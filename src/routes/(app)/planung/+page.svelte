@@ -17,6 +17,9 @@
 	import Thermometer from '@lucide/svelte/icons/thermometer';
 	import X from '@lucide/svelte/icons/x';
 	import Pencil from '@lucide/svelte/icons/pencil';
+	import FileText from '@lucide/svelte/icons/file-text';
+	import Printer from '@lucide/svelte/icons/printer';
+	import PdfButton from '$lib/components/PdfButton.svelte';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { addDays, isoWeek } from '$lib/modules/stunden/week';
@@ -101,6 +104,10 @@
 		<a href="?woche={addDays(data.weekStart, -7)}" class="btn btn-secondary btn-sm" aria-label="Vorige Woche"><ChevronLeft size={16} aria-hidden="true" />KW {isoWeek(addDays(data.weekStart, -7)).week}</a>
 		{#if !isThisWeek}<a href="?" class="btn btn-ghost btn-sm">Diese Woche</a>{/if}
 		<a href="?woche={addDays(data.weekStart, 7)}" class="btn btn-secondary btn-sm" aria-label="Nächste Woche">KW {isoWeek(addDays(data.weekStart, 7)).week}<ChevronRight size={16} aria-hidden="true" /></a>
+		{#if data.parties.length}
+			<PdfButton href="/planung/pdf?woche={data.weekStart}" class="btn btn-secondary btn-sm"><FileText size={16} aria-hidden="true" />PDF</PdfButton>
+			<a href="/planung/druck?woche={data.weekStart}" class="btn btn-secondary btn-sm"><Printer size={16} aria-hidden="true" />Drucken</a>
+		{/if}
 		{#if data.canEdit && data.entries.length}
 			<form
 				method="POST"

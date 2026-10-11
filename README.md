@@ -349,6 +349,10 @@ Eintragen lassen sich **mehrere Tage** auf einmal ankreuzen; ein Eintrag lässt 
 auf einen anderen Tag oder zu einer anderen Partie schieben und löschen. Mit den Pfeilen geht
 es eine Woche vor oder zurück.
 
+**PDF und Drucken:** Die Woche gibt es als PDF (A4 quer, wie der Zettel – die Zeilen wachsen mit
+dem Inhalt, die Notizen stehen darunter) und als Druckansicht. Jeder bekommt dabei genau das,
+was er auf der Seite sieht: die Partie nur ihre Spalte, ohne Notizen.
+
 - **Urlaub und Krankenstand** stehen von selbst im Feld der Partie: genehmigter Urlaub mit
   Palme, Krankenstand mit Thermometer. Wer Krankenstände nicht sehen darf (z. B. Arbeiter),
   sieht bei anderen nur „abwesend“.
