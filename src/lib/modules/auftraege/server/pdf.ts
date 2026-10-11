@@ -27,6 +27,8 @@ import {
 	spacedNumber
 } from '../offer';
 import type { SummaryColumn, SummaryReport } from '../summary';
+// Zertifizierung (Bureau Veritas, ISO 9001 und ISO 45001) – als Daten-URL mitgebaut, kein Pfad nötig
+import CERTIFICATE from './zertifikat.png?inline';
 import type { InvoiceDetail } from './invoices';
 import type { OfferDetail } from './offers';
 import type { OrderDetail } from './orders';
@@ -49,8 +51,12 @@ const isoDate = (iso: string) => {
 
 type Doc = PDFKit.PDFDocument;
 
-/** Briefkopf: das hochgeladene Bild oder – ohne Bild – aus Text gesetzt */
-function letterhead(doc: Doc, image: string | null) {
+/**
+ * Briefkopf: das hochgeladene Bild oder – ohne Bild – aus Text gesetzt. Auf
+ * Angebot und Rechnung steht wie auf dem Briefpapier rechts neben der Anschrift
+ * die Zertifizierung.
+ */
+function letterhead(doc: Doc, image: string | null, { certificate = false } = {}) {
 	const top = 10 * MM;
 	if (image) {
 		doc.image(image, LEFT, top, { fit: [WIDTH, 34 * MM], align: 'center', valign: 'center' });
@@ -67,6 +73,7 @@ function letterhead(doc: Doc, image: string | null) {
 	center('Bodenmarkierungen', y + 9, 9, true);
 	center(`${LETTERHEAD.lines[1]}, ${LETTERHEAD.lines[2]}`, y + 21, 6.5);
 	center(LETTERHEAD.lines[3], y + 29, 6.5);
+	if (certificate) doc.image(CERTIFICATE, doc.page.width / 2 + 47 * MM, y - 1, { width: 31 * MM });
 }
 
 /** Anschrift links, Angaben rechts – gibt die Unterkante zurück */
@@ -250,7 +257,7 @@ export async function offerPdf(offer: OfferDetail, { forCustomer = false } = {})
 	const title = `Angebot Nr. ${spacedNumber(offer.number)}`;
 	const { doc, finish } = startPdf({ title, margin: 8, bufferPages: true });
 
-	letterhead(doc, letterheadPath(settings.letterheadFile));
+	letterhead(doc, letterheadPath(settings.letterheadFile), { certificate: true });
 	if (!forCustomer && offer.status === 'entwurf') {
 		doc.font('Helvetica-Bold').fontSize(9).fillColor('#b42318').text('ENTWURF – nicht freigegeben', LEFT, 10 * MM, { width: WIDTH, align: 'right', lineBreak: false });
 	}
@@ -409,7 +416,7 @@ export async function invoicePdf(invoice: InvoiceDetail): Promise<Response> {
 	const title = `${invoiceLabel(invoice.kind)} Nr. ${spacedNumber(invoice.number)}`;
 	const { doc, finish } = startPdf({ title, margin: 8, bufferPages: true });
 
-	letterhead(doc, letterheadPath(settings.letterheadFile));
+	letterhead(doc, letterheadPath(settings.letterheadFile), { certificate: true });
 	let y = addressAndFacts(
 		doc,
 		addressLines({ name: invoice.customerName, addition: invoice.customerAddition, street: invoice.customerStreet, zip: invoice.customerZip, city: invoice.customerCity }),

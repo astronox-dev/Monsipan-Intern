@@ -373,6 +373,11 @@ Bankverbindung und Kontakt.
 - **Logo:** Alle PDFs (Angebot, Auftrag, Rechnung, Summenblatt, Tagesbericht, Lohnzettel)
   und die Druckansichten von Tagesbericht und Lohnzettel setzen das Monsipan-Logo als
   Vektor – die Pfade stehen in [`src/lib/logo.ts`](src/lib/logo.ts).
+- **Zertifizierung:** Auf Angebot und Rechnung steht wie auf dem Briefpapier rechts neben der
+  Anschrift das Zeichen von Bureau Veritas (ISO 9001, ISO 45001) –
+  [`zertifikat.png`](src/lib/modules/auftraege/server/zertifikat.png), wird ins Programm mit
+  eingebaut. Für ein neues Zertifikat einfach die Datei austauschen. Ist unter Einstellungen
+  ein eigenes Briefkopf-Bild hochgeladen, ersetzt es den ganzen Kopf samt Zeichen.
 
 **Ablauf:**
 
