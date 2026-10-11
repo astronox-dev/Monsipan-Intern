@@ -143,6 +143,35 @@ export const NOTIFICATION_EVENTS = {
 		all: 'stunden.alle.sehen',
 		defaults: ['partiefuehrer']
 	},
+	'planung.woche': {
+		label: 'Wochenplan an die Partie geschickt',
+		section: 'Planung',
+		hint: 'Auf „An die Partien schicken" – an die eigene Partie',
+		requires: 'planung.sehen',
+		all: 'planung.alle.sehen',
+		defaults: ['partiefuehrer', 'arbeiter']
+	},
+	'urlaub.beantragt': {
+		label: 'Urlaub beantragt',
+		section: 'Planung',
+		requires: 'urlaub.genehmigen',
+		defaults: ['geschaeftsfuehrer', 'bauleiter']
+	},
+	'urlaub.entschieden': {
+		label: 'Urlaub genehmigt oder abgelehnt',
+		section: 'Planung',
+		hint: 'Geht immer an die Person, deren Urlaub es ist – hier nur, wer es zusätzlich bekommt',
+		requires: 'urlaub.eigene.sehen',
+		defaults: []
+	},
+	'krankenstand.gemeldet': {
+		label: 'Krankenstand gemeldet',
+		section: 'Planung',
+		hint: 'Für die Partie nur, wenn es jemand aus der eigenen ist',
+		requires: 'krankenstand.sehen',
+		all: 'krankenstand.alle.sehen',
+		defaults: ['geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer']
+	},
 	'lager.mindestbestand': {
 		label: 'Artikel am Mindestbestand',
 		section: 'Lager',

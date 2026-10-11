@@ -9,10 +9,11 @@ Oberfläche, auf dem Handy wie am PC. Die übrigen Bereiche kommen nach und nach
 | Auftragsmanagement | fertig – Anfragen, Angebote mit Kundenlink, Aufträge je Partie, Summenblatt, Rechnungen, Kunden |
 | Dokumentation: Stundenzettel | fertig – Lohnwoche je Mitarbeiter, Freigabe und Prüfung |
 | Dokumentation: Tagesberichte | fertig – Leistung je Tag und Baustelle, Freigabe, Prüfung, Unterschrift des Kunden |
+| Planung | fertig – Wochenplanung je Partie und Tag mit Notizliste, Urlaubsanträge, Krankenstand mit Krankmeldung |
 | Lagermanagement | fertig – Bestand, Buchen, Inventur, Bewegungen, Bestellliste, Berichte, Artikel |
 | Benutzer | fertig – Zugänge, Gruppen, Berechtigungen |
 | Administration | fertig – Stammdaten, Einstellungen, Sicherungen |
-| Planung, Partien | geplant |
+| Partien | geplant |
 | Bestellungen, Dokumente, Auswertungen | geplant |
 
 **Übersicht** (`/`): Oben **Zu erledigen** – was gerade ansteht, das Dringendste zuerst:
@@ -82,6 +83,7 @@ Administration unter `/verwaltung/…`:
 | Übersicht | `/` |
 | Stundenzettel | `/stundenzettel` |
 | Tagesberichte | `/tagesberichte` |
+| Wochenplanung, Urlaub, Krankenstand | `/planung` (`?woche=JJJJ-MM-TT`), `/urlaub`, `/krankenstand` |
 | Tagesbericht für den Kunden (ohne Anmeldung) | `/bericht/<link>` |
 | Anfragen, Angebote, Aufträge, Rechnungen, Kunden | `/anfragen`, `/angebote`, `/auftraege`, `/rechnungen`, `/kunden` |
 | Summenblatt eines Auftrags bzw. einer Rechnung | `/auftraege/<id>/summenblatt`, `/rechnungen/<id>/summenblatt` |
@@ -335,6 +337,60 @@ Angaben untereinander.
 Wer kein Recht auf „alle sehen" hat, sieht die Berichte der eigenen Partie und die selbst
 angelegten.
 
+## Planung
+
+Drei Seiten unter **Planung** in der Seitenleiste.
+
+**Wochenplanung** (`/planung`) – wie der Zettel im Büro: je Partie eine Spalte (mit den
+Leuten darunter), je Tag eine Zeile, Montag bis Sonntag, Feiertage stehen beim Tag. In ein
+Feld kommt ein **Auftrag** (die Aufträge der Partie stehen in der Auswahl oben) oder **freier
+Text** wie „Stbe 1“ oder „Leitschutz?“ – oder beides, dann ist der Text ein Zusatz. Beim
+Eintragen lassen sich **mehrere Tage** auf einmal ankreuzen; ein Eintrag lässt sich ändern,
+auf einen anderen Tag oder zu einer anderen Partie schieben und löschen. Mit den Pfeilen geht
+es eine Woche vor oder zurück.
+
+- **Urlaub und Krankenstand** stehen von selbst im Feld der Partie: genehmigter Urlaub mit
+  Palme, Krankenstand mit Thermometer. Wer Krankenstände nicht sehen darf (z. B. Arbeiter),
+  sieht bei anderen nur „abwesend“.
+- **An die Partien schicken:** Ist die Woche fertig, bekommt jede Partie mit Einträgen eine
+  Benachrichtigung – statt bei jedem einzelnen Eintrag.
+- **Notizen** unten: eine durchgehende Liste („noch einzuplanen“), unabhängig von der Woche.
+  Abgehakte bleiben unter „Erledigte“ stehen und lassen sich wieder öffnen. **Die Partien sehen
+  die Notizen nicht.**
+- **Die Partie sieht nur ihre eigene Woche** – als Liste je Tag; Aufträge führen zum Auftrag.
+  Auf der Übersicht steht für sie „Heute laut Plan“.
+- Planen dürfen von Haus aus Admin, Geschäftsführung und Bauleitung; alle Partien sehen
+  zusätzlich Buchhaltung und Lesezugriff.
+
+**Urlaub** (`/urlaub`) – jeder beantragt für sich (von – bis, Notiz). Gezählt werden
+**Arbeitstage**: Montag bis Freitag ohne die österreichischen Feiertage (Ostern, Pfingsten,
+Fronleichnam usw. werden je Jahr berechnet). Überschneidet sich ein Antrag mit einem offenen
+oder genehmigten, kommt eine Meldung.
+
+- Die **Leitung** (Admin, Geschäftsführung, Bauleitung) genehmigt oder lehnt ab, auf Wunsch
+  mit Hinweis; die Person bekommt dazu eine Benachrichtigung. Sie kann auch **für andere
+  eintragen** – das gilt dann gleich als genehmigt – und Urlaub löschen.
+- Ein offener Antrag lässt sich zurückziehen.
+- Je Jahr: die genehmigten Tage je Person (über den Jahreswechsel zählt jeder Tag in seinem Jahr).
+- Sehen: die eigenen; der Partieführer die seiner Partie; das Büro alle.
+
+**Krankenstand** (`/krankenstand`) – melden mit „krank seit“ und, falls bekannt, „bis“ (leer
+heißt noch offen). Die **Krankmeldung** kommt als Foto (am Handy direkt aufnehmen, auch in der
+Android-App) oder PDF dazu – oder wird später nachgereicht. Fotos werden am Gerät verkleinert.
+
+- Jeder meldet sich selbst; der Partieführer auch für seine Leute, das Büro für alle.
+- **Die Krankmeldung sehen nur** die Person, wer gemeldet hat, und wer alle Krankenstände
+  sieht (Büro). Der Partieführer sieht, dass jemand krank ist, und ob die Krankmeldung da ist.
+- Ende eintragen („Gesund – Ende eintragen“), Belege ergänzen oder entfernen: die Person,
+  wer gemeldet hat, und das Büro; löschen: wer gemeldet hat und das Büro.
+- Auf der Übersicht sieht das Büro, wie viele Krankenstände der letzten 60 Tage noch keine
+  Krankmeldung haben.
+- Die Belege liegen unter `/data/krankmeldungen/` (wie Fotos und PDFs: nach dem Löschen noch
+  90 Tage, damit eine eingespielte Sicherung sie findet).
+
+Urlaub und Krankenstand landen **nicht** von selbst im Stundenzettel – die Stunden trägt man
+dort weiter ein.
+
 ## Auftragsmanagement
 
 Der Weg einer Arbeit durch den Betrieb: **Anfrage → Angebot → Auftrag → Tagesberichte →
@@ -516,7 +572,9 @@ neue Pläne/Unterlagen am Auftrag · Auftrag in Arbeit · Auftrag abgeschlossen 
 erstellt · Rechnung bezahlt · Rechnung überfällig (am Tag nach „zahlbar bis“, ab 7 Uhr,
 einmal je Rechnung) · Tagesbericht freigegeben · Tagesbericht vom Kunden unterschrieben ·
 Tagesbericht wieder geöffnet · Stundenzettel freigegeben · Stundenzettel wieder geöffnet ·
-Arbeiter hilft bei einer anderen Partie aus · Artikel am Mindestbestand.
+Arbeiter hilft bei einer anderen Partie aus · Wochenplan an die Partie geschickt · Urlaub
+beantragt · Urlaub genehmigt oder abgelehnt (geht immer an die Person selbst) · Krankenstand
+gemeldet · Artikel am Mindestbestand.
 
 **Wer was bekommt** stellt der Admin unter **Verwaltung → Benachrichtigungen** ein: je
 Ereignis die Gruppen anhaken und bei Bedarf einzelne Personen dazunehmen. Dabei gilt immer:
@@ -835,7 +893,7 @@ Die Sicherungen der Datenbank bleiben dadurch klein.
 **Sicherungen:** Wird ein PDF entfernt oder alles zurückgesetzt, bleibt die Datei noch
 90 Tage liegen. Eine in dieser Zeit eingespielte Sicherung findet ihre PDFs also wieder.
 Danach räumt die tägliche Wartung unbenutzte Dateien weg. Für den Umzug auf einen anderen
-Server das ganze Volume mitnehmen (Datenbank, `/data/dokumente`, `/data/fotos` **und** `/data/briefkopf`) – eine
+Server das ganze Volume mitnehmen (Datenbank, `/data/dokumente`, `/data/fotos`, `/data/krankmeldungen` **und** `/data/briefkopf`) – eine
 hochgeladene Sicherung allein enthält die PDFs nicht.
 
 Die Fotos der Tagesberichte liegen genauso unter `/data/fotos/<sha256>.jpg` (Foto und Vorschau)

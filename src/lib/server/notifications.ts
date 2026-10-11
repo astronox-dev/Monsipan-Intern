@@ -143,10 +143,30 @@ export interface NotifyInput {
 	partyId?: number | null;
 	/** Wer es ausgelöst hat – bekommt selbst nichts */
 	actorId?: number | null;
+	/** Bekommen es auf jeden Fall (z. B. wessen Urlaub es ist) – sofern sie es sehen dürfen und es nicht abgeschaltet haben */
+	userIds?: number[];
+}
+
+/** Die fest genannten Empfänger: aktiv, mit dem nötigen Recht, nicht stummgeschaltet, nicht der Auslöser */
+async function directRecipients(event: NotificationEvent, userIds: number[], actorId?: number | null): Promise<number[]> {
+	const wanted = userIds.filter((id) => id !== actorId);
+	if (!wanted.length) return [];
+	const [people, mutes] = await Promise.all([
+		db
+			.select({ id: users.id, role: users.role, partyId: users.partyId })
+			.from(users)
+			.where(and(activeUser, inArray(users.id, wanted)))
+			.all(),
+		db.select({ userId: notificationMutes.userId }).from(notificationMutes).where(eq(notificationMutes.event, event)).all()
+	]);
+	const muted = new Set(mutes.map((m) => m.userId));
+	return people.filter((p) => !muted.has(p.id) && can(p.role, NOTIFICATION_EVENTS[event].requires)).map((p) => p.id);
 }
 
 async function deliver(input: NotifyInput) {
-	const ids = await recipientsFor(input.event, input.partyId, input.actorId);
+	const found = await recipientsFor(input.event, input.partyId, input.actorId);
+	const direct = input.userIds?.length ? await directRecipients(input.event, input.userIds, input.actorId) : [];
+	const ids = [...new Set([...found, ...direct])];
 	if (!ids.length) return;
 	const title = input.title.slice(0, 200);
 	const body = (input.body ?? '').replace(/\s+/g, ' ').trim().slice(0, 400);

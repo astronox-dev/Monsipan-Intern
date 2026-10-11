@@ -14,6 +14,8 @@ import Inbox from '@lucide/svelte/icons/inbox';
 import ReceiptText from '@lucide/svelte/icons/receipt-text';
 import Building from '@lucide/svelte/icons/building';
 import CalendarDays from '@lucide/svelte/icons/calendar-days';
+import TreePalm from '@lucide/svelte/icons/tree-palm';
+import Thermometer from '@lucide/svelte/icons/thermometer';
 import Users from '@lucide/svelte/icons/users';
 import Clock from '@lucide/svelte/icons/clock';
 import NotebookPen from '@lucide/svelte/icons/notebook-pen';
@@ -84,7 +86,21 @@ export const MODULES: AppModule[] = [
 			{ href: '/kunden', label: 'Kunden', icon: Building, permission: 'kunden.sehen', hint: 'Anschriften für Angebote' }
 		]
 	},
-	{ key: 'planung', label: 'Planung', icon: CalendarDays, href: '/planung', group: 'betrieb', status: 'geplant', items: [] },
+	{
+		key: 'planung',
+		label: 'Planung',
+		icon: CalendarDays,
+		href: '/planung',
+		group: 'betrieb',
+		status: 'aktiv',
+		hint: 'Wochenplanung, Urlaub und Krankenstand',
+		cardsPerItem: true,
+		items: [
+			{ href: '/planung', label: 'Wochenplanung', icon: CalendarDays, permission: 'planung.sehen', hint: 'Aufträge je Partie und Tag' },
+			{ href: '/urlaub', label: 'Urlaub', icon: TreePalm, permission: 'urlaub.eigene.sehen', hint: 'Beantragen und genehmigen' },
+			{ href: '/krankenstand', label: 'Krankenstand', icon: Thermometer, permission: 'krankenstand.eigene.sehen', hint: 'Melden, mit Krankmeldung' }
+		]
+	},
 	{ key: 'partien', label: 'Partien', icon: Users, href: '/partien', group: 'betrieb', status: 'geplant', items: [] },
 	{
 		key: 'dokumentation',

@@ -18,6 +18,9 @@ import { reportCounts } from '$lib/modules/tagesberichte/server/reports';
 import { countReleased, maySeeTimesheets, seesOthers, weekOverview, type WeekRow } from '$lib/modules/stunden/server/timesheets';
 import { addDays, isoWeek, mondayOf, today } from '$lib/modules/stunden/week';
 import { round2 } from '$lib/modules/auftraege/offer';
+import { todayForParty } from '$lib/modules/planung/server/plan';
+import { countOpenLeave } from '$lib/modules/planung/server/urlaub';
+import { sickCounts } from '$lib/modules/planung/server/krank';
 import { can, type Permission } from '$lib/permissions';
 import type { PageServerLoad } from './$types';
 
@@ -134,6 +137,16 @@ async function dokuData(user: SessionUser, monday: string) {
 	};
 }
 
+/** Planung: was die eigene Partie heute vorhat, offene Urlaubsanträge, Krankenstände ohne Beleg */
+async function planData(user: SessionUser, day: string) {
+	const today = can(user.role, 'planung.sehen') && user.partyId ? await todayForParty(user.partyId, day) : null;
+	const [openLeave, sick] = await Promise.all([
+		can(user.role, 'urlaub.genehmigen') ? countOpenLeave() : null,
+		can(user.role, 'krankenstand.alle.sehen') ? sickCounts(day) : null
+	]);
+	return { today, openLeave, sick };
+}
+
 export const load: PageServerLoad = async ({ depends, locals }) => {
 	depends('app:stock');
 	const user = requireUser(locals);
@@ -141,7 +154,7 @@ export const load: PageServerLoad = async ({ depends, locals }) => {
 	const day = today();
 	const monday = mondayOf(day);
 
-	const [lager, auftrag, doku] = await Promise.all([lagerData(user), auftragData(user, day), dokuData(user, monday)]);
+	const [lager, auftrag, doku, plan] = await Promise.all([lagerData(user), auftragData(user, day), dokuData(user, monday), planData(user, day)]);
 
 	// Zu erledigen – das Dringendste zuerst, nur was diese Person auch angehen darf
 	const todos: Todo[] = [];
@@ -168,6 +181,8 @@ export const load: PageServerLoad = async ({ depends, locals }) => {
 	add(has('tagesberichte.kundenlink'), doku?.reports?.geprueft, { key: 'tb-kunde', label: 'Tagesberichte – Unterschrift des Kunden offen', href: '/tagesberichte?stand=geprueft', tone: 'info' });
 	add(true, doku?.released, { key: 'sz-pruefen', label: 'Stundenzettel zu prüfen', href: '/stundenzettel', tone: 'warn' });
 	add(true, doku?.lastWeekOpen, { key: 'sz-vorwoche', label: 'Stundenzettel der Vorwoche noch nicht freigegeben', href: `/stundenzettel?woche=${doku?.lastWeekMonday}`, tone: 'warn' });
+	add(has('urlaub.genehmigen'), plan.openLeave, { key: 'urlaub', label: 'Urlaubsanträge zu entscheiden', href: '/urlaub', tone: 'warn' });
+	add(has('krankenstand.bearbeiten'), plan.sick?.withoutDoc, { key: 'krankmeldung', label: 'Krankenstände ohne Krankmeldung', href: '/krankenstand', tone: 'info' });
 	add(has('auftraege.status') && !has('auftraege.bearbeiten'), auftrag?.orders?.erstellt, { key: 'auftraege-neu', label: 'Neue Aufträge', href: '/auftraege?status=erstellt', tone: 'info' });
 	// Nachbestellen ist Sache derer, die den Hinweis auf den Mindestbestand bekommen
 	add(!!lager && has('lager.warnungen.sehen'), lager?.kpi.low, {
@@ -177,5 +192,5 @@ export const load: PageServerLoad = async ({ depends, locals }) => {
 		tone: 'warn'
 	});
 
-	return { todos, lager, auftrag, doku, week: isoWeek(monday).week };
+	return { todos, lager, auftrag, doku, plan, week: isoWeek(monday).week };
 };

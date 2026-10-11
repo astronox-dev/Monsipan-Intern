@@ -8,3 +8,4 @@ export * from './stunden';
 export * from './tagesberichte';
 export * from './auftraege';
 export * from './benachrichtigungen';
+export * from './planung';

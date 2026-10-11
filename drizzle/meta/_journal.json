@@ -232,6 +232,13 @@
       "when": 1791641854013,
       "tag": "0032_teilrechnungen",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1791740940731,
+      "tag": "0033_planung",
+      "breakpoints": true
     }
   ]
 }

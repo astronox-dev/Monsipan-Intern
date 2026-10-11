@@ -140,6 +140,21 @@ export const DEFAULT_PERMISSIONS = {
 	'kunden.bearbeiten': BUERO,
 	'kunden.loeschen': BUERO,
 
+	// Planung: Wochenplanung, Urlaub, Krankenstand
+	'planung.sehen': ALL,
+	'planung.alle.sehen': [...BUERO, 'viewer'],
+	'planung.bearbeiten': LEITUNG,
+	'urlaub.eigene.sehen': ALL,
+	'urlaub.sehen': ['admin', 'geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer'],
+	'urlaub.alle.sehen': BUERO,
+	'urlaub.beantragen': ['admin', 'geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer', 'arbeiter'],
+	'urlaub.genehmigen': LEITUNG,
+	'krankenstand.eigene.sehen': ALL,
+	'krankenstand.sehen': ['admin', 'geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer'],
+	'krankenstand.alle.sehen': BUERO,
+	'krankenstand.melden': ['admin', 'geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer', 'arbeiter'],
+	'krankenstand.bearbeiten': BUERO,
+
 	// Verwaltung
 	'stammdaten.sehen': BUERO,
 	'stammdaten.erstellen': BUERO,
@@ -188,6 +203,11 @@ export interface PermissionArea {
 	edit?: PermissionLevel & { label?: string };
 	status?: { key: Permission; label: string; hint?: string }[];
 	remove?: PermissionLevel;
+	/**
+	 * Welche Stufe von „Sehen" ein Recht mit sich bringt – ohne Angabe die
+	 * mittlere. Urlaub beantragen heißt etwa nur: die eigenen sehen.
+	 */
+	implies?: Partial<Record<Permission, Permission>>;
 }
 
 const PARTY = 'Eigene Partie';
@@ -322,6 +342,33 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 		remove: { all: 'kunden.loeschen', hint: 'Nur ohne Angebote' }
 	},
 	{
+		key: 'planung',
+		title: 'Wochenplanung',
+		section: 'Planung',
+		hint: 'Aufträge je Partie und Tag; die Notizen sieht nur, wer alle sieht',
+		view: { own: 'planung.sehen', all: 'planung.alle.sehen', ownLabel: PARTY },
+		edit: { all: 'planung.bearbeiten', hint: 'Einträge, Notizen, an die Partien schicken' }
+	},
+	{
+		key: 'urlaub',
+		title: 'Urlaub',
+		section: 'Planung',
+		view: { self: 'urlaub.eigene.sehen', own: 'urlaub.sehen', all: 'urlaub.alle.sehen', selfLabel: 'Nur eigene', ownLabel: PARTY },
+		create: { key: 'urlaub.beantragen', label: 'Beantragen', hint: 'Für sich selbst' },
+		status: [{ key: 'urlaub.genehmigen', label: 'Genehmigen / ablehnen', hint: 'Auch für andere eintragen und löschen' }],
+		implies: { 'urlaub.beantragen': 'urlaub.eigene.sehen', 'urlaub.genehmigen': 'urlaub.alle.sehen' }
+	},
+	{
+		key: 'krankenstand',
+		title: 'Krankenstand',
+		section: 'Planung',
+		hint: 'Die Krankmeldung (Foto/PDF) anderer nur mit „Alle"',
+		view: { self: 'krankenstand.eigene.sehen', own: 'krankenstand.sehen', all: 'krankenstand.alle.sehen', selfLabel: 'Nur eigene', ownLabel: PARTY },
+		create: { key: 'krankenstand.melden', label: 'Melden', hint: 'Für sich – wer die Partie bzw. alle sieht, auch für diese' },
+		edit: { all: 'krankenstand.bearbeiten', hint: 'Ende, Belege, löschen' },
+		implies: { 'krankenstand.melden': 'krankenstand.eigene.sehen', 'krankenstand.bearbeiten': 'krankenstand.alle.sehen' }
+	},
+	{
 		key: 'stammdaten',
 		title: 'Stammdaten',
 		section: 'Verwaltung',
@@ -387,7 +434,7 @@ export function withImplied(allowed: Set<string>): Set<string> {
 		const has = (p: Permission | undefined) => !!p && out.has(`${role}|${p}`);
 		const add = (p: Permission | undefined) => p && out.add(`${role}|${p}`);
 		for (const area of PERMISSION_AREAS) {
-			if (areaActions(area).some(has)) add(area.view.own ?? area.view.all);
+			for (const action of areaActions(area)) if (has(action)) add(area.implies?.[action] ?? area.view.own ?? area.view.all);
 			for (const level of [area.view, area.edit, area.remove]) {
 				if (level?.own && has(level.all)) add(level.own);
 				if (level?.self && has(level.own ?? level.all)) add(level.self);

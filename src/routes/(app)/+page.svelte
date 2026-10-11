@@ -22,6 +22,9 @@
 	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 	import Clock from '@lucide/svelte/icons/clock';
 	import PackageMinus from '@lucide/svelte/icons/package-minus';
+	import TreePalm from '@lucide/svelte/icons/tree-palm';
+	import Thermometer from '@lucide/svelte/icons/thermometer';
+	import CalendarDays from '@lucide/svelte/icons/calendar-days';
 	import BarChart from '$lib/components/BarChart.svelte';
 	import CountUp from '$lib/components/CountUp.svelte';
 	import MovementList from '$lib/modules/lager/components/MovementList.svelte';
@@ -96,7 +99,9 @@
 		'sz-pruefen': ClipboardCheck,
 		'sz-vorwoche': Clock,
 		'auftraege-neu': HardHat,
-		nachbestellen: PackageMinus
+		nachbestellen: PackageMinus,
+		urlaub: TreePalm,
+		krankmeldung: Thermometer
 	};
 	const TONE: Record<string, string> = {
 		danger: 'bg-danger-soft text-danger',
@@ -159,8 +164,34 @@
 	</div>
 {/if}
 
+<!-- Heute laut Wochenplanung – für die eigene Partie -->
+{#if data.plan.today}
+	<section class="card mb-4 p-4 lg:p-5" aria-labelledby="h-heute">
+		<div class="flex items-center justify-between gap-2">
+			<h2 id="h-heute" class="flex items-center gap-2 text-xl"><CalendarDays size={20} aria-hidden="true" />Heute laut Plan</h2>
+			<a href="/planung" class="btn btn-ghost btn-sm">Ganze Woche<ChevronRight size={16} aria-hidden="true" /></a>
+		</div>
+		{#if data.plan.today.length}
+			<ul class="mt-2 flex flex-wrap gap-2">
+				{#each data.plan.today as e (e.id)}
+					<li class="rounded-xl border border-line bg-surface-2 px-3 py-2">
+						{#if e.orderId && has('auftraege.sehen')}
+							<a href="/auftraege/{e.orderId}" class="block font-medium hover:underline">{e.orderLocation || e.orderTitle || 'Auftrag'}</a>
+						{:else}
+							<span class="block font-medium">{e.orderId ? e.orderLocation || e.orderTitle || 'Auftrag' : e.text}</span>
+						{/if}
+						{#if e.orderId}<span class="num block text-[0.75rem] text-ink-3">{spacedNumber(e.orderNumber ?? '')}{e.text ? ` · ${e.text}` : ''}</span>{/if}
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<p class="mt-1 text-ink-2">Für heute ist nichts eingeplant.</p>
+		{/if}
+	</section>
+{/if}
+
 <!-- Zu erledigen: nur, was diese Person angehen darf -->
-{#if lager || auftrag || doku}
+{#if lager || auftrag || doku || data.plan.openLeave != null || data.plan.sick}
 	<section class="card p-4 lg:p-6" aria-labelledby="h-todo">
 		<h2 id="h-todo" class="text-xl">Zu erledigen</h2>
 		{#if data.todos.length}

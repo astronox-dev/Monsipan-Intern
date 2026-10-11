@@ -66,4 +66,12 @@ describe('withImplied', () => {
 		const out = withImplied(new Set(['viewer|kunden.loeschen']));
 		expect([...out].every((k) => k.startsWith('viewer|'))).toBe(true);
 	});
+
+	it('Urlaub beantragen heißt nur die eigenen sehen, genehmigen alle', () => {
+		const out = withImplied(new Set(['arbeiter|urlaub.beantragen', 'bauleiter|urlaub.genehmigen']));
+		expect(out.has('arbeiter|urlaub.eigene.sehen')).toBe(true);
+		expect(out.has('arbeiter|urlaub.sehen')).toBe(false);
+		expect(out.has('bauleiter|urlaub.alle.sehen')).toBe(true);
+		expect(out.has('bauleiter|urlaub.eigene.sehen')).toBe(true);
+	});
 });
