@@ -14,6 +14,7 @@ const { eq } = await import('drizzle-orm');
 const { customers, invoicePositions, invoices, offerPositions, offers, orderPositions, orders, parties, users } = await import('$lib/server/db/schema');
 const { decodeText, parseCsv, readTable, writeTable } = await import('$lib/server/table');
 const { exportTable, planImport, runImport, toBool, toDate, toNumber } = await import('./transfer');
+const { countListed, listInvoices, openGrossTotal } = await import('./invoices');
 const { suggestMapping } = await import('../transfer');
 const { verifyInvoice, checkArchive } = await import('./signatur/verification');
 
@@ -192,6 +193,23 @@ describe('Angebote und Stornos', () => {
 		expect(original).toMatchObject({ stage: 'storniert', stornoId: storno!.id, cancelReason: 'Im bisherigen Programm storniert' });
 		expect(storno).toMatchObject({ stage: 'importiert', kind: 'storno', cancelsId: original!.id });
 		expect((await verifyInvoice(original!.id, { record: false }))?.result).toBe('storniert');
+	});
+
+	it('zeigt importierte überfällige im Filter „Überfällig“ und zählt alle offenen Beträge', async () => {
+		const rows = table([
+			['Rechnungsnummer', 'Rechnungsdatum', 'Zahlbar bis', 'Kunde', 'Netto gesamt', 'USt-Satz'],
+			['U-1', '01.01.2024', '31.01.2024', 'Strabag AG', '100', '20'],
+			['U-2', '01.01.2024', '31.12.2099', 'Strabag AG', '50', '20']
+		]);
+		await runImport('rechnungen', rows.slice(1), mapFor('rechnungen', rows), { update: false }, user, 'offen.csv');
+		const overdue = await listInvoices({ status: 'ueberfaellig' }, 1000);
+		expect(overdue.map((i) => i.number)).toContain('U-1');
+		expect(overdue.map((i) => i.number)).not.toContain('U-2');
+		expect(await countListed({ status: 'ueberfaellig' })).toBe(overdue.length);
+		const open = await listInvoices({ status: 'offen' }, 100000);
+		const sum = Math.round(open.reduce((s, i) => s + i.net * (1 + (i.reverseCharge ? 0 : i.vatRate) / 100), 0) * 100) / 100;
+		expect(await openGrossTotal()).toBeCloseTo(sum, 2);
+		expect(await countListed({ status: 'offen' })).toBe(open.length);
 	});
 });
 

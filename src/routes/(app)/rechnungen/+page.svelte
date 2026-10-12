@@ -8,6 +8,7 @@
 	import Search from '@lucide/svelte/icons/search';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import Pagination from '$lib/components/Pagination.svelte';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { date as dateLabel } from '$lib/format';
 	import { INVOICE_STATUS_LABELS, invoiceLabel, money, round2, spacedNumber } from '$lib/modules/auftraege/offer';
@@ -17,6 +18,7 @@
 
 	const TABS = $derived([
 		{ key: 'offen', label: 'Offen', count: data.counts.open },
+		{ key: 'ueberfaellig', label: 'Überfällig', count: data.counts.overdue },
 		{ key: 'bezahlt', label: 'Bezahlt', count: data.counts.paid },
 		{ key: 'entwurf', label: 'Entwürfe', count: data.counts.drafts },
 		{ key: 'alle', label: 'Alle', count: data.counts.all }
@@ -107,9 +109,20 @@
 			</li>
 		{:else}
 			<li class="p-10 text-center">
-				<p class="font-medium">{data.filter.q ? 'Keine Rechnung gefunden' : data.filter.state === 'bezahlt' ? 'Noch nichts bezahlt' : 'Keine offenen Rechnungen'}</p>
+				<p class="font-medium">
+					{data.filter.q
+						? 'Keine Rechnung gefunden'
+						: data.filter.state === 'bezahlt'
+							? 'Noch nichts bezahlt'
+							: data.filter.state === 'ueberfaellig'
+								? 'Keine überfälligen Rechnungen'
+								: data.filter.state === 'entwurf'
+									? 'Keine Entwürfe'
+									: 'Keine offenen Rechnungen'}
+				</p>
 				<p class="mt-1 text-sm text-ink-3">Rechnungen entstehen aus abgeschlossenen Aufträgen.</p>
 			</li>
 		{/each}
 	</ul>
+	<Pagination page={data.page} pageSize={data.pageSize} count={data.count} />
 </div>

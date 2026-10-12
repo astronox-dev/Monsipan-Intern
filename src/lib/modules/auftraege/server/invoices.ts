@@ -68,18 +68,44 @@ const netSum = sql<number>`(select coalesce(sum(round(${col(invoicePositions.qua
 
 export interface InvoiceFilter {
 	q?: string;
-	/** „offen", „bezahlt" oder leer für alle */
+	/** „offen", „ueberfaellig", „bezahlt", „entwurf" oder leer für alle */
 	status?: string;
+	/** Stichtag für „überfällig" – ohne Angabe heute */
+	day?: string;
 }
 
-export async function listInvoices(filter: InvoiceFilter = {}, limit = 300) {
+function invoiceWhere(filter: InvoiceFilter): SQL | undefined {
 	const where: (SQL | undefined)[] = [];
 	if (filter.status === 'offen' || filter.status === 'bezahlt') where.push(eq(invoices.status, filter.status), activeInvoice);
+	// Überfällig: offen und „zahlbar bis" vorbei – genau wie das Abzeichen in der Liste
+	if (filter.status === 'ueberfaellig') where.push(eq(invoices.status, 'offen'), activeInvoice, lt(invoices.dueDate, filter.day ?? today()));
 	if (filter.status === 'entwurf') where.push(eq(invoices.stage, 'entwurf'));
 	if (filter.q?.trim()) {
 		const q = `%${filter.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 		where.push(or(like(invoices.number, q), like(invoices.title, q), like(invoices.customerName, q), like(invoices.location, q), like(invoices.projectNumber, q)));
 	}
+	return and(...where);
+}
+
+/** Wie viele Rechnungen der Filter trifft – zum Blättern */
+export async function countListed(filter: InvoiceFilter = {}): Promise<number> {
+	const row = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(invoices).where(invoiceWhere(filter)).get();
+	return row?.n ?? 0;
+}
+
+/** Summe aller offenen Beträge (brutto) – unabhängig davon, wie viele es sind */
+export async function openGrossTotal(): Promise<number> {
+	const row = await db
+		.select({
+			gross: sql<number>`coalesce(sum(round(${netSum} * (1 + (case when ${invoices.reverseCharge} then 0 else ${invoices.vatRate} end) / 100.0), 2)), 0)`.mapWith(Number)
+		})
+		.from(invoices)
+		.where(and(eq(invoices.status, 'offen'), activeInvoice))
+		.get();
+	return round2(row?.gross ?? 0);
+}
+
+export async function listInvoices(filter: InvoiceFilter = {}, limit = 300, offset = 0) {
 	return db
 		.select({
 			id: invoices.id,
@@ -98,10 +124,11 @@ export async function listInvoices(filter: InvoiceFilter = {}, limit = 300) {
 			net: netSum
 		})
 		.from(invoices)
-		.where(and(...where))
+		.where(invoiceWhere(filter))
 		// Offene nach Fälligkeit, bezahlte nach Datum
 		.orderBy(sql`case ${invoices.status} when 'offen' then 0 else 1 end`, sql`case ${invoices.status} when 'offen' then ${invoices.dueDate} end`, desc(invoices.date), desc(invoices.id))
 		.limit(limit)
+		.offset(offset)
 		.all();
 }
 

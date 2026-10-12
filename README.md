@@ -561,7 +561,10 @@ darunter die Reiter **Offen**, **Bezahlt** und **Alle**; überfällige sind rot 
   endgültig ausstellen** wird sie archiviert, auf Wunsch digital signiert und gesperrt –
   siehe [Rechnungen: Ausstellen, Signatur und Archiv](#rechnungen-ausstellen-signatur-und-archiv).
 - **Offen → Bezahlt** mit dem Datum der Zahlung (von Haus aus Admin, Geschäftsführung,
-  Buchhaltung), zurück auf offen ebenso – auch bei ausgestellten Rechnungen. Ein Auftrag mit
+  Buchhaltung), zurück auf offen ebenso – auch bei ausgestellten Rechnungen. Die Liste hat die
+  Reiter Offen, **Überfällig** (offen und „zahlbar bis“ vorbei – auch importierte), Bezahlt,
+  Entwürfe und Alle, 100 je Seite; „Rechnungen überfällig“ auf der Übersicht führt direkt zum
+  Reiter. Ein Auftrag mit
   Rechnung lässt sich nicht löschen.
 - Rechnungen von vor den Teilrechnungen: Die Berichte, die beim Erstellen schon geprüft waren,
   gelten als mit ihnen abgerechnet.

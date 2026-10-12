@@ -1,10 +1,11 @@
 import { can } from '$lib/permissions';
 import { requirePermission } from '$lib/server/guard';
-import { countInvoices, listInvoices, ordersToInvoice } from '$lib/modules/auftraege/server/invoices';
+import { countInvoices, countListed, listInvoices, ordersToInvoice } from '$lib/modules/auftraege/server/invoices';
 import { today } from '$lib/modules/stunden/week';
 import type { PageServerLoad } from './$types';
 
-const STATES = ['offen', 'bezahlt', 'entwurf', 'alle'] as const;
+const STATES = ['offen', 'ueberfaellig', 'bezahlt', 'entwurf', 'alle'] as const;
+const PAGE_SIZE = 100;
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = requirePermission(locals, 'rechnungen.sehen');
@@ -12,10 +13,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const state = asked && STATES.includes(asked) ? asked : 'offen';
 	const q = url.searchParams.get('q') ?? '';
 	const canCreate = can(user.role, 'rechnungen.erstellen');
+	const filter = { q, status: state === 'alle' ? '' : state };
+	const count = await countListed(filter);
+	const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+	const page = Math.min(pages, Math.max(1, Math.floor(Number(url.searchParams.get('seite')) || 1)));
 	const [invoices, counts, ready] = await Promise.all([
-		listInvoices({ q, status: state === 'alle' ? '' : state }),
+		listInvoices(filter, PAGE_SIZE, (page - 1) * PAGE_SIZE),
 		countInvoices(),
 		canCreate ? ordersToInvoice() : Promise.resolve([])
 	]);
-	return { invoices, counts, ready, filter: { q, state }, canCreate, today: today() };
+	return { invoices, counts, ready, filter: { q, state }, canCreate, today: today(), page, pageSize: PAGE_SIZE, count };
 };

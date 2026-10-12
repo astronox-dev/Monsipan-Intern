@@ -13,11 +13,10 @@ import { consumptionByMonth, listMovements } from '$lib/modules/lager/server/mov
 import { countInquiries } from '$lib/modules/auftraege/server/inquiries';
 import { offerCounts } from '$lib/modules/auftraege/server/offers';
 import { countOrders, listOrders } from '$lib/modules/auftraege/server/orders';
-import { countInvoices, listInvoices, ordersToInvoice } from '$lib/modules/auftraege/server/invoices';
+import { countInvoices, openGrossTotal, ordersToInvoice } from '$lib/modules/auftraege/server/invoices';
 import { reportCounts } from '$lib/modules/tagesberichte/server/reports';
 import { countReleased, maySeeTimesheets, seesOthers, weekOverview, type WeekRow } from '$lib/modules/stunden/server/timesheets';
 import { addDays, isoWeek, mondayOf, today } from '$lib/modules/stunden/week';
-import { round2 } from '$lib/modules/auftraege/offer';
 import { todayForParty } from '$lib/modules/planung/server/plan';
 import { countOpenLeave } from '$lib/modules/planung/server/urlaub';
 import { sickCounts } from '$lib/modules/planung/server/krank';
@@ -85,10 +84,10 @@ async function auftragData(user: SessionUser, day: string) {
 		sees.auftraege ? countOrders(user) : null,
 		sees.auftraege ? listOrders(user, { status: 'offen' }, 6) : null,
 		sees.rechnungen ? countInvoices(day) : null,
-		sees.rechnungen ? listInvoices({ status: 'offen' }) : null,
+		sees.rechnungen ? openGrossTotal() : null,
 		has('rechnungen.erstellen') ? ordersToInvoice() : null
 	]);
-	const openGross = openInvoices ? round2(openInvoices.reduce((s, i) => s + i.net * (1 + (i.reverseCharge ? 0 : i.vatRate) / 100), 0)) : 0;
+	const openGross = openInvoices ?? 0;
 	return {
 		inquiries,
 		offers,
@@ -161,7 +160,7 @@ export const load: PageServerLoad = async ({ depends, locals }) => {
 	const add = (show: boolean, count: number | null | undefined, t: Omit<Todo, 'count'>) => {
 		if (show && count) todos.push({ ...t, count });
 	};
-	add(!!auftrag?.invoices, auftrag?.invoices?.overdue, { key: 'ueberfaellig', label: 'Rechnungen überfällig', href: '/rechnungen?stand=offen', tone: 'danger' });
+	add(!!auftrag?.invoices, auftrag?.invoices?.overdue, { key: 'ueberfaellig', label: 'Rechnungen überfällig', href: '/rechnungen?stand=ueberfaellig', tone: 'danger' });
 	add(true, auftrag?.toInvoice, { key: 'abrechnen', label: 'Aufträge abgeschlossen – Rechnung schreiben', href: '/rechnungen', tone: 'warn' });
 	add(has('angebote.bearbeiten'), auftrag?.offers?.aenderung, { key: 'aenderung', label: 'Änderungswunsch zu Angeboten', href: '/angebote?status=aenderung', tone: 'warn' });
 	add(has('auftraege.erstellen'), auftrag?.offers?.acceptedWithoutOrder, {
