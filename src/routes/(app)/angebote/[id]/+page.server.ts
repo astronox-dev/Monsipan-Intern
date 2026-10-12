@@ -215,8 +215,10 @@ export const actions: Actions = {
 		const { user, offer } = await open(Number(params.id), locals);
 		if (!can(user.role, 'auftraege.erstellen')) return fail(403, { orderMessage: 'Dafür fehlt dir die Berechtigung.' });
 		const form = await request.formData();
-		const partyId = Number(form.get('partie'));
-		if (!Number.isInteger(partyId) || partyId <= 0) return fail(400, { orderMessage: 'Bitte eine Partie wählen.' });
+		// Die Partie ist freiwillig – zuteilen geht auch später, etwa in der Wochenplanung
+		const rawParty = String(form.get('partie') ?? '');
+		const partyId = rawParty ? Number(rawParty) : null;
+		if (partyId !== null && (!Number.isInteger(partyId) || partyId <= 0)) return fail(400, { orderMessage: 'Die Partie stimmt nicht.' });
 		// Pläne erst prüfen und ablegen – ist eine Datei kein PDF, entsteht auch kein Auftrag
 		const files = form.getAll('plaene').filter((f): f is File => f instanceof File && f.size > 0);
 		const stored: { name: string; sha256: string; size: number }[] = [];

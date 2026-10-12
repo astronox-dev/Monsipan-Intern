@@ -2,7 +2,9 @@
  * Wochenplanung wie der Zettel im Büro: je Partie eine Spalte, je Tag eine
  * Zeile, in den Feldern Aufträge oder freier Text. Dazu stehen Urlaub und
  * Krankenstand der Leute, und – nur für wer alle Partien sieht – die
- * durchgehende Notizliste („noch einzuplanen").
+ * durchgehende Notizliste („noch einzuplanen") und die Aufträge, die noch
+ * keiner Partie zugeteilt sind. Wer so einen Auftrag bei einer Partie
+ * einplant, teilt ihn ihr damit zu.
  *
  * Die Partie sieht nur ihre eigene Spalte.
  */
@@ -122,8 +124,42 @@ export async function planWeek(user: SessionUser, weekStart: string) {
 		})),
 		entries,
 		absences,
-		notes: all ? await listNotes() : []
+		notes: all ? await listNotes() : [],
+		unassigned: all ? await unassignedOrders() : []
 	};
+}
+
+/** Offene Aufträge ohne Partie – die ältesten zuerst */
+export function unassignedOrders() {
+	return db
+		.select({
+			id: orders.id,
+			number: orders.number,
+			title: orders.title,
+			location: orders.location,
+			customerName: orders.customerName,
+			status: orders.status,
+			createdAt: orders.createdAt
+		})
+		.from(orders)
+		.where(and(isNull(orders.partyId), or(eq(orders.status, 'erstellt'), eq(orders.status, 'in_arbeit'))))
+		.orderBy(asc(orders.createdAt), asc(orders.id))
+		.limit(200)
+		.all();
+}
+
+/**
+ * Beim Einplanen: Hat der Auftrag noch keine Partie, bekommt er diese. Gibt
+ * true zurück, wenn er damit zugeteilt wurde – ein schon zugeteilter bleibt,
+ * wo er ist (dann hilft die Partie nur aus).
+ */
+export async function claimOrder(orderId: number, partyId: number): Promise<boolean> {
+	const done = await db
+		.update(orders)
+		.set({ partyId, updatedAt: new Date() })
+		.where(and(eq(orders.id, orderId), isNull(orders.partyId)))
+		.returning({ id: orders.id });
+	return done.length > 0;
 }
 
 export type PlanWeek = Awaited<ReturnType<typeof planWeek>>;

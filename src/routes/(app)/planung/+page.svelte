@@ -2,7 +2,8 @@
 	/**
 	 * Wochenplanung wie der Zettel: je Partie eine Spalte, je Tag eine Zeile.
 	 * In den Feldern Aufträge oder freier Text; Urlaub und Krankenstand der Leute
-	 * stehen von selbst dabei. Darunter – nur fürs Büro – die Notizliste.
+	 * stehen von selbst dabei. Darunter – nur fürs Büro – die Aufträge ohne
+	 * Partie (beim Einplanen werden sie zugeteilt) und die Notizliste.
 	 * Wer nur die eigene Partie sieht, bekommt die Woche als Liste.
 	 */
 	import { pageTitle } from '$lib/app';
@@ -19,12 +20,15 @@
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import FileText from '@lucide/svelte/icons/file-text';
 	import Printer from '@lucide/svelte/icons/printer';
+	import HardHat from '@lucide/svelte/icons/hard-hat';
+	import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { addDays, isoWeek } from '$lib/modules/stunden/week';
 	import { holidayName } from '$lib/modules/planung/days';
-	import { spacedNumber } from '$lib/modules/auftraege/offer';
+	import { ORDER_STATUS_LABELS, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { date as dateLabel } from '$lib/format';
 
 	let { data, form } = $props();
 
@@ -58,6 +62,16 @@
 		text = '';
 		open = true;
 	}
+	/** Nicht zugeteilten Auftrag einplanen – Partie und Tage wählt man im Dialog */
+	function openPlan(o: (typeof data.unassigned)[number]) {
+		editing = null;
+		partyId = '';
+		days = [];
+		date = '';
+		orderId = String(o.id);
+		text = '';
+		open = true;
+	}
 	function openEdit(e: Entry) {
 		editing = e;
 		partyId = String(e.partyId);
@@ -67,19 +81,25 @@
 		text = e.orderId ? e.text : e.text;
 		open = true;
 	}
-	/** Aufträge der gewählten Partie zuerst */
-	const ownOrders = $derived(data.orders.filter((o) => String(o.partyId) === partyId));
-	const otherOrders = $derived(data.orders.filter((o) => String(o.partyId) !== partyId));
+	/** Aufträge der gewählten Partie zuerst, dann die noch nicht zugeteilten */
+	const ownOrders = $derived(data.orders.filter((o) => o.partyId != null && String(o.partyId) === partyId));
+	const freeOrders = $derived(data.orders.filter((o) => o.partyId == null));
+	const otherOrders = $derived(data.orders.filter((o) => o.partyId != null && String(o.partyId) !== partyId));
+	/** Wird der gewählte Auftrag mit dem Eintragen zugeteilt? */
+	const claims = $derived(!!orderId && freeOrders.some((o) => String(o.id) === orderId));
+	const partyName = $derived(data.parties.find((p) => String(p.id) === partyId)?.name ?? '');
 	const orderLabel = (o: (typeof data.orders)[number]) =>
 		`${spacedNumber(o.number)} · ${[o.location, o.title].filter(Boolean).join(' – ') || 'ohne Bezeichnung'}${o.status === 'abgeschlossen' ? ' (abgeschlossen)' : ''}`;
 
 	const after = (msg: string) => () => {
 		busy = true;
-		return async ({ result, update }: { result: { type: string }; update: () => Promise<void> }) => {
+		const name = partyName;
+		return async ({ result, update }: { result: { type: string; data?: Record<string, unknown> }; update: () => Promise<void> }) => {
 			busy = false;
 			if (result.type === 'success') {
 				open = false;
-				if (msg) toast.success(msg);
+				if (result.data?.assigned) toast.success(`Auftrag ist jetzt bei ${name}`, 'Die Partie bekommt dazu eine Benachrichtigung.');
+				else if (msg) toast.success(msg);
 			}
 			await update();
 		};
@@ -243,6 +263,37 @@
 {/if}
 
 {#if data.all}
+	<section class="card mt-5 p-4 lg:p-5" aria-labelledby="h-unassigned">
+		<h2 id="h-unassigned" class="flex items-center gap-2 text-lg"><HardHat size={20} aria-hidden="true" />Nicht zugeteilte Aufträge</h2>
+		<p class="mt-1 text-sm text-ink-2">
+			Offene Aufträge ohne Partie.{data.canEdit ? ' Beim Einplanen bekommt die gewählte Partie den Auftrag zugeteilt.' : ''} Die Partien sehen diese Liste nicht.
+		</p>
+		{#if data.unassigned.length}
+			<ul class="mt-3 divide-y divide-line rounded-xl border border-line">
+				{#each data.unassigned as o (o.id)}
+					{@const st = ORDER_STATUS_LABELS[o.status] ?? ORDER_STATUS_LABELS.erstellt}
+					<li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+						<span class="num w-16 shrink-0 font-display font-semibold">{spacedNumber(o.number)}</span>
+						<span class="min-w-[12rem] flex-1">
+							{#if data.canOpenOrders}
+								<a href="/auftraege/{o.id}" class="font-medium hover:underline">{o.location || o.title || 'Ohne Bezeichnung'}</a>
+							{:else}
+								<span class="font-medium">{o.location || o.title || 'Ohne Bezeichnung'}</span>
+							{/if}
+							<span class="block text-[0.8125rem] text-ink-3">{[o.location ? o.title : '', o.customerName, `seit ${dateLabel(o.createdAt)}`].filter(Boolean).join(' · ')}</span>
+						</span>
+						<span class="badge {st.tone}">{st.label}</span>
+						{#if data.canEdit}
+							<button type="button" class="btn btn-secondary btn-sm" onclick={() => openPlan(o)}><CalendarPlus size={16} aria-hidden="true" />Einplanen</button>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<p class="mt-3 text-sm text-ink-3">Alle offenen Aufträge sind einer Partie zugeteilt.</p>
+		{/if}
+	</section>
+
 	<section class="card mt-5 p-4 lg:p-5">
 		<h2 class="text-lg">Notizen</h2>
 		<p class="mt-1 text-sm text-ink-2">Noch einzuplanen und Sonstiges – bleibt stehen, bis es abgehakt ist. Die Partien sehen das nicht.</p>
@@ -332,6 +383,7 @@
 			<label class="block">
 				<span class="field-label">Partie</span>
 				<select class="select" name="partie" bind:value={partyId} required>
+					{#if !partyId}<option value="" disabled>Partie wählen</option>{/if}
 					{#each data.parties as p (p.id)}<option value={String(p.id)}>{p.name}</option>{/each}
 				</select>
 			</label>
@@ -364,12 +416,20 @@
 							{#each ownOrders as o (o.id)}<option value={String(o.id)}>{orderLabel(o)}</option>{/each}
 						</optgroup>
 					{/if}
+					{#if freeOrders.length}
+						<optgroup label="Nicht zugeteilt – geht an diese Partie">
+							{#each freeOrders as o (o.id)}<option value={String(o.id)}>{orderLabel(o)}</option>{/each}
+						</optgroup>
+					{/if}
 					{#if otherOrders.length}
-						<optgroup label={ownOrders.length ? 'Andere Aufträge' : 'Aufträge'}>
+						<optgroup label="Aufträge anderer Partien">
 							{#each otherOrders as o (o.id)}<option value={String(o.id)}>{orderLabel(o)}</option>{/each}
 						</optgroup>
 					{/if}
 				</select>
+				{#if claims}
+					<span class="field-hint">Der Auftrag ist noch keiner Partie zugeteilt – {partyName ? `mit dem Eintragen bekommt ihn ${partyName}` : 'mit dem Eintragen bekommt ihn die gewählte Partie'}.</span>
+				{/if}
 			</label>
 			<label class="block">
 				<span class="field-label">{orderId ? 'Zusatz' : 'Text'}{orderId ? '' : ' *'}</span>
@@ -377,7 +437,7 @@
 			</label>
 			{#if form && 'message' in form && form.message}<p class="text-sm text-danger" role="alert">{form.message}</p>{/if}
 			<div class="flex flex-wrap items-center gap-2 pt-1">
-				<button class="btn btn-primary" disabled={busy || (!editing && !days.length)}>{editing ? 'Speichern' : days.length > 1 ? `An ${days.length} Tagen eintragen` : 'Eintragen'}</button>
+				<button class="btn btn-primary" disabled={busy || !partyId || (!editing && !days.length)}>{editing ? 'Speichern' : days.length > 1 ? `An ${days.length} Tagen eintragen` : 'Eintragen'}</button>
 				<button type="button" class="btn btn-ghost" onclick={() => (open = false)}>Abbrechen</button>
 			</div>
 		</form>

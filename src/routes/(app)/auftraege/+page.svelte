@@ -71,6 +71,7 @@
 			<span class="field-label">Partie</span>
 			<select class="select" name="partie" value={data.filter.partyId ? String(data.filter.partyId) : ''}>
 				<option value="">Alle Partien</option>
+				<option value="ohne">Nicht zugeteilt</option>
 				{#each data.parties as p (p.id)}<option value={String(p.id)}>{p.name}</option>{/each}
 			</select>
 		</label>
@@ -90,7 +91,7 @@
 					<span class="min-w-0 flex-1">
 						<span class="block truncate font-medium">{o.title || 'Ohne BV'}</span>
 						<span class="block truncate text-[0.8125rem] text-ink-3">
-							{[o.location || o.customerName, data.all ? o.partyName : null].filter(Boolean).join(' · ')}
+							{[o.location || o.customerName, data.all ? (o.partyName ?? 'nicht zugeteilt') : null].filter(Boolean).join(' · ')}
 						</span>
 					</span>
 					<span class="hidden shrink-0 text-right text-[0.8125rem] text-ink-3 sm:block">{o.statusAt ? dateTime(o.statusAt) : dateTime(o.createdAt)}</span>

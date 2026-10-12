@@ -571,12 +571,12 @@
 	>
 		<p class="text-ink-2">
 			Der Auftrag bekommt die Nummer {spacedNumber(offer.number)}, die Anschrift und alle Positionen – ohne Preise. Die Partie sieht ihn danach unter
-			Aufträge und setzt ihn auf „in Arbeit" und „abgeschlossen".
+			Aufträge und setzt ihn auf „in Arbeit" und „abgeschlossen". Ohne Partie bleibt er „nicht zugeteilt" und steht in der Wochenplanung zum Einplanen.
 		</p>
 		<label class="block">
-			<span class="field-label">Partie *</span>
-			<select class="select" name="partie" required>
-				<option value="">Bitte wählen</option>
+			<span class="field-label">Partie</span>
+			<select class="select" name="partie">
+				<option value="">Noch keine – später zuteilen</option>
 				{#each data.parties as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
 			</select>
 		</label>

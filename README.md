@@ -6,7 +6,7 @@ Oberfläche, auf dem Handy wie am PC. Die übrigen Bereiche kommen nach und nach
 | Bereich | Stand |
 |---|---|
 | Übersicht | fertig – „Zu erledigen“ und Kennzahlen aus allen Bereichen, je nach Berechtigung |
-| Auftragsmanagement | fertig – Anfragen, Angebote mit Kundenlink, Aufträge je Partie, Summenblatt, Rechnungen (archiviert, PAdES-signiert, mit Prüfcode), Kunden |
+| Auftragsmanagement | fertig – Anfragen, Angebote mit Kundenlink, Aufträge (Partie freiwillig), Summenblatt, Rechnungen (archiviert, PAdES-signiert, mit Prüfcode), Kunden |
 | Dokumentation: Stundenzettel | fertig – Lohnwoche je Mitarbeiter, Freigabe und Prüfung |
 | Dokumentation: Tagesberichte | fertig – Leistung je Tag und Baustelle, Freigabe, Prüfung, Unterschrift des Kunden |
 | Planung | fertig – Wochenplanung je Partie und Tag mit Notizliste, Urlaubsanträge, Krankenstand mit Krankmeldung |
@@ -360,6 +360,12 @@ was er auf der Seite sieht: die Partie nur ihre Spalte, ohne Notizen.
   sieht bei anderen nur „abwesend“.
 - **An die Partien schicken:** Ist die Woche fertig, bekommt jede Partie mit Einträgen eine
   Benachrichtigung – statt bei jedem einzelnen Eintrag.
+- **Nicht zugeteilte Aufträge** unten: die offenen Aufträge ohne Partie, die ältesten zuerst.
+  **Einplanen** öffnet das Eintragen mit dem Auftrag – Partie und Tage wählen; die Partie
+  bekommt den Auftrag damit **zugeteilt** (und eine Benachrichtigung). Das gilt genauso, wenn
+  man einen nicht zugeteilten Auftrag über das Plus in einem Feld auswählt. Ein schon
+  zugeteilter Auftrag bleibt bei seiner Partie – plant man ihn woanders ein, hilft die andere
+  Partie nur aus. Die Liste steht auch im PDF und im Ausdruck; die Partien sehen sie nicht.
 - **Notizen** unten: eine durchgehende Liste („noch einzuplanen“), unabhängig von der Woche.
   Abgehakte bleiben unter „Erledigte“ stehen und lassen sich wieder öffnen. **Die Partien sehen
   die Notizen nicht.**
@@ -455,15 +461,19 @@ Bankverbindung und Kontakt.
      überarbeitet“.
    Wer das Angebot angelegt und freigegeben hat, bekommt bei beidem eine E-Mail (wenn SMTP
    eingerichtet ist und eine Adresse hinterlegt ist).
-4. **Angenommen:** **Auftrag erstellen** – Partie wählen, optional ein Hinweis für die Partie
-   und gleich die **Pläne als PDF** (mehrere auf einmal).
+4. **Angenommen:** **Auftrag erstellen** – Partie wählen (freiwillig: ohne Partie bleibt der
+   Auftrag „nicht zugeteilt“ und wird später zugeteilt, z. B. beim Einplanen in der
+   Wochenplanung), optional ein Hinweis für die Partie und gleich die **Pläne als PDF**
+   (mehrere auf einmal).
    Ein angenommenes Angebot lässt sich nur wieder öffnen (Admin, Geschäftsführung), solange
    es keinen Auftrag gibt; die Annahme verfällt dabei.
 
 **Aufträge** (`/auftraege`) bekommen dieselbe Nummer wie das Angebot, die Anschrift und alle
 Positionen – **ohne Preise** und ohne Einleitung, Schlusstext und Fußzeile, dafür mit Partie,
 Ausführungsort (antippen öffnet die Karte), Ansprechpartner und Telefon des Kunden und dem
-Hinweis.
+Hinweis. Die Partie lässt sich im Auftrag ändern oder wieder entfernen; in der Liste filtert
+„Partie → Nicht zugeteilt“ die Aufträge ohne Partie. Einen nicht zugeteilten Auftrag sehen
+nur, wer alle Aufträge sieht – die Partien nicht.
 
 - **Pläne und Unterlagen:** PDFs am Auftrag – beim Erstellen oder später hochladen (das Büro),
   die Partie sieht sie direkt in der App. Abgelegt werden sie wie die PDFs am Artikel unter

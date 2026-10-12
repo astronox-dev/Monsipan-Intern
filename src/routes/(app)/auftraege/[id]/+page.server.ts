@@ -77,15 +77,16 @@ export const actions: Actions = {
 		const { user, order } = await open(Number(params.id), locals);
 		if (!can(user.role, 'auftraege.bearbeiten')) return fail(403, { message: 'Dafür fehlt dir die Berechtigung.' });
 		const form = await request.formData();
-		const partyId = Number(form.get('partie'));
-		if (!Number.isInteger(partyId) || partyId <= 0) return fail(400, { message: 'Bitte eine Partie wählen.' });
+		const rawParty = String(form.get('partie') ?? '');
+		const partyId = rawParty ? Number(rawParty) : null;
+		if (partyId !== null && (!Number.isInteger(partyId) || partyId <= 0)) return fail(400, { message: 'Die Partie stimmt nicht.' });
 		await updateOrder(order.id, {
 			partyId,
 			location: String(form.get('ort') ?? '').trim(),
 			note: String(form.get('hinweis') ?? '').trim()
 		});
-		// Neue Partie: deren Partieführer erfährt es
-		if (partyId !== order.partyId) notifyOrderAssigned(order.id, user.id);
+		// Neue Partie: deren Partieführer erfährt es (ohne Partie niemand)
+		if (partyId !== null && partyId !== order.partyId) notifyOrderAssigned(order.id, user.id);
 		return { updated: true };
 	},
 

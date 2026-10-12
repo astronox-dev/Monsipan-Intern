@@ -134,7 +134,7 @@
 				<dd class="num">{order.projectNumber}</dd>
 			{/if}
 			<dt class="text-ink-3">Partie</dt>
-			<dd>{order.partyName ?? '–'}</dd>
+			<dd>{order.partyName ?? 'Nicht zugeteilt'}</dd>
 			<dt class="text-ink-3">Erstellt</dt>
 			<dd>{dateTime(order.createdAt)}{order.creatorFirst || order.creatorLast ? ` · ${[order.creatorFirst, order.creatorLast].filter(Boolean).join(' ')}` : ''}</dd>
 		</dl>
@@ -323,8 +323,8 @@
 		>
 			<label class="block max-w-sm">
 				<span class="field-label">Partie</span>
-				<select class="select" name="partie" required value={order.partyId ? String(order.partyId) : ''}>
-					<option value="">Bitte wählen</option>
+				<select class="select" name="partie" value={order.partyId ? String(order.partyId) : ''}>
+					<option value="">Keine – nicht zugeteilt</option>
 					{#each data.parties as p (p.id)}<option value={String(p.id)}>{p.name}</option>{/each}
 				</select>
 			</label>

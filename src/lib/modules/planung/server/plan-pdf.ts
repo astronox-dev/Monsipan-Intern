@@ -2,7 +2,7 @@
  * Wochenplanung als PDF – A4 quer wie der Zettel: oben KW und Zeitraum, je
  * Partie eine Spalte (mit den Leuten), je Tag eine Zeile, in den Feldern
  * Aufträge, Text, Urlaub und Krankenstand. Darunter – nur wer alle Partien
- * sieht – die offenen Notizen. Die Zeilen wachsen mit dem Inhalt; was nicht
+ * sieht – die nicht zugeteilten Aufträge und die offenen Notizen. Die Zeilen wachsen mit dem Inhalt; was nicht
  * mehr auf die Seite passt, geht mit wiederholtem Kopf weiter.
  */
 import { bufferResponse, drawLogo, startPdf } from '$lib/server/pdf';
@@ -134,6 +134,30 @@ export async function planPdf(week: PlanWeek, weekStart: string, heading: string
 		line(L, y, R, y, 0.5, d === 6 ? INK : LINE);
 	}
 	grid(tableTop, y);
+
+	/* ------------------------------------------------ Nicht zugeteilt */
+	if (week.unassigned.length) {
+		y += 14;
+		if (y + 30 > BOTTOM) {
+			doc.addPage();
+			y = pageHead();
+		}
+		doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text('Nicht zugeteilte Aufträge', L, y, { lineBreak: false });
+		y += 15;
+		for (const o of week.unassigned) {
+			const text = [o.location || o.title || 'Ohne Bezeichnung', o.location ? o.title : '', o.customerName].filter(Boolean).join(' · ');
+			doc.font('Helvetica').fontSize(8.5);
+			const h = doc.heightOfString(text, { width: R - L - 60 }) + 4;
+			if (y + h > BOTTOM) {
+				doc.addPage();
+				y = pageHead();
+			}
+			doc.font('Helvetica-Bold').fontSize(8.5).fillColor(INK).text(spacedNumber(o.number), L, y, { width: 54, lineBreak: false });
+			doc.font('Helvetica').fontSize(8.5).fillColor(INK).text(text, L + 60, y, { width: R - L - 60 });
+			y += h;
+			line(L, y - 1.5, R, y - 1.5, 0.3);
+		}
+	}
 
 	/* ------------------------------------------------ Notizen */
 	const open = week.notes.filter((n) => !n.done);

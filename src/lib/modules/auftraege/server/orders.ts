@@ -1,11 +1,13 @@
 /**
  * Aufträge: entstehen aus einem angenommenen Angebot – mit derselben Nummer,
  * Anschrift und Positionen, aber ohne Preise – und gehen an eine Partie. Die
- * Partie setzt sie auf „in Arbeit" und „abgeschlossen".
+ * Partie setzt sie auf „in Arbeit" und „abgeschlossen". Die Partie ist
+ * freiwillig: ein Auftrag kann auch erst später zugeteilt werden, etwa beim
+ * Einplanen in der Wochenplanung.
  *
  * Wer nicht alle Aufträge sehen darf, sieht die seiner Partie.
  */
-import { and, asc, desc, eq, inArray, like, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, like, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { can } from '$lib/permissions';
 import { db } from '$lib/server/db';
@@ -27,13 +29,15 @@ function scope(user: SessionUser): SQL | undefined {
 export interface OrderFilter {
 	q?: string;
 	status?: string;
-	partyId?: number | null;
+	/** Eine Partie oder „ohne" für die noch nicht zugeteilten */
+	partyId?: number | 'ohne' | null;
 }
 
 /** Sichtbarkeit, Partie und Suche – ohne den Stand */
 function baseWhere(user: SessionUser, filter: OrderFilter): (SQL | undefined)[] {
 	const where: (SQL | undefined)[] = [scope(user)];
-	if (filter.partyId) where.push(eq(orders.partyId, filter.partyId));
+	if (filter.partyId === 'ohne') where.push(isNull(orders.partyId));
+	else if (filter.partyId) where.push(eq(orders.partyId, filter.partyId));
 	if (filter.q?.trim()) {
 		const q = `%${filter.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 		where.push(
@@ -133,7 +137,7 @@ export type OrderDetail = NonNullable<Awaited<ReturnType<typeof orderDetail>>>;
  * werden übernommen, Ansprechpartner und Telefon aus dem Kundenstamm.
  * Gibt die ID zurück – oder null, wenn das Angebot nicht (mehr) passt.
  */
-export async function createOrderFromOffer(offerId: number, partyId: number, note: string, userId: number): Promise<number | null> {
+export async function createOrderFromOffer(offerId: number, partyId: number | null, note: string, userId: number): Promise<number | null> {
 	return db.transaction(async (tx) => {
 		const offer = await tx.select().from(offers).where(eq(offers.id, offerId)).get();
 		if (!offer || offer.status !== 'angenommen') return null;
@@ -179,7 +183,7 @@ export async function setOrderStatus(id: number, status: OrderStatus, userId: nu
 	await db.update(orders).set({ status, statusBy: userId, statusAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, id));
 }
 
-export async function updateOrder(id: number, data: { partyId: number; location: string; note: string }) {
+export async function updateOrder(id: number, data: { partyId: number | null; location: string; note: string }) {
 	await db
 		.update(orders)
 		.set({ partyId: data.partyId, location: data.location.slice(0, 300), note: data.note.slice(0, 2000), updatedAt: new Date() })

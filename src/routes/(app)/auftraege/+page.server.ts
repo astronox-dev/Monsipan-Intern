@@ -8,10 +8,11 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = requirePermission(locals, 'auftraege.sehen');
 	const all = can(user.role, 'auftraege.alle.sehen');
-	const party = Number(url.searchParams.get('partie'));
+	const rawParty = url.searchParams.get('partie');
+	const party = Number(rawParty);
 	const base = {
 		q: url.searchParams.get('q') ?? '',
-		partyId: all && Number.isInteger(party) && party > 0 ? party : null
+		partyId: !all ? null : rawParty === 'ohne' ? ('ohne' as const) : Number.isInteger(party) && party > 0 ? party : null
 	};
 	const counts = await countOrders(user, base);
 	// Drei Listen: erstellt, in Arbeit, abgeschlossen. Ohne Auswahl die erste, in der etwas steht

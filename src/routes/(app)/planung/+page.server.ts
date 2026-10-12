@@ -4,6 +4,7 @@ import { requirePermission } from '$lib/server/guard';
 import {
 	addEntry,
 	addNote,
+	claimOrder,
 	deleteEntry,
 	deleteNote,
 	planOrders,
@@ -16,6 +17,8 @@ import {
 	updateNote
 } from '$lib/modules/planung/server/plan';
 import { isValidIsoDate, mondayOf, today } from '$lib/modules/stunden/week';
+import { notifyOrderAssigned } from '$lib/modules/auftraege/server/notify';
+import type { SessionUser } from '$lib/server/auth';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url, locals }) => {
@@ -38,6 +41,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 const id = (form: FormData) => Number(form.get('id'));
 
+/** Ein noch nicht zugeteilter Auftrag geht an die Partie, bei der er eingeplant wird */
+async function assign(user: SessionUser, input: { orderId: number | null; partyId: number }): Promise<boolean> {
+	if (!input.orderId || !(await claimOrder(input.orderId, input.partyId))) return false;
+	notifyOrderAssigned(input.orderId, user.id);
+	return true;
+}
+
 export const actions: Actions = {
 	/** Neu – auf einem oder mehreren Tagen der Woche */
 	add: async ({ request, locals }) => {
@@ -52,17 +62,17 @@ export const actions: Actions = {
 			const result = await addEntry(user, { ...input, date });
 			if (typeof result !== 'number') return fail(400, result);
 		}
-		return { saved: days.length };
+		return { saved: days.length, assigned: await assign(user, input) };
 	},
 
 	update: async ({ request, locals }) => {
-		requirePermission(locals, 'planung.bearbeiten');
+		const user = requirePermission(locals, 'planung.bearbeiten');
 		const form = await request.formData();
 		const input = readEntry(form);
 		if ('message' in input) return fail(400, input);
 		const result = await updateEntry(id(form), input);
 		if (result !== true) return fail(400, result);
-		return { saved: 1 };
+		return { saved: 1, assigned: await assign(user, input) };
 	},
 
 	remove: async ({ request, locals }) => {
