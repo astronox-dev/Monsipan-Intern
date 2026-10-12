@@ -39,6 +39,7 @@
 	} from '$lib/modules/auftraege/offer';
 	import { date as dateLabel, dateTime } from '$lib/format';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { uploadFormPdfs, UploadError } from '$lib/upload';
 
 	let { data, form } = $props();
 	const offer = $derived(data.offer);
@@ -92,6 +93,9 @@
 	let orderOpen = $state(false);
 	let customerBusy = $state(false);
 	let orderBusy = $state(false);
+	/** Pläne beim Erstellen des Auftrags: Anteil hochgeladen (null = gerade nicht) */
+	let planShare = $state<number | null>(null);
+	let planError = $state('');
 	let listBox = $state<HTMLElement>();
 
 	/** Kunde gewählt: seine Anschrift kommt ins Angebot (danach hier noch änderbar) */
@@ -616,8 +620,21 @@
 		action="?/createOrder"
 		enctype="multipart/form-data"
 		class="space-y-4"
-		use:enhance={() => {
+		use:enhance={async ({ formData, cancel }) => {
 			orderBusy = true;
+			planError = '';
+			// Pläne in Teilen vorab – ohne Größengrenze; ist eine kein PDF, entsteht kein Auftrag
+			try {
+				planShare = 0;
+				await uploadFormPdfs(formData, 'plaene', (share) => (planShare = share));
+			} catch (err) {
+				planError = err instanceof UploadError ? err.message : 'Das Hochladen hat nicht geklappt – bitte noch einmal versuchen.';
+				orderBusy = false;
+				cancel();
+				return;
+			} finally {
+				planShare = null;
+			}
 			return async ({ update }) => {
 				orderBusy = false;
 				await update({ reset: false });
@@ -643,10 +660,11 @@
 			<span class="field-label">Pläne und Unterlagen <span class="font-normal text-ink-3">(PDF, freiwillig – auch später im Auftrag)</span></span>
 			<input class="input py-2" type="file" name="plaene" accept="application/pdf,.pdf" multiple />
 		</label>
-		{#if form && 'orderMessage' in form && form.orderMessage}<p class="field-error" role="alert">{form.orderMessage}</p>{/if}
+		{#if planError}<p class="field-error" role="alert">{planError}</p>
+		{:else if form && 'orderMessage' in form && form.orderMessage}<p class="field-error" role="alert">{form.orderMessage}</p>{/if}
 		<div class="flex justify-end gap-2 pt-1">
 			<button type="button" class="btn btn-ghost" onclick={() => (orderOpen = false)}>Abbrechen</button>
-			<button class="btn btn-primary" disabled={orderBusy}><HardHat size={18} aria-hidden="true" />{orderBusy ? 'Wird erstellt …' : 'Auftrag erstellen'}</button>
+			<button class="btn btn-primary" disabled={orderBusy}><HardHat size={18} aria-hidden="true" />{planShare !== null ? `Pläne hochladen … ${Math.floor(planShare * 100)} %` : orderBusy ? 'Wird erstellt …' : 'Auftrag erstellen'}</button>
 		</div>
 	</form>
 </Dialog>

@@ -9,7 +9,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Readable, Transform } from 'node:stream';
+import { Readable, Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { asc, eq, sql } from 'drizzle-orm';
 import { MAX_DOCUMENT_BYTES } from '$lib/documents';
@@ -30,43 +30,124 @@ export const documentFile = (sha256: string) => path.join(DOC_DIR, `${sha256}.pd
 
 /**
  * Hochgeladene Datei prüfen und ablegen – gestreamt, mit Prüfsumme und
- * Größengrenze. Gibt Prüfsumme und Größe zurück.
+ * Größengrenze (`null`: ohne, etwa für Pläne am Auftrag). Gibt Prüfsumme und Größe zurück.
  */
-export async function storeDocument(upload: File): Promise<{ sha256: string; size: number }> {
+export async function storeDocument(upload: File, maxBytes: number | null = MAX_DOCUMENT_BYTES): Promise<{ sha256: string; size: number }> {
 	if (upload.size === 0) throw new DocumentError('Die Datei ist leer.');
-	if (upload.size > MAX_DOCUMENT_BYTES) {
-		throw new DocumentError(`Die Datei ist zu groß – erlaubt sind ${MAX_DOCUMENT_BYTES / 1024 / 1024} MB.`);
+	if (maxBytes !== null && upload.size > maxBytes) {
+		throw new DocumentError(`Die Datei ist zu groß – erlaubt sind ${maxBytes / 1024 / 1024} MB.`);
 	}
 	fs.mkdirSync(DOC_DIR, { recursive: true });
 	const temp = path.join(DOC_DIR, `upload-${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}.tmp`);
+	try {
+		const { sha256, size, head } = await copyChecked(Readable.fromWeb(upload.stream() as Parameters<typeof Readable.fromWeb>[0]), temp, maxBytes);
+		return adopt(temp, sha256, size, head);
+	} catch (err) {
+		fs.rmSync(temp, { force: true });
+		throw err;
+	}
+}
 
+/** Strom in eine Datei schreiben (ohne `to` nur lesen) – dabei Prüfsumme, Größe und Anfang mitnehmen */
+async function copyChecked(from: Readable, to: string | null, maxBytes: number | null) {
 	const hash = crypto.createHash('sha256');
 	let size = 0;
 	let head = Buffer.alloc(0);
 	const tap = new Transform({
 		transform(chunk: Buffer, _enc, done) {
 			size += chunk.length;
-			if (size > MAX_DOCUMENT_BYTES) return done(new DocumentError('Die Datei ist zu groß.'));
+			if (maxBytes !== null && size > maxBytes) return done(new DocumentError('Die Datei ist zu groß.'));
 			if (head.length < 1024) head = Buffer.concat([head, chunk]).subarray(0, 1024);
 			hash.update(chunk);
 			done(null, chunk);
 		}
 	});
+	const sink = to ? fs.createWriteStream(to) : new Writable({ write: (_chunk, _enc, done) => done() });
+	await pipeline(from, tap, sink);
+	return { sha256: hash.digest('hex'), size, head };
+}
 
+/** Geprüfte Datei unter ihrer Prüfsumme ablegen – liegt sie schon da, bleibt es bei einer */
+function adopt(temp: string, sha256: string, size: number, head: Buffer) {
+	if (size === 0) throw new DocumentError('Die Datei ist leer.');
+	// Die Kennung darf laut PDF-Norm in den ersten 1024 Bytes stehen
+	if (!head.toString('latin1').includes(PDF_MAGIC)) throw new DocumentError('Das ist keine PDF-Datei.');
+	const target = documentFile(sha256);
+	if (fs.existsSync(target)) fs.rmSync(temp, { force: true });
+	else fs.renameSync(temp, target);
+	touch(target);
+	return { sha256, size };
+}
+
+/* ----------------------------------------------------- Uploads in Teilen */
+
+/**
+ * Pläne am Auftrag dürfen beliebig groß sein. Damit jede Anfrage trotzdem klein
+ * bleibt (Cloudflare und BODY_SIZE_LIMIT begrenzen je Anfrage), schickt der
+ * Browser sie in Teilen: Die Teile kommen der Reihe nach in eine .tmp-Datei je
+ * Person und Upload; abgebrochene räumt `tidyFolder` nach einem Tag weg. Am Ende
+ * wird die Datei geprüft, abgelegt und bekommt einen Beleg – mit dessen
+ * Kennung hängt das Formular sie dann an den Auftrag.
+ */
+export const UPLOAD_ID = /^[A-Za-z0-9_-]{16,64}$/;
+
+const partFile = (userId: number, id: string) => path.join(DOC_DIR, `teil-${userId}-${id}.tmp`);
+const writing = new Set<string>();
+/** Fertige Uploads, je Person und Kennung */
+const finished = new Map<string, { name: string; sha256: string; size: number; at: number }>();
+const finishedKey = (userId: number, id: string) => `${userId}:${id}`;
+const FINISHED_TTL = 86_400_000;
+
+const sizeOf = (file: string) => (fs.existsSync(file) ? fs.statSync(file).size : 0);
+
+/**
+ * Einen Teil anhängen – nur genau dort, wo das schon Angekommene endet. Sonst
+ * (Wiederholung nach Abbruch, oder es schreibt gerade noch) bleibt die Datei,
+ * wie sie ist, und `received` sagt, ab wo es weitergeht.
+ */
+export async function appendUploadPart(userId: number, id: string, offset: number, part: ReadableStream<Uint8Array>) {
+	const file = partFile(userId, id);
+	if (writing.has(file) || offset !== sizeOf(file)) return { ok: false, received: sizeOf(file) };
+	fs.mkdirSync(DOC_DIR, { recursive: true });
+	writing.add(file);
 	try {
-		await pipeline(Readable.fromWeb(upload.stream() as Parameters<typeof Readable.fromWeb>[0]), tap, fs.createWriteStream(temp));
-		// Die Kennung darf laut PDF-Norm in den ersten 1024 Bytes stehen
-		if (!head.toString('latin1').includes(PDF_MAGIC)) throw new DocumentError('Das ist keine PDF-Datei.');
-		const sha256 = hash.digest('hex');
-		const target = documentFile(sha256);
-		if (fs.existsSync(target)) fs.rmSync(temp, { force: true });
-		else fs.renameSync(temp, target);
-		touch(target);
-		return { sha256, size };
+		await pipeline(Readable.fromWeb(part as Parameters<typeof Readable.fromWeb>[0]), fs.createWriteStream(file, { flags: 'a' }));
+	} catch {
+		/* Verbindung abgebrochen – angekommen ist, was in der Datei steht */
+	} finally {
+		writing.delete(file);
+	}
+	return { ok: true, received: sizeOf(file) };
+}
+
+/** Alle Teile sind da: prüfen und ablegen, ohne Größengrenze */
+export async function finishUpload(userId: number, id: string, name: string) {
+	// Schon fertig (die Antwort ging unterwegs verloren)
+	const done = finished.get(finishedKey(userId, id));
+	if (done) return { sha256: done.sha256, size: done.size };
+	const file = partFile(userId, id);
+	if (writing.has(file)) throw new DocumentError('Die Datei wird noch übertragen.');
+	if (!fs.existsSync(file)) throw new DocumentError('Die Datei ist leer.');
+	try {
+		const { sha256, size, head } = await copyChecked(fs.createReadStream(file), null, null);
+		const stored = adopt(file, sha256, size, head);
+		const now = Date.now();
+		for (const [key, f] of finished) if (now - f.at > FINISHED_TTL) finished.delete(key);
+		finished.set(finishedKey(userId, id), { name: name.trim().slice(0, 200) || 'unterlage.pdf', ...stored, at: now });
+		return stored;
 	} catch (err) {
-		fs.rmSync(temp, { force: true });
+		fs.rmSync(file, { force: true });
 		throw err;
 	}
+}
+
+/** Fertige Uploads dieser Person einlösen – jeden einmal */
+export function takeUploads(userId: number, ids: string[]): { name: string; sha256: string; size: number }[] {
+	const keys = ids.map((id) => finishedKey(userId, id));
+	const found = keys.map((key) => finished.get(key));
+	if (found.some((f) => !f)) throw new DocumentError('Eine Datei ist nicht vollständig angekommen – bitte noch einmal hochladen.');
+	for (const key of keys) finished.delete(key);
+	return found.map((f) => ({ name: f!.name, sha256: f!.sha256, size: f!.size }));
 }
 
 function touch(file: string) {

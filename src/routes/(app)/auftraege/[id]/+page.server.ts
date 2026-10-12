@@ -1,13 +1,14 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
 import { requireUser } from '$lib/server/guard';
-import { DocumentError } from '$lib/server/documents';
+import { DocumentError, takeUploads } from '$lib/server/documents';
 import { ORDER_STATUS, type OrderStatus } from '$lib/server/db/schema';
 import {
 	activeParties,
 	addOrderDocument,
 	deleteOrder,
 	deleteOrderDocument,
+	insertOrderDocument,
 	mayDeleteOrder,
 	mayViewOrder,
 	maySetOrderStatus,
@@ -90,14 +91,32 @@ export const actions: Actions = {
 		return { updated: true };
 	},
 
-	/** Pläne und andere PDFs – mehrere auf einmal */
+	/**
+	 * Pläne und andere PDFs – mehrere auf einmal, ohne Größengrenze. Der Browser
+	 * lädt sie vorher in Teilen hoch und schickt nur die Kennungen (`uploads`);
+	 * ohne JavaScript kommen die Dateien selbst (`dateien`).
+	 */
 	upload: async ({ params, request, locals }) => {
 		const { user, order } = await open(Number(params.id), locals);
 		if (!can(user.role, 'auftraege.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
-		const files = (await request.formData()).getAll('dateien').filter((f): f is File => f instanceof File && f.size > 0);
-		if (!files.length) return fail(400, { docError: 'Bitte eine oder mehrere PDF-Dateien auswählen.' });
+		const form = await request.formData();
+		const files = form.getAll('dateien').filter((f): f is File => f instanceof File && f.size > 0);
+		const uploadIds = form.getAll('uploads').map(String);
+		if (!files.length && !uploadIds.length) return fail(400, { docError: 'Bitte eine oder mehrere PDF-Dateien auswählen.' });
 		let added = 0;
 		const titles: string[] = [];
+		let uploaded: ReturnType<typeof takeUploads>;
+		try {
+			uploaded = takeUploads(user.id, uploadIds);
+		} catch (err) {
+			if (err instanceof DocumentError) return fail(400, { docError: err.message, added });
+			throw err;
+		}
+		for (const u of uploaded) {
+			await insertOrderDocument(order.id, u.name, u, user.id);
+			added++;
+			titles.push(titleFromFileName(u.name) || u.name);
+		}
 		for (const file of files) {
 			try {
 				await addOrderDocument(order.id, file, user.id);

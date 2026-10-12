@@ -503,7 +503,10 @@ nur, wer alle Aufträge sieht – die Partien nicht.
 
 - **Pläne und Unterlagen:** PDFs am Auftrag – beim Erstellen oder später hochladen (das Büro),
   die Partie sieht sie direkt in der App. Abgelegt werden sie wie die PDFs am Artikel unter
-  `/data/dokumente`; im Auftrags-PDF steht, welche Unterlagen es in der App gibt.
+  `/data/dokumente`; im Auftrags-PDF steht, welche Unterlagen es in der App gibt. Eine
+  Größengrenze gibt es für Pläne nicht: Der Browser schickt sie in Teilen zu 8 MB (so passt
+  jede Anfrage durch Cloudflare) und macht nach einem Verbindungsabbruch dort weiter, wo er
+  stand; die Anzeige zeigt, wie weit er ist.
 - **Tagesberichte zum Auftrag:** Beim Anlegen oder im Bericht lässt sich ein offener Auftrag
   wählen – die Baustelle wird dann aus dem Ausführungsort übernommen (oder dem BV, wenn keiner
   eingetragen ist). Im Auftrag stehen alle seine Tagesberichte, **Neuer Tagesbericht** legt

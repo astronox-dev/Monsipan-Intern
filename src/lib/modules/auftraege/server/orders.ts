@@ -262,9 +262,9 @@ export function listOrderDocuments(orderId: number) {
 		.all();
 }
 
-/** PDF ablegen (wie die PDFs am Artikel) und an den Auftrag hängen; der Titel kommt aus dem Dateinamen */
+/** PDF ablegen (wie die PDFs am Artikel, aber ohne Größengrenze) und an den Auftrag hängen; der Titel kommt aus dem Dateinamen */
 export async function addOrderDocument(orderId: number, file: File, userId: number) {
-	await insertOrderDocument(orderId, file.name, await storeDocument(file), userId);
+	await insertOrderDocument(orderId, file.name, await storeDocument(file, null), userId);
 }
 
 /** Eintrag für eine schon abgelegte Datei – beim Erstellen des Auftrags werden die PDFs vorher geprüft */

@@ -18,7 +18,8 @@
 	import X from '@lucide/svelte/icons/x';
 	import Sigma from '@lucide/svelte/icons/sigma';
 	import ReceiptText from '@lucide/svelte/icons/receipt-text';
-	import { fileSizeLabel, MAX_DOCUMENT_BYTES } from '$lib/documents';
+	import { fileSizeLabel } from '$lib/documents';
+	import { uploadFormPdfs, UploadError } from '$lib/upload';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PdfButton from '$lib/components/PdfButton.svelte';
@@ -37,6 +38,8 @@
 	let deleteOpen = $state(false);
 	let resetOpen = $state(false);
 	let uploading = $state(false);
+	let uploadShare = $state(0);
+	let uploadError = $state('');
 	let removeDoc = $state<{ id: number; title: string } | null>(null);
 
 	/** Ausführungsort in der Karten-App öffnen – am Handy gleich mit Navigation */
@@ -178,8 +181,20 @@
 				method="POST"
 				action="?/upload"
 				enctype="multipart/form-data"
-				use:enhance={() => {
+				use:enhance={async ({ formData, formElement, cancel }) => {
 					uploading = true;
+					uploadShare = 0;
+					uploadError = '';
+					// Große Pläne in Teilen vorab – ins Formular kommen nur noch die Kennungen
+					try {
+						await uploadFormPdfs(formData, 'dateien', (share) => (uploadShare = share));
+					} catch (err) {
+						uploading = false;
+						uploadError = err instanceof UploadError ? err.message : 'Das Hochladen hat nicht geklappt – bitte noch einmal versuchen.';
+						formElement.reset();
+						cancel();
+						return;
+					}
 					return async ({ result, update }) => {
 						uploading = false;
 						if (result.type === 'success') toast.success(Number(result.data?.added) === 1 ? 'PDF hochgeladen' : `${result.data?.added} PDFs hochgeladen`);
@@ -188,7 +203,7 @@
 				}}
 			>
 				<label class="upload btn btn-secondary btn-sm {uploading ? 'pointer-events-none opacity-50' : ''}">
-					<Upload size={16} aria-hidden="true" />{uploading ? 'Wird hochgeladen …' : 'PDF hochladen'}
+					<Upload size={16} aria-hidden="true" />{uploading ? `Wird hochgeladen … ${Math.floor(uploadShare * 100)} %` : 'PDF hochladen'}
 					<input
 						type="file"
 						name="dateien"
@@ -201,7 +216,8 @@
 			</form>
 		{/if}
 	</div>
-	{#if form && 'docError' in form && form.docError}<p class="field-error mt-2" role="alert">{form.docError}</p>{/if}
+	{#if uploadError}<p class="field-error mt-2" role="alert">{uploadError}</p>
+	{:else if form && 'docError' in form && form.docError}<p class="field-error mt-2" role="alert">{form.docError}</p>{/if}
 	{#if order.documents.length}
 		<ul class="mt-3 divide-y divide-line rounded-xl border border-line">
 			{#each order.documents as d (d.id)}
@@ -223,7 +239,7 @@
 			{/each}
 		</ul>
 	{:else}
-		<p class="mt-2 text-sm text-ink-3">{data.canManage ? `Noch keine Unterlagen – z. B. Pläne als PDF (bis ${fileSizeLabel(MAX_DOCUMENT_BYTES)} je Datei).` : 'Keine Unterlagen.'}</p>
+		<p class="mt-2 text-sm text-ink-3">{data.canManage ? 'Noch keine Unterlagen – z. B. Pläne als PDF, auch große.' : 'Keine Unterlagen.'}</p>
 	{/if}
 </section>
 
