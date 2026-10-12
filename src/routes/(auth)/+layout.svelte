@@ -17,8 +17,10 @@
 			{/each}
 		</div>
 		<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#15181c] via-[#15181c]/90 to-transparent px-10 pt-32 pb-10 text-white">
-			<p class="font-display text-3xl leading-tight font-semibold">Lagerbestand für Bodenmarkierung</p>
-			<p class="mt-2 max-w-sm text-white/75">Kaltplastik, Farben, Bänder und Zubehör – scannen, buchen, nachbestellen.</p>
+			<p class="font-display text-4xl leading-tight font-semibold">Alles auf einer Spur.</p>
+			<p class="mt-2 max-w-md text-white/75">
+				Von der Anfrage bis zur Rechnung: Angebote, Aufträge, Wochenplan, Tagesberichte, Stunden und Lager – für Büro und Baustelle.
+			</p>
 		</div>
 	</aside>
 
@@ -26,7 +28,11 @@
 		class="flex items-center justify-center px-5 pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-10"
 	>
 		<div class="w-full max-w-sm">
-			<div class="mb-10"><Logo /></div>
+			<div class="mb-10">
+				<Logo large />
+				<!-- Am Handy fehlt die Fahrbahn links – der Spruch steht dann hier -->
+				<p class="mt-4 text-ink-2 lg:hidden">Alles auf einer Spur – von der Anfrage bis zur Rechnung.</p>
+			</div>
 			{@render children()}
 		</div>
 	</main>

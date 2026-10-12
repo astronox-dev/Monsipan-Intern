@@ -3,6 +3,8 @@
 @import '@fontsource/barlow/latin-500.css';
 @import '@fontsource/barlow/latin-600.css';
 @import '@fontsource/barlow-semi-condensed/latin-600.css';
+/* Nur für den großen Schriftzug auf der Anmeldeseite – geladen wird sie erst dort */
+@import '@fontsource/barlow-semi-condensed/latin-800-italic.css';
 
 /* Dark Mode folgt dem Attribut; ohne Attribut dem System */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
