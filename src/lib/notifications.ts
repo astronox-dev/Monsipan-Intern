@@ -1,8 +1,9 @@
 /**
  * Benachrichtigungen: welche Ereignisse es gibt und wer sie von Haus aus bekommt.
  *
- * Was tatsächlich gilt, stellt der Admin unter Verwaltung → Benachrichtigungen
- * ein – je Ereignis Gruppen und einzelne Personen. Bekommen kann eine
+ * Zwei Wege: unter der Glocke samt Push, und als Info-Mail. Was tatsächlich
+ * gilt, stellt der Admin unter Verwaltung → Benachrichtigungen ein – je Weg und
+ * Ereignis Gruppen und einzelne Personen. Bekommen kann eine
  * Benachrichtigung aber nur, wer das Ding auch sehen darf (`requires`); geht es
  * um eine Partie, nur die eigene Partie – außer mit dem Recht, alle zu sehen
  * (`all`). Wer etwas selbst auslöst, bekommt dazu nichts.
@@ -17,8 +18,17 @@ export interface NotificationEventDef {
 	requires: Permission;
 	/** Ereignis einer Partie: ohne dieses Recht nur für die eigene Partie */
 	all?: Permission;
+	/** Glocke und Push von Haus aus */
 	defaults: readonly Role[];
+	/** Info-Mail von Haus aus – ohne Angabe niemand */
+	mailDefaults?: readonly Role[];
+	/** Wer die Info-Mail außerdem immer bekommt (Hinweis für die Einstellungen) */
+	mailAlways?: string;
 }
+
+export const NOTIFICATION_CHANNELS = ['push', 'mail'] as const;
+export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+export const CHANNEL_LABELS: Record<NotificationChannel, string> = { push: 'Glocke und Push', mail: 'Info-Mail' };
 
 export const NOTIFICATION_EVENTS = {
 	'anfrage.neu': {
@@ -39,13 +49,15 @@ export const NOTIFICATION_EVENTS = {
 		label: 'Angebot vom Kunden angenommen',
 		section: 'Auftragsmanagement',
 		requires: 'angebote.sehen',
-		defaults: ['geschaeftsfuehrer', 'bauleiter', 'buchhaltung']
+		defaults: ['geschaeftsfuehrer', 'bauleiter', 'buchhaltung'],
+		mailAlways: 'Nimmt der Kunde über den Link an, geht die Info-Mail immer auch an die Person, die das Angebot angelegt bzw. freigegeben hat'
 	},
 	'angebot.aenderung': {
 		label: 'Kunde wünscht Änderungen am Angebot',
 		section: 'Auftragsmanagement',
 		requires: 'angebote.sehen',
-		defaults: ['geschaeftsfuehrer', 'bauleiter', 'buchhaltung']
+		defaults: ['geschaeftsfuehrer', 'bauleiter', 'buchhaltung'],
+		mailAlways: 'Die Info-Mail geht immer auch an die Person, die das Angebot angelegt bzw. freigegeben hat'
 	},
 	'auftrag.zugeordnet': {
 		label: 'Auftrag einer Partie zugeordnet',
@@ -191,7 +203,8 @@ export const NOTIFICATION_EVENTS = {
 		section: 'Lager',
 		hint: 'Einmal je Artikel, bis er wieder darüber liegt',
 		requires: 'lager.bestand.sehen',
-		defaults: ['admin', 'bauleiter']
+		defaults: ['admin', 'bauleiter'],
+		mailDefaults: ['admin', 'bauleiter']
 	}
 } as const satisfies Record<string, NotificationEventDef>;
 

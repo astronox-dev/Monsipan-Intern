@@ -282,7 +282,7 @@
 			<div>
 				<label for="minStock" class="field-label">Mindestbestand (Stück)</label>
 				<input id="minStock" name="minStock" class="input" inputmode="numeric" bind:value={v.minStock} aria-invalid={errors.minStock ? true : undefined} aria-describedby="min-hint" />
-				<p id="min-hint" class="field-hint">Wird er erreicht, erscheint der Artikel auf der Bestellliste und es geht eine Warn-Mail raus.</p>
+				<p id="min-hint" class="field-hint">Wird er erreicht, erscheint der Artikel auf der Bestellliste und es gibt eine Benachrichtigung (je nach Einstellung auch als Info-Mail).</p>
 				{#if errors.minStock}<p class="field-error">{errors.minStock}</p>{/if}
 			</div>
 			<div>

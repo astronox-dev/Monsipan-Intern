@@ -4,47 +4,82 @@
  * `notify()` sucht die Empfänger (Gruppen und Personen aus den Einstellungen
  * des Admins, ohne wer es abgeschaltet hat, ohne wer es selbst ausgelöst hat,
  * nur wer es sehen darf), legt je Person einen Eintrag für die Glocke an,
- * sagt offenen Browsern Bescheid und schickt Push an ihre Geräte. Das läuft
- * im Hintergrund – die Antwort an den Auslöser wartet nicht darauf.
+ * sagt offenen Browsern Bescheid und schickt Push an ihre Geräte. Dasselbe
+ * mit eigener Auswahl als Info-Mail. Das läuft im Hintergrund – die Antwort
+ * an den Auslöser wartet nicht darauf.
  */
 import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { env } from '$env/dynamic/private';
 import { can, ROLES, type Role } from '$lib/permissions';
 import {
 	isNotificationEvent,
 	mayReceive,
 	NOTIFICATION_EVENT_KEYS,
 	NOTIFICATION_EVENTS,
+	type NotificationChannel,
 	type NotificationEvent,
 	type NotificationEventDef
 } from '$lib/notifications';
 import { db } from './db';
-import { notificationMutes, notificationPeople, notificationRules, notifications, users } from './db/schema';
+import {
+	notificationMailMutes,
+	notificationMailPeople,
+	notificationMailRules,
+	notificationMutes,
+	notificationPeople,
+	notificationRules,
+	notifications,
+	users
+} from './db/schema';
 import { broadcast } from './events';
+import { infoMail, isMailConfigured, sendMail } from './mail';
 import { pushTo } from './push';
+import { getSettings } from './settings';
 
 /* ------------------------------------------------------- Einstellungen */
 
-let ensured: Promise<void> | null = null;
+const TABLES = {
+	push: { rules: notificationRules, people: notificationPeople, mutes: notificationMutes },
+	mail: { rules: notificationMailRules, people: notificationMailPeople, mutes: notificationMailMutes }
+};
+/** Beide Wege haben dieselben Spalten – für die Typen genügt der eine */
+const tables = (channel: NotificationChannel) => TABLES[channel] as unknown as typeof TABLES.push;
 
-/** Fehlende Paare (Ereignis, Gruppe) aus den Vorgaben im Katalog anlegen – einmal je Start */
-export function ensureNotificationRules(): Promise<void> {
-	ensured ??= (async () => {
-		const rows = await db.select({ event: notificationRules.event, role: notificationRules.role }).from(notificationRules).all();
+const ensured: Partial<Record<NotificationChannel, Promise<void>>> = {};
+/** Nach „Auf Standard zurücksetzen": die Vorgaben aus dem Katalog, nicht die alten Einstellungen */
+let catalogOnly = false;
+
+/** Wer ein Ereignis von Haus aus bekommt */
+async function defaultsFor(channel: NotificationChannel, firstTime: boolean): Promise<(e: NotificationEvent) => readonly Role[]> {
+	if (channel === 'push') return (e) => NOTIFICATION_EVENTS[e].defaults;
+	const mail = (e: NotificationEvent) => (NOTIFICATION_EVENTS[e] as NotificationEventDef).mailDefaults ?? [];
+	if (!firstTime || catalogOnly) return mail;
+	// Beim ersten Mal: die bisherigen „Warn-Mails zum Mindestbestand" aus den Einstellungen übernehmen
+	const s = await getSettings();
+	return (e) => (e === 'lager.mindestbestand' ? (s.alertEmailsEnabled ? s.alertRoles : []) : mail(e));
+}
+
+/** Fehlende Paare (Ereignis, Gruppe) aus den Vorgaben im Katalog anlegen – einmal je Start und Weg */
+export function ensureNotificationRules(channel: NotificationChannel = 'push'): Promise<void> {
+	ensured[channel] ??= (async () => {
+		const t = tables(channel);
+		const rows = await db.select({ event: t.rules.event, role: t.rules.role }).from(t.rules).all();
 		const known = new Set(rows.map((r) => `${r.event}|${r.role}`));
+		const defaults = await defaultsFor(channel, rows.length === 0);
 		const missing = NOTIFICATION_EVENT_KEYS.flatMap((event) =>
 			ROLES.filter((role) => !known.has(`${event}|${role}`)).map((role) => ({
 				event,
 				role,
-				enabled: (NOTIFICATION_EVENTS[event].defaults as readonly Role[]).includes(role)
+				enabled: defaults(event).includes(role)
 			}))
 		);
 		if (missing.length) {
 			await db.transaction(async (tx) => {
-				for (const m of missing) await tx.insert(notificationRules).values(m).onConflictDoNothing();
+				for (const m of missing) await tx.insert(t.rules).values(m).onConflictDoNothing();
 			});
 		}
 	})();
-	return ensured;
+	return ensured[channel]!;
 }
 
 export interface NotificationSettings {
@@ -54,12 +89,10 @@ export interface NotificationSettings {
 	people: Record<string, number[]>;
 }
 
-export async function notificationSettings(): Promise<NotificationSettings> {
-	await ensureNotificationRules();
-	const [rules, people] = await Promise.all([
-		db.select().from(notificationRules).where(eq(notificationRules.enabled, true)).all(),
-		db.select().from(notificationPeople).all()
-	]);
+export async function notificationSettings(channel: NotificationChannel = 'push'): Promise<NotificationSettings> {
+	await ensureNotificationRules(channel);
+	const t = tables(channel);
+	const [rules, people] = await Promise.all([db.select().from(t.rules).where(eq(t.rules.enabled, true)).all(), db.select().from(t.people).all()]);
 	const out: NotificationSettings = { roles: {}, people: {} };
 	for (const e of NOTIFICATION_EVENT_KEYS) {
 		out.roles[e] = [];
@@ -70,51 +103,64 @@ export async function notificationSettings(): Promise<NotificationSettings> {
 	return out;
 }
 
-/** Den ganzen Stand aus dem Formular übernehmen */
-export async function saveNotificationSettings(roles: Set<string>, people: Set<string>) {
+/** Den ganzen Stand eines Wegs aus dem Formular übernehmen */
+export async function saveNotificationSettings(roles: Set<string>, people: Set<string>, channel: NotificationChannel = 'push') {
+	await ensureNotificationRules(channel);
+	const t = tables(channel);
 	await db.transaction(async (tx) => {
 		for (const event of NOTIFICATION_EVENT_KEYS) {
 			for (const role of ROLES) {
 				const enabled = roles.has(`${event}|${role}`);
 				await tx
-					.insert(notificationRules)
+					.insert(t.rules)
 					.values({ event, role, enabled, updatedAt: new Date() })
-					.onConflictDoUpdate({ target: [notificationRules.event, notificationRules.role], set: { enabled, updatedAt: new Date() } });
+					.onConflictDoUpdate({ target: [t.rules.event, t.rules.role], set: { enabled, updatedAt: new Date() } });
 			}
 		}
-		await tx.delete(notificationPeople);
+		await tx.delete(t.people);
 		for (const key of people) {
 			const [event, id] = key.split('|');
-			if (isNotificationEvent(event) && /^\d+$/.test(id)) await tx.insert(notificationPeople).values({ event, userId: Number(id) }).onConflictDoNothing();
+			if (isNotificationEvent(event) && /^\d+$/.test(id)) await tx.insert(t.people).values({ event, userId: Number(id) }).onConflictDoNothing();
 		}
 	});
 }
 
-/** Zurück auf die Vorgaben im Katalog: Gruppen wie ausgeliefert, keine Personen */
+/** Zurück auf die Vorgaben im Katalog – beide Wege: Gruppen wie ausgeliefert, keine Personen */
 export async function resetNotificationSettings() {
 	await db.transaction(async (tx) => {
-		await tx.delete(notificationRules);
-		await tx.delete(notificationPeople);
+		for (const channel of ['push', 'mail'] as const) {
+			await tx.delete(tables(channel).rules);
+			await tx.delete(tables(channel).people);
+		}
 	});
-	ensured = null;
-	await ensureNotificationRules();
+	catalogOnly = true;
+	for (const channel of ['push', 'mail'] as const) {
+		delete ensured[channel];
+		await ensureNotificationRules(channel);
+	}
 }
 
 /* ----------------------------------------------------------- Empfänger */
 
 const activeUser = and(eq(users.active, true), isNull(users.deletedAt));
 
-/** Wer diese Benachrichtigung bekommt – ohne den Auslöser */
-export async function recipientsFor(event: NotificationEvent, partyId: number | null | undefined, actorId?: number | null): Promise<number[]> {
-	await ensureNotificationRules();
+/** Wer diese Benachrichtigung auf diesem Weg bekommt – ohne den Auslöser */
+export async function recipientsFor(
+	event: NotificationEvent,
+	partyId: number | null | undefined,
+	actorId?: number | null,
+	channel: NotificationChannel = 'push'
+): Promise<number[]> {
+	await ensureNotificationRules(channel);
+	const t = tables(channel);
 	const [rules, people, mutes] = await Promise.all([
 		db
-			.select({ role: notificationRules.role })
-			.from(notificationRules)
-			.where(and(eq(notificationRules.event, event), eq(notificationRules.enabled, true)))
+			.select({ role: t.rules.role })
+			.from(t.rules)
+			.where(and(eq(t.rules.event, event), eq(t.rules.enabled, true)))
 			.all(),
-		db.select({ userId: notificationPeople.userId }).from(notificationPeople).where(eq(notificationPeople.event, event)).all(),
-		db.select({ userId: notificationMutes.userId }).from(notificationMutes).where(eq(notificationMutes.event, event)).all()
+		db.select({ userId: t.people.userId }).from(t.people).where(eq(t.people.event, event)).all(),
+		db.select({ userId: t.mutes.userId }).from(t.mutes).where(eq(t.mutes.event, event)).all()
 	]);
 	const roles = rules.map((r) => r.role);
 	const ids = people.map((p) => p.userId);
@@ -145,31 +191,68 @@ export interface NotifyInput {
 	actorId?: number | null;
 	/** Bekommen es auf jeden Fall (z. B. wessen Urlaub es ist) – sofern sie es sehen dürfen und es nicht abgeschaltet haben */
 	userIds?: number[];
+	/** Bekommen auf jeden Fall die Info-Mail (z. B. wer das Angebot angelegt hat) – sofern sie es sehen dürfen und nicht abgeschaltet haben */
+	mailUserIds?: number[];
+	/** Adresse des Portals für den Link in der Info-Mail – sonst ORIGIN aus der Umgebung */
+	origin?: string;
 }
 
 /** Die fest genannten Empfänger: aktiv, mit dem nötigen Recht, nicht stummgeschaltet, nicht der Auslöser */
-async function directRecipients(event: NotificationEvent, userIds: number[], actorId?: number | null): Promise<number[]> {
+async function directRecipients(event: NotificationEvent, userIds: number[], actorId?: number | null, channel: NotificationChannel = 'push'): Promise<number[]> {
 	const wanted = userIds.filter((id) => id !== actorId);
 	if (!wanted.length) return [];
+	const t = tables(channel);
 	const [people, mutes] = await Promise.all([
 		db
 			.select({ id: users.id, role: users.role, partyId: users.partyId })
 			.from(users)
 			.where(and(activeUser, inArray(users.id, wanted)))
 			.all(),
-		db.select({ userId: notificationMutes.userId }).from(notificationMutes).where(eq(notificationMutes.event, event)).all()
+		db.select({ userId: t.mutes.userId }).from(t.mutes).where(eq(t.mutes.event, event)).all()
 	]);
 	const muted = new Set(mutes.map((m) => m.userId));
 	return people.filter((p) => !muted.has(p.id) && can(p.role, NOTIFICATION_EVENTS[event].requires)).map((p) => p.id);
 }
 
+const cleanTitle = (t: string) => t.slice(0, 200);
+const cleanBody = (b: string | undefined) => (b ?? '').replace(/\s+/g, ' ').trim().slice(0, 400);
+
+/** Wer die Info-Mail bekommt: ausgewählt oder fest genannt, mit E-Mail-Adresse – je Adresse einmal */
+export async function mailRecipientsFor(input: Pick<NotifyInput, 'event' | 'partyId' | 'actorId' | 'mailUserIds'>): Promise<string[]> {
+	const found = await recipientsFor(input.event, input.partyId, input.actorId, 'mail');
+	const direct = input.mailUserIds?.length ? await directRecipients(input.event, input.mailUserIds, input.actorId, 'mail') : [];
+	const ids = [...new Set([...found, ...direct])];
+	if (!ids.length) return [];
+	const rows = await db.select({ email: users.email }).from(users).where(inArray(users.id, ids)).all();
+	return [...new Set(rows.map((r) => r.email?.trim().toLowerCase() ?? '').filter((e) => e.includes('@')))];
+}
+
+async function deliverMail(input: NotifyInput) {
+	if (!isMailConfigured()) return;
+	const to = await mailRecipientsFor(input);
+	if (!to.length) return;
+	const origin = (env.ORIGIN || input.origin || '').replace(/\/+$/, '');
+	const info = {
+		event: NOTIFICATION_EVENTS[input.event].label,
+		title: cleanTitle(input.title),
+		body: cleanBody(input.body),
+		link: /^https?:\/\//.test(origin) ? `${origin}${input.url}` : null
+	};
+	// Je Person eine eigene Mail – niemand sieht die Adressen der anderen
+	for (const address of to) await sendMail(infoMail(address, info));
+}
+
 async function deliver(input: NotifyInput) {
+	await Promise.all([deliverPush(input), deliverMail(input)]);
+}
+
+async function deliverPush(input: NotifyInput) {
 	const found = await recipientsFor(input.event, input.partyId, input.actorId);
 	const direct = input.userIds?.length ? await directRecipients(input.event, input.userIds, input.actorId) : [];
 	const ids = [...new Set([...found, ...direct])];
 	if (!ids.length) return;
-	const title = input.title.slice(0, 200);
-	const body = (input.body ?? '').replace(/\s+/g, ' ').trim().slice(0, 400);
+	const title = cleanTitle(input.title);
+	const body = cleanBody(input.body);
 	const rows = await db
 		.insert(notifications)
 		.values(ids.map((userId) => ({ userId, event: input.event, title, body, url: input.url })))
@@ -254,23 +337,29 @@ export async function purgeOldNotifications(now = new Date()) {
 
 /**
  * Für die Seite der Person: welche Ereignisse sie bekommt (über ihre Gruppe
- * oder persönlich) und welche sie abgeschaltet hat.
+ * oder persönlich) und welche sie abgeschaltet hat – je Weg.
  */
 export async function myNotificationEvents(user: { id: number; role: Role; partyId: number | null }) {
-	const [settings, mutes] = await Promise.all([
-		notificationSettings(),
-		db.select({ event: notificationMutes.event }).from(notificationMutes).where(eq(notificationMutes.userId, user.id)).all()
-	]);
-	const muted = new Set(mutes.map((m) => m.event));
-	return NOTIFICATION_EVENT_KEYS.filter((e) => {
-		const def: NotificationEventDef = NOTIFICATION_EVENTS[e];
-		const listed = settings.roles[e].includes(user.role) || settings.people[e].includes(user.id);
-		// Ob es überhaupt ankommen kann: sehen dürfen, bei Partie-Ereignissen eine Partie haben oder alle sehen
-		return listed && can(user.role, def.requires) && (!def.all || can(user.role, def.all) || user.partyId != null);
-	}).map((e) => ({ event: e, viaGroup: settings.roles[e].includes(user.role), muted: muted.has(e) }));
+	const mine = async (channel: NotificationChannel) => {
+		const t = tables(channel);
+		const [settings, mutes] = await Promise.all([
+			notificationSettings(channel),
+			db.select({ event: t.mutes.event }).from(t.mutes).where(eq(t.mutes.userId, user.id)).all()
+		]);
+		const muted = new Set(mutes.map((m) => m.event));
+		return NOTIFICATION_EVENT_KEYS.filter((e) => {
+			const def: NotificationEventDef = NOTIFICATION_EVENTS[e];
+			const listed = settings.roles[e].includes(user.role) || settings.people[e].includes(user.id);
+			// Ob es überhaupt ankommen kann: sehen dürfen, bei Partie-Ereignissen eine Partie haben oder alle sehen
+			return listed && can(user.role, def.requires) && (!def.all || can(user.role, def.all) || user.partyId != null);
+		}).map((e) => ({ event: e, viaGroup: settings.roles[e].includes(user.role), muted: muted.has(e) }));
+	};
+	const [push, mail] = await Promise.all([mine('push'), mine('mail')]);
+	return { push, mail };
 }
 
-export async function setMuted(userId: number, event: NotificationEvent, muted: boolean) {
-	if (muted) await db.insert(notificationMutes).values({ userId, event }).onConflictDoNothing();
-	else await db.delete(notificationMutes).where(and(eq(notificationMutes.userId, userId), eq(notificationMutes.event, event)));
+export async function setMuted(userId: number, event: NotificationEvent, muted: boolean, channel: NotificationChannel = 'push') {
+	const t = tables(channel);
+	if (muted) await db.insert(t.mutes).values({ userId, event }).onConflictDoNothing();
+	else await db.delete(t.mutes).where(and(eq(t.mutes.userId, userId), eq(t.mutes.event, event)));
 }

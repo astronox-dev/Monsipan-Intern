@@ -285,7 +285,7 @@
 		<div>
 			<label for="u-mail" class="field-label">E-Mail</label>
 			<input id="u-mail" name="email" type="email" class="input" maxlength="120" bind:value={email} autocomplete="off" />
-			<p class="field-hint">Für „Passwort vergessen“ und Warn-Mails.</p>
+			<p class="field-hint">Für „Passwort vergessen“ und Info-Mails.</p>
 		</div>
 
 		<!-- Gesperrte Felder schickt der Browser nicht mit – ihr Wert kommt deshalb versteckt mit -->

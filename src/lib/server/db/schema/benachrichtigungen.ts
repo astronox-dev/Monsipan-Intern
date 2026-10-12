@@ -84,3 +84,44 @@ export const notificationMutes = sqliteTable(
 	},
 	(t) => [primaryKey({ columns: [t.userId, t.event] })]
 );
+
+/*
+ * Info-Mails: derselbe Aufbau wie Glocke und Push, aber eigene Auswahl – wer
+ * etwas als Push bekommt, muss es nicht auch noch per Mail bekommen.
+ */
+
+/** Admin: welche Gruppe welches Ereignis als Info-Mail bekommt */
+export const notificationMailRules = sqliteTable(
+	'notification_mail_rules',
+	{
+		event: text('event').notNull(),
+		role: text('role', { enum: ROLES }).notNull(),
+		enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
+		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+	},
+	(t) => [primaryKey({ columns: [t.event, t.role] })]
+);
+
+/** Admin: zusätzlich einzelne Personen je Ereignis per Info-Mail */
+export const notificationMailPeople = sqliteTable(
+	'notification_mail_people',
+	{
+		event: text('event').notNull(),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.event, t.userId] })]
+);
+
+/** Welche Info-Mails jemand für sich abgeschaltet hat */
+export const notificationMailMutes = sqliteTable(
+	'notification_mail_mutes',
+	{
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		event: text('event').notNull()
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.event] })]
+);

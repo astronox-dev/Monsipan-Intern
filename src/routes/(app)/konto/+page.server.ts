@@ -6,6 +6,7 @@ import { db } from '$lib/server/db';
 import { parties, sessions, users } from '$lib/server/db/schema';
 import { requireUser } from '$lib/server/guard';
 import { myNotificationEvents, setMuted } from '$lib/server/notifications';
+import { isMailConfigured } from '$lib/server/mail';
 import { isNotificationEvent } from '$lib/notifications';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -13,17 +14,22 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const user = requireUser(locals);
 	const row = await db.select({ n: sql<number>`count(*)` }).from(sessions).where(eq(sessions.userId, user.id)).get();
 	const party = user.partyId ? await db.select({ name: parties.name }).from(parties).where(eq(parties.id, user.partyId)).get() : null;
-	return { sessionCount: Number(row?.n ?? 1), partyName: party?.name ?? null, myEvents: await myNotificationEvents(user) };
+	return {
+		sessionCount: Number(row?.n ?? 1),
+		partyName: party?.name ?? null,
+		myEvents: await myNotificationEvents(user),
+		mailConfigured: isMailConfigured()
+	};
 };
 
 export const actions: Actions = {
-	/** Eine Benachrichtigung für sich ab- bzw. wieder einschalten */
+	/** Eine Benachrichtigung für sich ab- bzw. wieder einschalten – Glocke/Push oder Info-Mail */
 	mute: async ({ request, locals }) => {
 		const user = requireUser(locals);
 		const f = await request.formData();
 		const event = String(f.get('event') ?? '');
 		if (!isNotificationEvent(event)) return fail(400, { message: 'Unbekannte Benachrichtigung' });
-		await setMuted(user.id, event, f.get('aus') === '1');
+		await setMuted(user.id, event, f.get('aus') === '1', f.get('kanal') === 'mail' ? 'mail' : 'push');
 		return { muted: true };
 	},
 	profile: async ({ request, locals }) => {

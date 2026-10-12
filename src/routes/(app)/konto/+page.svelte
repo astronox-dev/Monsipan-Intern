@@ -9,7 +9,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import Bell from '@lucide/svelte/icons/bell';
 	import PushToggle from '$lib/components/PushToggle.svelte';
-	import { NOTIFICATION_EVENTS } from '$lib/notifications';
+	import { NOTIFICATION_EVENTS, type NotificationChannel } from '$lib/notifications';
 
 	let { data, form } = $props();
 
@@ -80,35 +80,57 @@
 		</form>
 	</section>
 
+	{#snippet list(channel: NotificationChannel, title: string, events: typeof data.myEvents.push, empty: string, warning = '')}
+		<div>
+			<h3 class="font-display text-base font-semibold">{title}</h3>
+			{#if warning}<p class="mt-1 text-[0.8125rem] text-warn">{warning}</p>{/if}
+			{#if events.length}
+				<ul class="mt-2 space-y-1">
+					{#each events as e (e.event)}
+						<li>
+							<form method="POST" action="?/mute" use:enhance={after(e.muted ? 'Wieder eingeschaltet' : 'Abgeschaltet')}>
+								<input type="hidden" name="event" value={e.event} />
+								<input type="hidden" name="kanal" value={channel} />
+								<input type="hidden" name="aus" value={e.muted ? '0' : '1'} />
+								<button class="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-surface-2" role="switch" aria-checked={!e.muted}>
+									<span class="relative h-6 w-10 shrink-0 rounded-full transition-colors {e.muted ? 'bg-surface-3' : 'bg-ok'}">
+										<span class="absolute top-0.5 size-5 rounded-full bg-white shadow transition-[left] {e.muted ? 'left-0.5' : 'left-[1.125rem]'}"></span>
+									</span>
+									<span class="min-w-0 flex-1 text-sm {e.muted ? 'text-ink-3' : ''}">
+										<span class="block font-medium">{NOTIFICATION_EVENTS[e.event].label}</span>
+										<span class="block text-[0.75rem] text-ink-3">{NOTIFICATION_EVENTS[e.event].section}{e.viaGroup ? '' : ' · persönlich eingetragen'}</span>
+									</span>
+								</button>
+							</form>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="mt-2 text-sm text-ink-3">{empty}</p>
+			{/if}
+		</div>
+	{/snippet}
+
 	<section id="benachrichtigungen" class="card scroll-mt-24 p-4 lg:col-span-2 lg:p-6" aria-labelledby="h-notify">
 		<h2 id="h-notify" class="flex items-center gap-2 text-xl"><Bell size={20} aria-hidden="true" />Benachrichtigungen</h2>
 		<p class="mt-1 text-sm text-ink-2">
-			Was du bekommst, legt der Admin fest. Einzelne kannst du hier für dich abschalten – sie fehlen dann unter der Glocke und als Push.
+			Was du bekommst, legt der Admin fest. Einzelne kannst du hier für dich abschalten – unter der Glocke und als Push oder als Info-Mail, je für sich.
 		</p>
 		<div class="mt-4"><PushToggle /></div>
-		{#if data.myEvents.length}
-			<ul class="mt-4 grid gap-x-6 gap-y-1 sm:grid-cols-2">
-				{#each data.myEvents as e (e.event)}
-					<li>
-						<form method="POST" action="?/mute" use:enhance={after(e.muted ? 'Wieder eingeschaltet' : 'Abgeschaltet')}>
-							<input type="hidden" name="event" value={e.event} />
-							<input type="hidden" name="aus" value={e.muted ? '0' : '1'} />
-							<button class="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-surface-2" role="switch" aria-checked={!e.muted}>
-								<span class="relative h-6 w-10 shrink-0 rounded-full transition-colors {e.muted ? 'bg-surface-3' : 'bg-ok'}">
-									<span class="absolute top-0.5 size-5 rounded-full bg-white shadow transition-[left] {e.muted ? 'left-0.5' : 'left-[1.125rem]'}"></span>
-								</span>
-								<span class="min-w-0 flex-1 text-sm {e.muted ? 'text-ink-3' : ''}">
-									<span class="block font-medium">{NOTIFICATION_EVENTS[e.event].label}</span>
-									<span class="block text-[0.75rem] text-ink-3">{NOTIFICATION_EVENTS[e.event].section}{e.viaGroup ? '' : ' · persönlich eingetragen'}</span>
-								</span>
-							</button>
-						</form>
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<p class="mt-4 text-sm text-ink-3">Für dich ist derzeit keine Benachrichtigung eingestellt.</p>
-		{/if}
+		<div class="mt-5 grid gap-6 lg:grid-cols-2">
+			{@render list('push', 'Glocke und Push', data.myEvents.push, 'Für dich ist derzeit keine Benachrichtigung eingestellt.')}
+			{@render list(
+				'mail',
+				'Info-Mail',
+				data.myEvents.mail,
+				'Für dich ist derzeit keine Info-Mail eingestellt.',
+				!data.user.email
+					? 'Ohne E-Mail-Adresse kommen keine Info-Mails an – oben unter „Persönliche Daten“ eintragen.'
+					: !data.mailConfigured
+						? 'Der E-Mail-Versand ist am Server noch nicht eingerichtet.'
+						: ''
+			)}
+		</div>
 	</section>
 
 	<section class="card p-4 lg:p-6" aria-labelledby="h-scan">

@@ -3,7 +3,10 @@ import { settings } from './db/schema';
 import { ROLES, type Role } from '$lib/permissions';
 
 export interface AppSettings {
-	/** Wer Warn-E-Mails zum Mindestbestand bekommt */
+	/**
+	 * Früher „Warn-Mails zum Mindestbestand" – nur noch, um die Auswahl einmal in
+	 * die Info-Mails unter Benachrichtigungen zu übernehmen
+	 */
 	alertRoles: Role[];
 	alertEmailsEnabled: boolean;
 	/** Vorlagen für neue Angebote – im einzelnen Angebot änderbar */

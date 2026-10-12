@@ -33,8 +33,16 @@ const OFFER_TITLE: Record<OfferEvent, (n: string) => string> = {
 	'angebot.aenderung': (n) => `Änderungswunsch zu Angebot ${n}`
 };
 
-/** Angebot: freigegeben, vom Kunden angenommen oder Änderung gewünscht (dann mit dem Wunsch im Text) */
-export function notifyOffer(event: OfferEvent, offerId: number, opts: { actorId?: number; message?: string; name?: string } = {}) {
+/**
+ * Angebot: freigegeben, vom Kunden angenommen oder Änderung gewünscht (dann mit
+ * dem Wunsch im Text). Antwortet der Kunde über den Link (`fromCustomer`), geht
+ * die Info-Mail außerdem an die Person, die das Angebot angelegt bzw. freigegeben hat.
+ */
+export function notifyOffer(
+	event: OfferEvent,
+	offerId: number,
+	opts: { actorId?: number; message?: string; name?: string; fromCustomer?: boolean; origin?: string } = {}
+) {
 	background(event, async () => {
 		const offer = await offerDetail(offerId);
 		if (!offer) return;
@@ -48,7 +56,9 @@ export function notifyOffer(event: OfferEvent, offerId: number, opts: { actorId?
 						? join(opts.name && `von ${opts.name}`, offer.customerName, offer.title)
 						: join(offer.customerName, offer.title),
 			url: `/angebote/${offer.id}`,
-			actorId: opts.actorId
+			actorId: opts.actorId,
+			mailUserIds: opts.fromCustomer ? [offer.createdBy, offer.releasedBy].filter((id): id is number => id != null) : undefined,
+			origin: opts.origin
 		});
 	});
 }

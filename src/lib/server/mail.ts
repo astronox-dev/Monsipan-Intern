@@ -103,37 +103,6 @@ export function inviteMail(to: string, name: string, username: string, link: str
 	};
 }
 
-export interface LowStockItem {
-	name: string;
-	articleNumber: string | null;
-	total: number;
-	minStock: number;
-}
-
-export function lowStockMail(to: string[], items: LowStockItem[], link: string): Mail {
-	const rows = items
-		.map(
-			(i) =>
-				`<tr><td style="padding:8px 0;border-bottom:1px solid #e3e5e8">${esc(i.name)}${i.articleNumber ? `<br><span style="color:#5c626b;font-size:13px">Art.-Nr. ${esc(i.articleNumber)}</span>` : ''}</td><td style="padding:8px 0;border-bottom:1px solid #e3e5e8;text-align:right;white-space:nowrap"><strong>${i.total}</strong> / ${i.minStock}</td></tr>`
-		)
-		.join('');
-	const subject =
-		items.length === 1 ? `Nachbestellen: ${items[0].name}` : `Nachbestellen: ${items.length} Artikel unter Mindestbestand`;
-	return {
-		to,
-		subject,
-		text:
-			`Diese Artikel haben den Mindestbestand erreicht:\n\n` +
-			items.map((i) => `- ${i.name}: ${i.total} (Mindestbestand ${i.minStock})`).join('\n') +
-			`\n\nBestellliste: ${link}`,
-		html: layout(
-			items.length === 1 ? 'Ein Artikel muss nachbestellt werden' : `${items.length} Artikel müssen nachbestellt werden`,
-			`<p>Diese Artikel haben den Mindestbestand erreicht (Bestand / Mindestbestand in Stück):</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px">${rows}</table>${button(link, 'Bestellliste öffnen')}`
-		)
-	};
-}
-
-/** Link für den Kunden: Tagesbericht ansehen, unterschreiben, als PDF laden */
 export function customerReportMail(
 	to: string,
 	report: { number: string; date: string; dateTo: string | null; road: string; site: string; signed: boolean },
@@ -175,26 +144,23 @@ export function customerOfferMail(to: string, offer: { number: string; title: st
 	};
 }
 
-/** Ans Büro: der Kunde hat angenommen oder wünscht Änderungen */
-export function offerAnswerMail(
-	to: string[],
-	offer: { number: string; title: string; customerName: string },
-	answer: { kind: 'angenommen' | 'aenderung'; name: string; message?: string },
-	link: string
-): Mail {
-	const what = `Angebot Nr. ${offer.number}${offer.title ? ` – ${offer.title}` : ''}`;
-	const headline = answer.kind === 'angenommen' ? 'Angebot angenommen' : 'Änderungswunsch zum Angebot';
-	const lead =
-		answer.kind === 'angenommen'
-			? `${answer.name} hat das Angebot für ${offer.customerName} angenommen und unterschrieben. Jetzt lässt sich daraus der Auftrag erstellen.`
-			: `${answer.name} (${offer.customerName}) wünscht Änderungen am Angebot:`;
+/**
+ * Info-Mail zu einer Benachrichtigung: Ereignis klein darüber, Titel, Text und
+ * ein Knopf ins Portal. Wer sie bekommt, steht unter Verwaltung →
+ * Benachrichtigungen; abschalten kann man sie unter „Mein Konto".
+ */
+export function infoMail(to: string, info: { event: string; title: string; body: string; link: string | null }): Mail {
+	const lines = info.body.trim();
 	return {
 		to,
-		subject: `${headline}: ${what}`,
-		text: `${lead}${answer.message ? `\n\n${answer.message}` : ''}\n\n${what}\n${link}`,
+		subject: info.title,
+		text: [info.title, lines, info.link ? `Öffnen: ${info.link}` : '', `${APP_NAME} · Info-Mail „${info.event}". Abschalten unter Mein Konto.`]
+			.filter(Boolean)
+			.join('\n\n'),
 		html: layout(
-			headline,
-			`<p>${esc(lead)}</p>${answer.message ? `<blockquote style="margin:12px 0;padding:10px 14px;border-left:4px solid #f8f000;background:#f6f7f8;white-space:pre-line">${esc(answer.message)}</blockquote>` : ''}<p style="font-weight:600">${esc(what)}</p>${button(link, 'Angebot öffnen')}`
+			info.title,
+			`${lines ? `<p style="white-space:pre-line">${esc(lines)}</p>` : ''}${info.link ? button(info.link, 'Im Portal öffnen') : ''}<p style="margin-top:20px;color:#5c626b;font-size:13px">Info-Mail „${esc(info.event)}". Welche Info-Mails du bekommst, kannst du unter „Mein Konto“ einzeln abschalten.</p>`,
+			`${APP_NAME} · Info`
 		)
 	};
 }
@@ -204,6 +170,6 @@ export function testMail(to: string): Mail {
 		to,
 		subject: `Test-Mail – ${APP_NAME}`,
 		text: 'Der E-Mail-Versand funktioniert.',
-		html: layout('Der E-Mail-Versand funktioniert', '<p>Warnungen und Passwort-Links werden ab jetzt zugestellt.</p>')
+		html: layout('Der E-Mail-Versand funktioniert', '<p>Info-Mails und Passwort-Links werden ab jetzt zugestellt.</p>')
 	};
 }

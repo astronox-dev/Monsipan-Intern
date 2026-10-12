@@ -1,10 +1,8 @@
 import { and, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { products, users } from '$lib/server/db/schema';
+import { products } from '$lib/server/db/schema';
 import { broadcast } from '$lib/server/events';
-import { lowStockMail, sendMail, type LowStockItem } from '$lib/server/mail';
 import { summaryQuery, totalSql } from './products';
-import { getSettings } from '$lib/server/settings';
 import { notify } from '$lib/server/notifications';
 
 /** Artikel mit Mindestbestand, deren Gesamtbestand ihn erreicht oder unterschritten hat */
@@ -25,8 +23,10 @@ export async function lowStockCount(): Promise<number> {
 }
 
 /**
- * Nach einer Buchung: Warnung verschicken, wenn ein Artikel den Mindestbestand
- * neu erreicht. Jeder Artikel meldet sich nur einmal, bis er wieder darüber liegt.
+ * Nach einer Buchung: Bescheid geben, wenn ein Artikel den Mindestbestand neu
+ * erreicht – unter der Glocke, als Push und als Info-Mail, je nachdem, was unter
+ * Benachrichtigungen eingestellt ist. Jeder Artikel meldet sich nur einmal, bis
+ * er wieder darüber liegt.
  */
 async function checkLowStock(productIds: number[], origin: string) {
 	if (!productIds.length) return;
@@ -44,11 +44,11 @@ async function checkLowStock(productIds: number[], origin: string) {
 		.where(inArray(products.id, productIds))
 		.all();
 
-	const newlyLow: LowStockItem[] = [];
+	const newlyLow: { name: string; total: number; minStock: number }[] = [];
 	for (const r of rows) {
 		const low = r.active && r.minStock != null && r.minStock > 0 && r.total <= r.minStock;
 		if (low && !r.notifiedAt) {
-			newlyLow.push({ name: r.name, articleNumber: r.articleNumber, total: r.total, minStock: r.minStock! });
+			newlyLow.push({ name: r.name, total: r.total, minStock: r.minStock! });
 			await db.update(products).set({ lowStockNotifiedAt: new Date() }).where(eq(products.id, r.id));
 		} else if (!low && r.notifiedAt) {
 			await db.update(products).set({ lowStockNotifiedAt: null }).where(eq(products.id, r.id));
@@ -60,24 +60,14 @@ async function checkLowStock(productIds: number[], origin: string) {
 		event: 'lager.mindestbestand',
 		title: newlyLow.length === 1 ? `Mindestbestand: ${newlyLow[0].name}` : `${newlyLow.length} Artikel am Mindestbestand`,
 		body: newlyLow.map((p) => `${p.name} (${p.total} / ${p.minStock})`).join(', '),
-		url: '/lager/bestellliste'
+		url: '/lager/bestellliste',
+		origin
 	});
-
-	const s = await getSettings();
-	if (!s.alertEmailsEnabled || !s.alertRoles.length) return;
-	const recipients = await db
-		.select({ email: users.email })
-		.from(users)
-		.where(and(eq(users.active, true), inArray(users.role, s.alertRoles), isNotNull(users.email)))
-		.all();
-	const to = recipients.map((r) => r.email!).filter(Boolean);
-	if (!to.length) return;
-	await sendMail(lowStockMail(to, newlyLow, `${origin}/lager/bestellliste`));
 }
 
-/** Nach jeder Bestandsänderung aufrufen: Live-Update an alle Browser + Warnungen */
+/** Nach jeder Bestandsänderung aufrufen: Live-Update an alle Browser + Mindestbestand melden */
 export function afterStockChange(productIds: number[], origin: string) {
 	broadcast('stock', { productIds });
-	// Mailversand soll die Antwort nicht aufhalten
+	// Benachrichtigungen sollen die Antwort nicht aufhalten
 	checkLowStock(productIds, origin).catch((err) => console.error('[alerts]', err));
 }

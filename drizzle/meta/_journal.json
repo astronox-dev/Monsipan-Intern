@@ -253,6 +253,13 @@
       "when": 1791825039617,
       "tag": "0035_kostenstelle_abgerechnet",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1791840849617,
+      "tag": "0036_info_mails",
+      "breakpoints": true
     }
   ]
 }

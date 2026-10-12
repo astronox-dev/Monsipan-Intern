@@ -157,12 +157,12 @@ export const MODULES: AppModule[] = [
 		href: '/verwaltung',
 		group: 'verwaltung',
 		status: 'aktiv',
-		hint: 'Stammdaten, Einstellungen, Sicherungen, Import und Export',
+		hint: 'Stammdaten, Benachrichtigungen, Import und Export, Einstellungen',
 		items: [
 			{ href: '/verwaltung/stammdaten', label: 'Stammdaten', icon: Database, permission: 'stammdaten.sehen' },
-			{ href: '/verwaltung/einstellungen', label: 'Einstellungen', icon: Settings, permission: 'einstellungen.sehen' },
 			{ href: '/verwaltung/benachrichtigungen', label: 'Benachrich\u00adtigungen', icon: BellRing, permission: 'benachrichtigungen.sehen' },
-			{ href: '/verwaltung/import', label: 'Import und Export', icon: FileSpreadsheet, permission: 'daten.export' }
+			{ href: '/verwaltung/import', label: 'Import und Export', icon: FileSpreadsheet, permission: 'daten.export' },
+			{ href: '/verwaltung/einstellungen', label: 'Einstellungen', icon: Settings, permission: 'einstellungen.sehen' }
 		]
 	}
 ];

@@ -12,7 +12,7 @@ Oberfläche, auf dem Handy wie am PC. Die übrigen Bereiche kommen nach und nach
 | Planung | fertig – Wochenplanung je Partie und Tag mit Notizliste, Urlaubsanträge, Krankenstand mit Krankmeldung |
 | Lagermanagement | fertig – Bestand, Buchen, Inventur, Bewegungen, Bestellliste, Berichte, Artikel |
 | Benutzer | fertig – Zugänge, Gruppen, Berechtigungen |
-| Administration | fertig – Stammdaten, Einstellungen, Sicherungen |
+| Administration | fertig – Stammdaten, Benachrichtigungen (Glocke, Push, Info-Mail), Import und Export, Einstellungen, Sicherungen |
 | Partien | geplant |
 | Bestellungen, Dokumente, Auswertungen | geplant |
 
@@ -40,7 +40,7 @@ zeigt alle Seiten gegliedert wie die Seitenleiste, dazu Konto, Darstellung und A
 ## Lagermanagement
 
 Lagerverwaltung für die Bodenmarkierung: Bestand je Lagerort, Ein-/Ausbuchen per Scan,
-Umlagern, Rückgaben, Inventur, Bestellliste mit Warn-Mails und Auswertungen.
+Umlagern, Rückgaben, Inventur, Bestellliste mit Info-Mails und Auswertungen.
 
 - **Scannen** mit USB-/Bluetooth-Handscanner am PC oder mit der Handykamera
   (EAN, GTIN-14, Code 128, GS1, die Kansai-DataMatrix mit `bez:`/`art:`/`inh:` … und SWARCO-Palettenetiketten)
@@ -474,8 +474,9 @@ Bankverbindung und Kontakt.
      Angebot; **Überarbeiten** holt es zurück in Arbeit, danach wird es neu freigegeben.
      Der Link bleibt derselbe; solange es überarbeitet wird, sieht der Kunde „wird
      überarbeitet“.
-   Wer das Angebot angelegt und freigegeben hat, bekommt bei beidem eine E-Mail (wenn SMTP
-   eingerichtet ist und eine Adresse hinterlegt ist).
+   Wer das Angebot angelegt und freigegeben hat, bekommt bei beidem eine Info-Mail (wenn SMTP
+   eingerichtet ist und eine Adresse hinterlegt ist) – weitere Empfänger stellt man unter
+   Benachrichtigungen ein.
    Sagt der Kunde anders zu (am Telefon, per E-Mail, unterschrieben zurück), setzt man es mit
    **Als angenommen markieren** intern auf angenommen (Recht „Intern annehmen“, von Haus aus
    Admin, Geschäftsführung, Bauleitung) – auf Wunsch mit dem Namen, wer zugesagt hat. Am
@@ -835,8 +836,8 @@ bisherigen Programm:
 
 Bei wichtigen Schritten bekommen die richtigen Leute Bescheid – unter der **Glocke** oben
 rechts (mit Zahl der ungelesenen, live) und als **Push** aufs Handy bzw. den PC, auch wenn
-die App zu ist. Ein Tipp führt direkt zur Stelle und markiert die Benachrichtigung als
-gelesen. Ältere als 90 Tage räumt die nächtliche Wartung weg.
+die App zu ist, und auf Wunsch als **Info-Mail**. Ein Tipp führt direkt zur Stelle und
+markiert die Benachrichtigung als gelesen. Ältere als 90 Tage räumt die nächtliche Wartung weg.
 
 **Ereignisse:** neue Anfrage · Angebot freigegeben · Angebot vom Kunden angenommen ·
 Änderungswunsch des Kunden · Auftrag einer Partie zugeordnet (neu oder Partie gewechselt) ·
@@ -850,7 +851,9 @@ beantragt · Urlaub genehmigt oder abgelehnt (geht immer an die Person selbst) �
 gemeldet · Artikel am Mindestbestand.
 
 **Wer was bekommt** stellt der Admin unter **Verwaltung → Benachrichtigungen** ein: je
-Ereignis die Gruppen anhaken und bei Bedarf einzelne Personen dazunehmen. Dabei gilt immer:
+Ereignis die Gruppen anhaken und bei Bedarf einzelne Personen dazunehmen – oben umschaltbar
+zwischen **Glocke und Push** und **Info-Mail**, beide mit eigener Auswahl (gespeichert wird
+beides zusammen). Dabei gilt immer:
 
 - Ankommen kann nur, was die Person auch öffnen darf (Berechtigungen) – Gruppen ohne Recht
   sind ausgegraut.
@@ -858,7 +861,15 @@ Ereignis die Gruppen anhaken und bei Bedarf einzelne Personen dazunehmen. Dabei 
   Partieführer und Arbeiter nur für ihre eigene Partie; wer „alle sehen“ darf, für alle.
 - Wer einen Schritt selbst macht, bekommt dazu nichts.
 - Jede Person kann einzelne Benachrichtigungen unter **Mein Konto → Benachrichtigungen** für
-  sich abschalten.
+  sich abschalten – Glocke/Push und Info-Mail getrennt.
+
+**Info-Mails** gehen nur an Personen mit E-Mail-Adresse (die Spalten zeigen, wie viele je
+Gruppe eine haben) und nur, wenn der Versand (SMTP) eingerichtet ist. Jede Person bekommt
+eine eigene Mail mit Titel, Text und einem Knopf ins Portal (Adresse aus `ORIGIN`). Von
+Haus aus ist nur „Artikel am Mindestbestand“ an Admin und Bauleitung eingeschaltet – die
+früheren Warn-Mails; wer dort unter Einstellungen andere Rollen angehakt hatte, behält diese
+Auswahl. Antwortet ein Kunde auf ein Angebot, geht die Info-Mail außerdem immer an die
+Person, die es angelegt bzw. freigegeben hat.
 
 Von Haus aus z. B.: neuer Auftrag → Partieführer der Partie; Angebot angenommen →
 Geschäftsführung, Bauleitung, Büro; Tagesbericht freigegeben → Bauleitung und Büro;
@@ -1041,7 +1052,7 @@ Start automatisch.
 |---|---|
 | `DOMAIN` | Domain für HTTPS und Links in E-Mails |
 | `INITIAL_ADMIN_*` | erster Admin, nur beim allerersten Start |
-| `SMTP_*`, `MAIL_FROM` | E-Mail für „Passwort vergessen“, Einladungen, Warnungen |
+| `SMTP_*`, `MAIL_FROM` | E-Mail für „Passwort vergessen“, Einladungen, Info-Mails |
 | `DEMO_DATA` | `true` legt Beispieldaten an – im Echtbetrieb `false` lassen |
 
 Ohne SMTP funktioniert alles außer E-Mail; Mails landen dann nur im Log. Den Versand

@@ -5,7 +5,6 @@
  */
 import { error, fail } from '@sveltejs/kit';
 import { isRateLimited, registerFailure } from '$lib/server/auth';
-import { isMailConfigured, offerAnswerMail, sendMail } from '$lib/server/mail';
 import { isValidSignature } from '$lib/modules/stunden/signature';
 import { customerAccept, customerRequestChange, offerByToken, type OfferDetail } from '$lib/modules/auftraege/server/offers';
 import { notifyOffer } from '$lib/modules/auftraege/server/notify';
@@ -50,13 +49,6 @@ export const load: PageServerLoad = async ({ params, setHeaders }) => {
 	};
 };
 
-/** Kurz Bescheid geben: wer das Angebot angelegt und freigegeben hat */
-async function tellOffice(offer: OfferDetail, origin: string, answer: { kind: 'angenommen' | 'aenderung'; name: string; message?: string }) {
-	const to = [...new Set([offer.creatorEmail, offer.releasedByEmail].filter((e): e is string => !!e))];
-	if (!to.length || !isMailConfigured()) return;
-	await sendMail(offerAnswerMail(to, offer, answer, `${origin}/angebote/${offer.id}`));
-}
-
 function readName(form: FormData) {
 	return String(form.get('name') ?? '')
 		.trim()
@@ -86,8 +78,8 @@ export const actions: Actions = {
 		if (!(await customerAccept(offer.id, name, signature))) {
 			return fail(409, { message: 'Das Angebot wurde inzwischen geändert – bitte die Seite neu laden.', name });
 		}
-		await tellOffice(offer, url.origin, { kind: 'angenommen', name });
-		notifyOffer('angebot.angenommen', offer.id, { name });
+		// Ans Büro: Glocke, Push und Info-Mail – die Mail immer auch an die Person, die es angelegt bzw. freigegeben hat
+		notifyOffer('angebot.angenommen', offer.id, { name, fromCustomer: true, origin: url.origin });
 		return { accepted: true };
 	},
 
@@ -113,8 +105,7 @@ export const actions: Actions = {
 		if (!(await customerRequestChange(offer.id, name, message))) {
 			return fail(409, { changeMessage: 'Das Angebot wurde inzwischen geändert – bitte die Seite neu laden.', name, text: message });
 		}
-		await tellOffice(offer, url.origin, { kind: 'aenderung', name, message });
-		notifyOffer('angebot.aenderung', offer.id, { name, message });
+		notifyOffer('angebot.aenderung', offer.id, { name, message, fromCustomer: true, origin: url.origin });
 		return { changed: true };
 	}
 };

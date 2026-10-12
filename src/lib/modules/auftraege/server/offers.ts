@@ -198,6 +198,7 @@ async function loadOffer(where: SQL) {
 			vatRate: offers.vatRate,
 			status: offers.status,
 			releasedAt: offers.releasedAt,
+			releasedBy: offers.releasedBy,
 			releasedByFirst: releaser.firstName,
 			releasedByLast: releaser.lastName,
 			releasedByEmail: releaser.email,

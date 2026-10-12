@@ -11,7 +11,6 @@ import { backupPath, MAX_UPLOAD_BYTES, restoreFromFile, RestoreError, stageUploa
 import { mailInfo, sendMail, testMail } from '$lib/server/mail';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { letterheadPath, LetterheadError, storeLetterhead } from '$lib/server/letterhead';
-import { ROLES, type Role } from '$lib/permissions';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -24,12 +23,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 			db.select({ n: sql<number>`count(*)` }).from(users).where(eq(users.active, true)).get()
 		])
 	]);
-	const recipients = await db
-		.select({ role: users.role, n: sql<number>`count(*)` })
-		.from(users)
-		.where(sql`${users.active} = 1 and ${users.email} is not null`)
-		.groupBy(users.role)
-		.all();
 	let dbSize = 0;
 	try {
 		dbSize = fs.statSync(DB_FILE).size;
@@ -44,7 +37,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		resetCounts: await dataCounts(me.id),
 		resetPhrase: RESET_PHRASE,
 		maxUploadBytes: MAX_UPLOAD_BYTES,
-		recipients: Object.fromEntries(recipients.map((r) => [r.role, Number(r.n)])) as Partial<Record<Role, number>>,
 		backups: listBackups(),
 		stats: {
 			products: Number(counts[0]?.n ?? 0),
@@ -56,13 +48,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	alerts: async ({ request, locals }) => {
-		requirePermission(locals, 'einstellungen.bearbeiten');
-		const f = await request.formData();
-		const roles = f.getAll('roles').map(String).filter((r): r is Role => (ROLES as readonly string[]).includes(r));
-		await updateSettings({ alertEmailsEnabled: f.get('enabled') === 'on', alertRoles: roles });
-		return { saved: 'alerts' };
-	},
 	/** Vorlagen für Angebote: Einleitung, Schlusstext, Fußzeile */
 	offerTexts: async ({ request, locals }) => {
 		requirePermission(locals, 'einstellungen.bearbeiten');
