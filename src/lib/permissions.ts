@@ -173,7 +173,10 @@ export const DEFAULT_PERMISSIONS = {
 	'einstellungen.sehen': ['admin'],
 	'einstellungen.bearbeiten': ['admin'],
 	'benachrichtigungen.sehen': ['admin'],
-	'benachrichtigungen.bearbeiten': ['admin']
+	'benachrichtigungen.bearbeiten': ['admin'],
+	// Import und Export – exportiert wird je Bereich nur, was man dort sehen darf
+	'daten.export': BUERO,
+	'daten.import': ['admin']
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof DEFAULT_PERMISSIONS;
@@ -406,6 +409,14 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 		section: 'Verwaltung',
 		view: { all: 'berechtigungen.sehen' },
 		edit: { all: 'berechtigungen.bearbeiten' }
+	},
+	{
+		key: 'daten',
+		title: 'Import und Export',
+		section: 'Verwaltung',
+		hint: 'Kunden, Anfragen, Aufträge und Rechnungen als Excel oder CSV',
+		view: { all: 'daten.export', hint: 'Exportieren – je Bereich nur, was man dort sehen darf' },
+		create: { key: 'daten.import', label: 'Importieren', hint: 'Aus Dateien anderer Programme' }
 	},
 	{
 		key: 'einstellungen',

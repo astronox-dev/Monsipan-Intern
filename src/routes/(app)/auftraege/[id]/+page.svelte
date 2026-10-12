@@ -284,7 +284,7 @@
 								</span>
 							</span>
 							<span class="num hidden font-medium sm:block">{money(i.gross)}</span>
-							{#if i.stage === 'entwurf' || i.stage === 'fehlgeschlagen' || i.stage === 'storniert'}
+							{#if i.stage === 'entwurf' || i.stage === 'fehlgeschlagen' || i.stage === 'storniert' || i.stage === 'importiert'}
 								<span class="badge {INVOICE_STAGE_LABELS[i.stage].tone}">{i.stage === 'fehlgeschlagen' ? 'Nicht signiert' : INVOICE_STAGE_LABELS[i.stage].label}</span>
 							{/if}
 							{#if st && i.stage !== 'storniert' && i.kind !== 'storno'}<span class="badge {st.tone}">{st.label}</span>{/if}

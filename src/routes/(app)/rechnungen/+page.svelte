@@ -92,7 +92,7 @@
 					</span>
 					<span class="num hidden shrink-0 text-right text-sm sm:block">{money(gross(i))}</span>
 					{#if i.stage === 'signiert'}<span title="Digital signiert" class="shrink-0 text-ok"><ShieldCheck size={18} aria-label="Digital signiert" /></span>{/if}
-					{#if i.stage === 'entwurf' || i.stage === 'fehlgeschlagen' || i.stage === 'storniert'}
+					{#if i.stage === 'entwurf' || i.stage === 'fehlgeschlagen' || i.stage === 'storniert' || i.stage === 'importiert'}
 						<span class="badge {INVOICE_STAGE_LABELS[i.stage].tone}">{i.stage === 'fehlgeschlagen' ? 'Nicht signiert' : INVOICE_STAGE_LABELS[i.stage].label}</span>
 					{/if}
 					{#if inactive(i)}

@@ -259,8 +259,25 @@
 	</section>
 </div>
 
+<!-- Altbestand aus einem anderen Programm -->
+{#if invoice.stage === 'importiert'}
+	<section class="card mt-4 flex flex-wrap items-center gap-3 p-4 lg:p-5">
+		<History size={22} class="shrink-0 text-ink-3" aria-hidden="true" />
+		<p class="min-w-[14rem] flex-1">
+			<span class="font-medium">Altbestand – aus einem anderen Programm importiert.</span>
+			<span class="block text-sm text-ink-2">
+				Gesperrt wie eine ausgestellte Rechnung, aber ohne Archiv, Signatur und Prüfcode – maßgeblich ist das ursprünglich ausgestellte Dokument. Offen/bezahlt
+				lässt sich ändern; Korrekturen per Storno.
+			</span>
+		</p>
+		{#if data.canCancel}
+			<button type="button" class="btn btn-ghost text-danger hover:bg-danger-soft" onclick={() => (cancelOpen = true)}><Ban size={18} aria-hidden="true" />Stornieren</button>
+		{/if}
+	</section>
+{/if}
+
 <!-- Digitale Signatur & Sicherheit -->
-{#if !draft}
+{#if !draft && invoice.stage !== 'importiert'}
 	<section class="card mt-4 p-4 lg:p-5" aria-labelledby="h-security">
 		<div class="flex flex-wrap items-center justify-between gap-2">
 			<h2 id="h-security" class="flex items-center gap-2 text-lg"><ShieldCheck size={20} aria-hidden="true" />Digitale Signatur & Sicherheit</h2>

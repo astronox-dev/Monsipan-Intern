@@ -90,6 +90,7 @@ Administration unter `/verwaltung/…`:
 | Angebot für den Kunden (ohne Anmeldung) | `/angebot/<link>` |
 | Prüfseite einer Rechnung, hinter dem QR-Code (ohne Anmeldung) | `/pruefen/<schlüssel>` |
 | Rechnungssignatur (Einstellungen) | `/verwaltung/einstellungen/signatur` |
+| Import und Export (Kunden, Anfragen, Aufträge, Rechnungen) | `/verwaltung/import` |
 | Handschrift auf dem Formular | `/tagesberichte/<id>/handschrift`, `/stundenzettel/<id>/handschrift` |
 | Bestand, Buchen, Bewegungen, Bestellliste, Berichte | `/lager/bestand` usw. |
 | Inventur | `/lager/inventur` |
@@ -739,6 +740,50 @@ regelmäßige Nachstempeln selbst ist noch nicht eingebaut. Wird eine ältere Si
 eingespielt, fehlen danach die später ausgestellten Rechnungen in der Datenbank – ihre
 Dateien bleiben im Archiv, der Stand davor steckt in der „-vor-restore“-Sicherung.
 
+## Import und Export
+
+Unter **Verwaltung → Import und Export** (`/verwaltung/import`) gehen Kunden, Anfragen,
+Aufträge und Rechnungen als **Excel (.xlsx) oder CSV** hinaus und herein.
+
+**Exportieren** (Recht „Import und Export → Exportieren“, von Haus aus das Büro – je Bereich
+nur, wer dort alles sieht): alle Einträge; Aufträge und Rechnungen mit **einer Zeile je
+Position**, die Kopfdaten in jeder Zeile, Rechnungen dazu mit Stufe und Summen. Die
+Spaltenüberschriften sind genau die Felder des Imports – ein Export lässt sich unverändert
+wieder einlesen.
+
+**Importieren** (Recht „Importieren“, von Haus aus nur Admin) – gedacht für Daten aus dem
+bisherigen Programm:
+
+1. Art wählen (Kunden, Anfragen, Aufträge, Rechnungen) und die Datei – Excel oder CSV.
+   CSV darf Semikolon, Komma oder Tabulator trennen und in UTF-8, UTF-16 oder Windows-1252
+   (ältere Programme) gespeichert sein. Die erste Zeile enthält die Spaltenüberschriften.
+2. **Spalten zuordnen:** Die Seite schlägt die Zuordnung nach den Überschriften vor – auch
+   für übliche fremde Namen wie „Re-Nr.“, „Belegdatum“, „Netto“, „EP“, „ME“ – und zeigt je
+   Feld einen Beispielwert. Bei mehreren Blättern einer Excel-Datei lässt sich das Blatt
+   wählen. **Vorlage** lädt eine leere Datei mit den richtigen Spalten.
+3. **Prüfen** schreibt noch nichts: neu, schon vorhanden, mit Fehlern – mit Zeilennummern.
+4. **Importieren** schreibt alles in einer Transaktion – ganz oder gar nicht. Zeilen mit
+   Fehlern werden nicht übernommen.
+
+- **Reihenfolge:** zuerst Kunden, dann Anfragen und Aufträge, zuletzt Rechnungen. Rechnungen
+  hängen sich über die Auftragsnummer an ihren Auftrag, Anfragen über den Namen an den Kunden.
+- **Aufträge und Rechnungen** haben je Zeile eine Position; Zeilen mit gleicher Nummer – oder
+  ohne Nummer direkt darunter – gehören zum selben Beleg. „Titel“ in der Positionsart (oder
+  eine Zeile nur mit Text) wird zur Zwischenüberschrift. Eine Rechnung ohne Positionen braucht
+  „Netto gesamt“ – das wird dann eine Position.
+- **Werte:** Datum als Excel-Datum, „12.10.2026“, „12.10.26“ oder „2026-10-12“; Zahlen mit
+  Komma oder Punkt; ja/nein auch als x, 1, wahr. Der Stand eines Auftrags wird aus Wörtern wie
+  „in Arbeit“, „fertig“, „abgeschlossen“ erkannt, die Partie über ihren Namen („Erich“ findet
+  „Partie Erich“); unbekannte Partien bleiben „nicht zugeteilt“.
+- **Schon vorhanden:** Kunden (gleicher Name, bei Angabe gleiche PLZ) und Aufträge (gleiche
+  Nummer) lassen sich überspringen oder **aktualisieren** – leere Felder ändern dabei nichts,
+  Positionen eines Auftrags werden ersetzt. Anfragen und Rechnungen werden übersprungen.
+- **Rechnungen kommen als Altbestand** (Stufe „Importiert“): gesperrt wie ausgestellte, aber
+  ohne Archiv, Signatur und Prüfcode – maßgeblich bleibt das ursprünglich ausgestellte
+  Dokument; das PDF trägt dazu einen Hinweis. Offen/bezahlt lässt sich ändern, korrigiert wird
+  per Storno. Schon überfällige, offene melden sich nicht als „überfällig“. Die Archivprüfung
+  lässt sie aus; im Protokoll steht, aus welcher Datei sie kamen.
+
 ## Benachrichtigungen
 
 Bei wichtigen Schritten bekommen die richtigen Leute Bescheid – unter der **Glocke** oben
@@ -1230,6 +1275,8 @@ src/
   routes/
     (auth)/        Anmelden, Passwort vergessen/zurücksetzen
     (app)/         Übersicht, lager/…, verwaltung/…, Konto, App fürs Handy
+    (app)/verwaltung/import/  Import und Export (Logik in modules/auftraege/server/transfer.ts,
+                   Felder in modules/auftraege/transfer.ts, Excel/CSV in server/table.ts)
     (kunde)/       Seiten für Kunden ohne Anmeldung: Tagesbericht unterschreiben, Angebot annehmen,
                    Rechnung prüfen (/pruefen/<schlüssel>)
     api/           Code-Suche, Artikelsuche, Live-Ereignisse

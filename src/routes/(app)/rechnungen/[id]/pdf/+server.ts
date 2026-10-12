@@ -18,7 +18,8 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	requirePermission(locals, 'rechnungen.sehen');
 	const invoice = await invoiceDetail(Number(params.id));
 	if (!invoice) error(404, 'Rechnung nicht gefunden');
-	if (invoice.stage === 'entwurf') return invoicePdf(invoice);
+	// Entwürfe und importierter Altbestand haben kein Archiv – das PDF entsteht aus den Daten
+	if (invoice.stage === 'entwurf' || invoice.stage === 'importiert') return invoicePdf(invoice);
 	const files = await db.select().from(invoiceFiles).where(eq(invoiceFiles.invoiceId, invoice.id)).all();
 	const file = files.find((f) => f.kind === 'signiert') ?? files.find((f) => f.kind === 'original');
 	const data = file ? readArchiveFile(file.fileName) : null;

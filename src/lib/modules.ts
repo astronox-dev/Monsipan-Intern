@@ -33,6 +33,7 @@ import UserCog from '@lucide/svelte/icons/user-cog';
 import ShieldCheck from '@lucide/svelte/icons/shield-check';
 import Settings from '@lucide/svelte/icons/settings';
 import BellRing from '@lucide/svelte/icons/bell-ring';
+import FileSpreadsheet from '@lucide/svelte/icons/file-spreadsheet';
 import Database from '@lucide/svelte/icons/database';
 import type { Component } from 'svelte';
 import { can, type Permission, type Role } from './permissions';
@@ -156,11 +157,12 @@ export const MODULES: AppModule[] = [
 		href: '/verwaltung',
 		group: 'verwaltung',
 		status: 'aktiv',
-		hint: 'Stammdaten, Einstellungen, Sicherungen',
+		hint: 'Stammdaten, Einstellungen, Sicherungen, Import und Export',
 		items: [
 			{ href: '/verwaltung/stammdaten', label: 'Stammdaten', icon: Database, permission: 'stammdaten.sehen' },
 			{ href: '/verwaltung/einstellungen', label: 'Einstellungen', icon: Settings, permission: 'einstellungen.sehen' },
-			{ href: '/verwaltung/benachrichtigungen', label: 'Benachrichtigungen', icon: BellRing, permission: 'benachrichtigungen.sehen' }
+			{ href: '/verwaltung/benachrichtigungen', label: 'Benachrichtigungen', icon: BellRing, permission: 'benachrichtigungen.sehen' },
+			{ href: '/verwaltung/import', label: 'Import und Export', icon: FileSpreadsheet, permission: 'daten.export' }
 		]
 	}
 ];

@@ -561,6 +561,18 @@ export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }
 		verifyBlock(doc, y, issued.verifyUrl, issued.issuedAt);
 	}
 
+	if (invoice.stage === 'importiert') {
+		y += 6 * MM;
+		if (y + 12 > FOOTER_TOP - 4 * MM) {
+			doc.addPage();
+			y = 20 * MM;
+		}
+		doc
+			.font('Helvetica')
+			.fontSize(7.5)
+			.fillColor(MUTED)
+			.text('Aus dem bisherigen Rechnungsprogramm übernommen – maßgeblich ist das ursprünglich ausgestellte Dokument.', LEFT, y, { width: WIDTH });
+	}
 	if (!issued && invoice.stage === 'entwurf') draftMark(doc);
 	finishPages(doc, [
 		['Anschrift', settings.offerFooterAddress],

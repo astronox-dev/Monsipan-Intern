@@ -4,7 +4,8 @@
  */
 
 /** Entwurf → ausgestellt → (Signierung läuft) → signiert bzw. fehlgeschlagen; jederzeit danach storniert */
-export const INVOICE_STAGES = ['entwurf', 'ausgestellt', 'signierung', 'signiert', 'fehlgeschlagen', 'storniert'] as const;
+/** „importiert": Altbestand aus einem anderen Programm – gesperrt, ohne Archiv und Signatur */
+export const INVOICE_STAGES = ['entwurf', 'ausgestellt', 'signierung', 'signiert', 'fehlgeschlagen', 'storniert', 'importiert'] as const;
 export type InvoiceStage = (typeof INVOICE_STAGES)[number];
 
 export const INVOICE_STAGE_LABELS: Record<InvoiceStage, { label: string; tone: string }> = {
@@ -13,7 +14,8 @@ export const INVOICE_STAGE_LABELS: Record<InvoiceStage, { label: string; tone: s
 	signierung: { label: 'Signierung läuft', tone: 'badge-info' },
 	signiert: { label: 'Signiert', tone: 'badge-ok' },
 	fehlgeschlagen: { label: 'Signierung fehlgeschlagen', tone: 'badge-danger' },
-	storniert: { label: 'Storniert', tone: 'badge-warn' }
+	storniert: { label: 'Storniert', tone: 'badge-warn' },
+	importiert: { label: 'Importiert', tone: '' }
 };
 
 export const isIssued = (stage: string) => stage !== 'entwurf';
@@ -79,7 +81,8 @@ export const AUDIT_LABELS: Record<string, string> = {
 	einstellungen: 'Signatur-Einstellungen geändert',
 	zertifikat: 'Zertifikat hinterlegt',
 	verbindungstest: 'Verbindung getestet',
-	archivpruefung: 'Archiv geprüft'
+	archivpruefung: 'Archiv geprüft',
+	importiert: 'Aus anderem Programm importiert'
 };
 
 /** Prüfcode auf der Rechnung: wohin er zeigt */

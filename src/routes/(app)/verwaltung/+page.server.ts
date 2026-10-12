@@ -9,5 +9,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 	if (can(user.role, 'stammdaten.sehen')) redirect(302, '/verwaltung/stammdaten');
 	if (can(user.role, 'benutzer.sehen')) redirect(302, '/verwaltung/benutzer');
 	if (can(user.role, 'einstellungen.sehen')) redirect(302, '/verwaltung/einstellungen');
+	if (can(user.role, 'daten.export')) redirect(302, '/verwaltung/import');
 	error(403, 'Kein Zugriff auf die Verwaltung');
 };

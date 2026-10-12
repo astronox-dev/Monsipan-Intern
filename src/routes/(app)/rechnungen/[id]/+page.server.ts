@@ -47,7 +47,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		canDeleteIssued: !draft && can(user.role, 'rechnungen.loeschen.ausgestellt'),
 		canIssue: issuable,
 		canSign: settings.enabled && can(user.role, 'rechnungen.ausstellen') && ['ausgestellt', 'fehlgeschlagen', 'signierung'].includes(invoice.stage),
-		canCancel: can(user.role, 'rechnungen.stornieren') && invoice.kind !== 'storno' && ['ausgestellt', 'signiert', 'fehlgeschlagen'].includes(invoice.stage),
+		canCancel: can(user.role, 'rechnungen.stornieren') && invoice.kind !== 'storno' && ['ausgestellt', 'signiert', 'fehlgeschlagen', 'importiert'].includes(invoice.stage),
 		canSeeOrder: !!invoice.orderId && can(user.role, 'auftraege.sehen'),
 		canSeeReports: can(user.role, 'tagesberichte.sehen'),
 		signing: { enabled: settings.enabled, level: settings.level, verify: settings.verifyEnabled },

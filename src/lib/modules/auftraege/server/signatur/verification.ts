@@ -10,7 +10,7 @@
  * gültig, ungültig, storniert oder nicht feststellbar. Dazu die nächtliche
  * Prüfung des ganzen Archivs samt Protokoll-Kette.
  */
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, notInArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { invoiceFiles, invoices, invoiceSignatures, settings as settingsTable } from '$lib/server/db/schema';
 import { getSettings } from '$lib/server/settings';
@@ -60,6 +60,10 @@ export async function verifyInvoice(id: number, opts: { user?: SessionUser | nul
 	};
 	if (row.stage === 'entwurf') {
 		out.archive.detail = 'Noch nicht ausgestellt.';
+		return out;
+	}
+	if (row.stage === 'importiert') {
+		out.archive.detail = 'Aus einem anderen Programm importiert – nicht im Portal ausgestellt, daher ohne Archiv und Signatur.';
 		return out;
 	}
 	const files = await db.select().from(invoiceFiles).where(eq(invoiceFiles.invoiceId, id)).all();
@@ -239,7 +243,12 @@ export async function lastArchiveCheck(): Promise<ArchiveCheck | null> {
 
 /** Alle ausgestellten Rechnungen und die Protokoll-Kette prüfen */
 export async function checkArchive(user: SessionUser | null = null): Promise<ArchiveCheck> {
-	const issued = await db.select({ id: invoices.id, number: invoices.number, kind: invoices.kind }).from(invoices).where(ne(invoices.stage, 'entwurf')).all();
+	// Entwürfe und importierter Altbestand haben kein Archiv
+	const issued = await db
+		.select({ id: invoices.id, number: invoices.number, kind: invoices.kind })
+		.from(invoices)
+		.where(notInArray(invoices.stage, ['entwurf', 'importiert']))
+		.all();
 	const problems: ArchiveCheck['problems'] = [];
 	for (const i of issued) {
 		const check = await verifyInvoice(i.id, { record: true });
