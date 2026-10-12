@@ -23,7 +23,7 @@ import type { Actions, PageServerLoad } from './$types';
 function localCertificate(): { info: (CertInfo & { label: string }) | null; chain: number; problem: string | null } {
 	const file = secrets.keyFile();
 	if (!fs.existsSync(file)) return { info: null, chain: 0, problem: null };
-	if (!secretStatus().keyPassword) return { info: null, chain: 0, problem: 'Zertifikat vorhanden, aber SIGNATUR_PASSWORT fehlt oder ist zu kurz.' };
+	if (!secretStatus().keyPassword) return { info: null, chain: 0, problem: 'Zertifikat vorhanden, aber SIGNATUR_PASSWORT fehlt oder ist zu kurz (ein $ in Docker Compose als $$ schreiben).' };
 	try {
 		const m = readKeyFile(fs.readFileSync(file, 'utf8'), secrets.keyPassword());
 		const info = certInfo(m.certificates[0]);

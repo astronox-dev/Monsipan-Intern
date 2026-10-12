@@ -93,8 +93,11 @@ export const secrets = {
 
 /** Welche Umgebungsvariablen gesetzt sind – für die Einstellungsseite, ohne Werte */
 export function secretStatus() {
+	const key = secrets.keyPassword();
 	return {
-		keyPassword: secrets.keyPassword().length >= 12,
+		keyPassword: key.length >= 12,
+		/** gesetzt, aber zu kurz – oft ein $ in Docker Compose, das als Variable gelesen wurde */
+		keyPasswordShort: key.length > 0 && key.length < 12,
 		cscSecret: !!secrets.cscSecret(),
 		cscPin: !!secrets.cscPin(),
 		tsaAuth: !!secrets.tsaUser()

@@ -49,7 +49,7 @@ services:
       # Passwort für den Schlüssel des eigenen Zertifikats – mindestens 12 Zeichen.
       SIGNATUR_PASSWORT: ${SIGNATUR_PASSWORT:-}
       # Nur für A-Trust bzw. einen anderen Anbieter über die CSC-API
-      SIGNATUR_CSC_SECRET: ${SIGNATUR_CSC_SECRET:-}
+      SIGNATUR_CSC_SECRET: ${SIGNATUR_CSC_SECRET:-AHRn8Aay$ySjbPpX4&fn}
       SIGNATUR_CSC_PIN: ${SIGNATUR_CSC_PIN:-}
       # Nur für einen Zeitstempeldienst mit Anmeldung
       SIGNATUR_TSA_BENUTZER: ${SIGNATUR_TSA_BENUTZER:-}

@@ -242,7 +242,13 @@
 					size={16}
 					class="inline text-danger"
 					aria-hidden="true"
-				/> SIGNATUR_PASSWORT fehlt (mindestens 12 Zeichen) – damit wird der Schlüssel verschlüsselt{/if}
+				/>
+				{#if data.secrets.keyPasswordShort}
+					SIGNATUR_PASSWORT ist gesetzt, aber kürzer als 12 Zeichen. Steht ein <code>$</code> darin? Docker Compose liest es als Variable und lässt es samt
+					Folgezeichen weg – <code>$</code> als <code>$$</code> schreiben oder ein Passwort ohne <code>$</code> wählen.
+				{:else}
+					SIGNATUR_PASSWORT fehlt (mindestens 12 Zeichen) – damit wird der Schlüssel verschlüsselt
+				{/if}{/if}
 		</p>
 		{#if data.local.info}
 			{@const c = data.local.info}
