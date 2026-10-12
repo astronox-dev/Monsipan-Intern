@@ -6,7 +6,7 @@ Oberfläche, auf dem Handy wie am PC. Die übrigen Bereiche kommen nach und nach
 | Bereich | Stand |
 |---|---|
 | Übersicht | fertig – „Zu erledigen“ und Kennzahlen aus allen Bereichen, je nach Berechtigung |
-| Auftragsmanagement | fertig – Anfragen, Angebote mit Kundenlink, Aufträge je Partie, Summenblatt, Rechnungen, Kunden |
+| Auftragsmanagement | fertig – Anfragen, Angebote mit Kundenlink, Aufträge je Partie, Summenblatt, Rechnungen (archiviert, PAdES-signiert, mit Prüfcode), Kunden |
 | Dokumentation: Stundenzettel | fertig – Lohnwoche je Mitarbeiter, Freigabe und Prüfung |
 | Dokumentation: Tagesberichte | fertig – Leistung je Tag und Baustelle, Freigabe, Prüfung, Unterschrift des Kunden |
 | Planung | fertig – Wochenplanung je Partie und Tag mit Notizliste, Urlaubsanträge, Krankenstand mit Krankmeldung |
@@ -88,6 +88,8 @@ Administration unter `/verwaltung/…`:
 | Anfragen, Angebote, Aufträge, Rechnungen, Kunden | `/anfragen`, `/angebote`, `/auftraege`, `/rechnungen`, `/kunden` |
 | Summenblatt eines Auftrags bzw. einer Rechnung | `/auftraege/<id>/summenblatt`, `/rechnungen/<id>/summenblatt` |
 | Angebot für den Kunden (ohne Anmeldung) | `/angebot/<link>` |
+| Prüfseite einer Rechnung, hinter dem QR-Code (ohne Anmeldung) | `/pruefen/<schlüssel>` |
+| Rechnungssignatur (Einstellungen) | `/verwaltung/einstellungen/signatur` |
 | Handschrift auf dem Formular | `/tagesberichte/<id>/handschrift`, `/stundenzettel/<id>/handschrift` |
 | Bestand, Buchen, Bewegungen, Bestellliste, Berichte | `/lager/bestand` usw. |
 | Inventur | `/lager/inventur` |
@@ -541,12 +543,15 @@ darunter die Reiter **Offen**, **Bezahlt** und **Alle**; überfällige sind rot 
   Rechnungsnummer, zahlbar bis, die abgerechneten Tagesberichte, Positionen mit EP und GP,
   Summen, „Zahlbar bis … ohne Abzug“, Schlusstext und Fußzeile mit Bankverbindung. Die
   Rechnung zeigt ihre Tagesberichte und hat ein eigenes **Summenblatt**.
+- Eine neue Rechnung ist ein **Entwurf** (PDF mit „ENTWURF“) – nur Entwürfe lassen sich
+  **bearbeiten** und löschen (löschen: Admin, Geschäftsführung). Wird ein Entwurf gelöscht,
+  sind seine Tagesberichte wieder abzurechnen. Welche Berichte drin sind, lässt sich
+  nachträglich nicht ändern – dafür den Entwurf löschen und neu erstellen. Mit **Rechnung
+  endgültig ausstellen** wird sie archiviert, auf Wunsch digital signiert und gesperrt –
+  siehe [Rechnungen: Ausstellen, Signatur und Archiv](#rechnungen-ausstellen-signatur-und-archiv).
 - **Offen → Bezahlt** mit dem Datum der Zahlung (von Haus aus Admin, Geschäftsführung,
-  Buchhaltung), zurück auf offen ebenso. Offene Rechnungen lassen sich noch **bearbeiten**
-  und löschen (löschen: Admin, Geschäftsführung); bezahlte nicht mehr. Wird eine Rechnung
-  gelöscht, sind ihre Tagesberichte wieder abzurechnen. Welche Berichte drin sind, lässt sich
-  nachträglich nicht ändern – dafür die offene Rechnung löschen und neu erstellen. Ein Auftrag
-  mit Rechnung lässt sich nicht löschen.
+  Buchhaltung), zurück auf offen ebenso – auch bei ausgestellten Rechnungen. Ein Auftrag mit
+  Rechnung lässt sich nicht löschen.
 - Rechnungen von vor den Teilrechnungen: Die Berichte, die beim Erstellen schon geprüft waren,
   gelten als mit ihnen abgerechnet.
 - Einleitung, Schlusstext und **Zahlungsziel** (von Haus aus 30 Tage) stehen unter
@@ -563,6 +568,157 @@ Wer was darf, steht unter Verwaltung → Berechtigungen im Abschnitt „Auftrags
 (Anfragen, Angebote, Aufträge, Rechnungen, Kunden). Preise sieht nur, wer Angebote oder
 Rechnungen sehen darf – Partieführer und Arbeiter sehen sie nicht.
 
+## Rechnungen: Ausstellen, Signatur und Archiv
+
+Ausgestellte Rechnungen lassen sich nicht unbemerkt verändern: Sie werden unverändert
+archiviert, mit Prüfsumme (SHA-256) und Protokoll abgesichert, auf Wunsch nach **PAdES**
+(eIDAS, ETSI EN 319 142) digital signiert und tragen einen **Prüfcode** zur öffentlichen
+Prüfseite.
+
+**Ablauf:** Entwurf erstellen und bearbeiten → **Rechnung endgültig ausstellen** (Recht
+„Endgültig ausstellen“, von Haus aus das Büro) → die Rechnung behält ihre eindeutige Nummer,
+das endgültige PDF wird **genau einmal** erzeugt (mit QR-Code), archiviert und – wenn die
+Signatur an ist – signiert. Stufen: *Entwurf → Ausgestellt → Signierung läuft → Signiert*
+bzw. *Signierung fehlgeschlagen*; danach jederzeit *Storniert*.
+
+- **Gesperrt** sind danach Nummer, Datum, Leistungszeitraum, Empfänger, Rechnungssteller
+  (steht im archivierten PDF), Texte, Positionen, Preise, Steuersatz und Beträge. Das sichern
+  **Trigger in der Datenbank** – auch wer an der App vorbei schreibt, wird abgewiesen.
+  Archiv, Signaturangaben und Protokoll lassen sich gar nicht ändern oder löschen.
+- **Ausgeliefert** wird ab dann nur noch das archivierte Dokument (PDF, Drucken, Download) –
+  die signierte Fassung, sonst das Original. Nichts wird neu erzeugt.
+- **Scheitert die Signierung** (Zeitstempeldienst nicht erreichbar, Zertifikat abgelaufen
+  …), heißt die Rechnung „Signierung fehlgeschlagen“ – nie „signiert“. Sie ist trotzdem
+  ausgestellt und archiviert; **Signierung erneut versuchen** signiert dasselbe Original.
+  Die Benachrichtigung „Digitale Signatur fehlgeschlagen“ geht an Admin, GF und Buchhaltung.
+- **Korrekturen nur per Storno** (Recht „Stornieren“, von Haus aus Admin, GF, Buchhaltung):
+  mit Grund; es entsteht eine **Stornorechnung** mit umgekehrten Mengen und Bezug auf die
+  Rechnung („Storno zu Rechnung Nr. …“), selbst ausgestellt und signiert, Nummer wie jede
+  weitere Rechnung zum Auftrag. Die Rechnung bleibt unverändert archiviert und gilt als
+  storniert; ihre Tagesberichte sind wieder frei für eine neue (Korrektur-)Rechnung.
+  Stornierte Rechnungen und Stornorechnungen zählen nicht bei offenen Beträgen und Mahnungen.
+- **Bisherige Rechnungen** (vor diesem Stand) sind als **Entwurf** übernommen – Inhalt
+  unverändert, weiter bearbeitbar und jederzeit ausstellbar. Nichts wurde automatisch
+  ausgestellt oder neu erzeugt.
+
+**Abschnitt „Digitale Signatur & Sicherheit“** in jeder ausgestellten Rechnung:
+Signaturstatus, Standard (z. B. PAdES-B-LT), Signaturdatum mit Zeitstempeldienst,
+Zertifikat und seine Einstufung, letzte Prüfung, SHA-256 von Original und signierter Fassung,
+Aufbewahrungsfrist – dazu **Digitale Signatur überprüfen**, **Signierte Rechnung
+herunterladen**, **Rechnung verifizieren** (öffnet die Prüfseite), **Signaturinformationen
+anzeigen** und das **Protokoll** aller Schritte.
+
+**Prüfcode und Prüfseite:** Unten auf der Rechnung steht ein QR-Code mit Adresse
+(`https://portal.monsipan.at/pruefen/<schlüssel>`, 144 Bit Zufall, nicht erratbar) und dem
+Hinweis, dass es **kein Registrierkassen-Beleg (RKSV)** ist. Die Seite braucht keine
+Anmeldung und zeigt nur Nummer, Datum, Ausstellung, Rechnungssteller, Status, Signatur und
+das Prüfergebnis – **keine Beträge, keine Positionen, keinen Kunden**:
+
+| Anzeige | Bedeutung |
+|---|---|
+| Rechnung gültig (grün) | Archiv unverändert, Signatur erfolgreich geprüft |
+| Signatur ungültig (rot) | Datei fehlt oder verändert, Daten weichen ab oder Signatur ungültig |
+| Rechnung storniert (gelb) | ursprünglich ausgestellt, inzwischen storniert |
+| Verifizierung nicht möglich (grau) | z. B. nicht signiert – der Signaturstatus ist nicht feststellbar |
+
+Wer die Rechnung bekommen hat, kann dort seine PDF auswählen: Der Browser rechnet die
+Prüfsumme aus, nur sie wird verglichen – die Datei verlässt das Gerät nicht.
+
+**Signatur (PAdES):** unsichtbares Signaturfeld, `/SubFilter /ETSI.CAdES.detached`, CMS mit
+SHA-256 und *signing-certificate-v2* (ohne *signing-time*), PDF 1.7. Stufen zum Einstellen:
+
+| Stufe | Inhalt |
+|---|---|
+| PAdES-B-B | nur die Signatur |
+| PAdES-B-T | + Zeitstempel (RFC 3161) über den Signaturwert – die Signaturzeit ist belegt |
+| PAdES-B-LT (Standard) | + Document Security Store mit Zertifikaten und Sperrinformationen (OCSP/CRL) – prüfbar, auch wenn Aussteller und Dienste nicht mehr erreichbar sind |
+| PAdES-B-LTA | + Archivzeitstempel über alles |
+
+Ausgewiesen wird nur, was tatsächlich drin ist: Fehlen Sperrinformationen, steht B-T statt
+B-LT. Jede Signatur wird vor dem Archivieren selbst geprüft. Ein gesperrtes Zertifikat wird
+nicht verwendet. Signiert wird als neue Revision ans Original angehängt – das Original
+steckt Byte für Byte in der signierten Datei.
+
+**Einstufung, ehrlich:** „Qualifiziert“ steht nur da, wenn das Zertifikat es selbst über
+die QC-Statements erklärt (qualifiziert *und* Schlüssel in einer QSCD). Ein eigenes
+Zertifikat ist „nicht qualifiziert“; Adobe meldet dazu „Identität unbekannt“, prüft aber
+die Unversehrtheit. Für normale Rechnungen verlangt Österreich keine qualifizierte Signatur –
+Echtheit der Herkunft, Unversehrtheit und Lesbarkeit müssen gesichert sein.
+
+**Archiv und Aufbewahrung:** Dateien unter `/data/rechnungen/<Jahr>/`, einmal geschrieben
+(nur anlegen, schreibgeschützt), nach dem Schreiben gegen die Prüfsumme verglichen. In der
+Datenbank stehen Prüfsumme, Zeitpunkt und Verfahren der Signatur sowie eine Prüfsumme der
+Rechnungsdaten – so fällt auch eine Änderung an der Datenbank vorbei auf. Aufbewahrung
+mindestens sieben Jahre ab Ende des Rechnungsjahres (§ 132 BAO), einstellbar bis 50 Jahre;
+ausgestellte Rechnungen werden nie gelöscht. **Jede Nacht** prüft die Wartung alle
+ausgestellten Rechnungen (Datei, Prüfsumme, Daten, Signatur) und die **Hash-Kette des
+Protokolls** (jeder Eintrag enthält den Hash des vorigen); Fehler gehen als
+Benachrichtigung „Archivprüfung mit Fehlern“ an Admin und GF.
+
+**Einstellungen** (Verwaltung → Einstellungen → Rechnungssignatur, nur Admin): Signatur an/aus,
+Anbieter, Verfahren, Zeitstempeldienst, Prüfseite an/aus und ihre Adresse, Grund und Ort,
+Aufbewahrung, Zertifikat (anzeigen, erzeugen, hochladen), **Verbindung testen** (Zertifikat,
+Testsignatur, Zeitstempel, Sperrinformationen – ohne Rechnung) und **Archiv prüfen**.
+Jede Änderung steht im Protokoll.
+
+### Einrichten
+
+1. **Umgebungsvariable** `SIGNATUR_PASSWORT` in Portainer setzen (mindestens 12 Zeichen,
+   gut aufbewahren) und **Pull and redeploy**. Damit wird der Schlüssel am Server
+   verschlüsselt; ohne sie lässt er sich nicht öffnen.
+2. Unter **Rechnungssignatur** ein Zertifikat hinterlegen:
+   - **Eigenes Zertifikat erzeugen** – sofort und kostenlos (RSA 3072, SHA-256), oder
+   - **Gekauftes Zertifikat hochladen** (.p12/.pfx mit RSA oder PEM mit Schlüssel und Kette);
+     das Passwort der Datei dient nur zum Öffnen.
+
+   Abgelegt wird es verschlüsselt unter `/data/signatur/siegel.pem` (anderer Ort:
+   `SIGNATUR_DATEI`); ein ersetztes bleibt als `.bak` daneben.
+3. Verfahren wählen (empfohlen **PAdES-B-LT**), Zeitstempeldienst eintragen (vorgeschlagen:
+   DigiCert, kostenlos), **Verbindung testen**, dann **Ausgestellte Rechnungen digital
+   signieren** einschalten und speichern.
+4. Adresse für den Prüfcode prüfen – sie steht dauerhaft auf jeder Rechnung. Leer heißt
+   `ORIGIN`; vor dem Umzug auf `portal.monsipan.at` am besten dort schon
+   `https://portal.monsipan.at` eintragen.
+
+**A-Trust (qualifiziertes elektronisches Siegel):** Ein qualifiziertes Siegel liegt nie als
+Datei vor, sondern beim Vertrauensdiensteanbieter. A-Trust bietet dafür *Hash-Signing über die
+CSC-API* an (Cloud Signature Consortium). Die App spricht CSC v1 und v2; an A-Trust geht nur
+der SHA-256, nie die Rechnung. Nötig ist ein Vertrag (z. B. a.sign premium seal als
+Fernsiegel) – A-Trust nennt dann Adresse der CSC-API, Token-Adresse, Client-ID und die Kennung
+des Siegels (credentialID). Diese unter **Vertrauensdiensteanbieter über CSC-API** eintragen,
+das Client-Secret als `SIGNATUR_CSC_SECRET` und – falls verlangt – die PIN als
+`SIGNATUR_CSC_PIN` setzen, **Verbindung testen**. Für qualifizierte Zeitstempel die Adresse
+des A-Trust-Zeitstempeldienstes eintragen; Zugangsdaten über `SIGNATUR_TSA_BENUTZER` und
+`SIGNATUR_TSA_PASSWORT`. Die CSC-Anbindung ist gegen einen nachgebauten Dienst getestet; mit
+echten Zugangsdaten zuerst **Verbindung testen**.
+
+| Umgebungsvariable | Wofür |
+|---|---|
+| `SIGNATUR_PASSWORT` | verschlüsselt den Schlüssel des eigenen Zertifikats (Pflicht für „Eigenes Zertifikat“) |
+| `SIGNATUR_DATEI` | anderer Ablageort des Schlüssels (Standard `/data/signatur/siegel.pem`) |
+| `SIGNATUR_CSC_SECRET` | Client-Secret bzw. Passwort für die CSC-API |
+| `SIGNATUR_CSC_PIN` | PIN des Siegels, falls der Anbieter sie verlangt |
+| `SIGNATUR_TSA_BENUTZER`, `SIGNATUR_TSA_PASSWORT` | Zugang zu einem Zeitstempeldienst mit Anmeldung |
+
+### Kosten und Abhängigkeiten
+
+| Funktion | Kostenlos | Externer Anbieter |
+|---|---|---|
+| Sperre nach dem Ausstellen, Archiv mit SHA-256, Protokoll mit Hash-Kette | ✅ | nein |
+| QR-Code mit Prüfseite | ✅ | nein |
+| PAdES mit eigenem Zertifikat (B-B bis B-LTA) | ✅ (Zeitstempel von DigiCert/Sectigo kostenlos) | nur der Zeitstempeldienst |
+| PAdES ohne Warnung in Adobe | ⚠️ | Zertifikat eines Ausstellers in der Adobe-Liste (AATL) bzw. EU-Vertrauensliste – jährliche Kosten |
+| Qualifiziertes elektronisches Siegel | ❌ | ja, z. B. A-Trust über die CSC-API – Vertrag, laufende Kosten je Siegel bzw. Paket |
+| Qualifizierter Zeitstempel | ❌ | ja, z. B. A-Trust – kostenpflichtig |
+
+**Grenzen:** Eine PAdES-Signatur verhindert nicht, dass jemand eine PDF-Kopie verändert –
+sie macht jede Änderung sichtbar (in Adobe und auf der Prüfseite). Für sehr lange
+Aufbewahrung müssen Zeitstempel vor dem Ablauf des Zeitstempelzertifikats erneuert werden
+(B-LTA-Erneuerung); die Signatur ist dafür vorbereitet (Archivzeitstempel, DSS), das
+regelmäßige Nachstempeln selbst ist noch nicht eingebaut. Wird eine ältere Sicherung
+eingespielt, fehlen danach die später ausgestellten Rechnungen in der Datenbank – ihre
+Dateien bleiben im Archiv, der Stand davor steckt in der „-vor-restore“-Sicherung.
+
 ## Benachrichtigungen
 
 Bei wichtigen Schritten bekommen die richtigen Leute Bescheid – unter der **Glocke** oben
@@ -574,7 +730,8 @@ gelesen. Ältere als 90 Tage räumt die nächtliche Wartung weg.
 Änderungswunsch des Kunden · Auftrag einer Partie zugeordnet (neu oder Partie gewechselt) ·
 neue Pläne/Unterlagen am Auftrag · Auftrag in Arbeit · Auftrag abgeschlossen · Rechnung
 erstellt · Rechnung bezahlt · Rechnung überfällig (am Tag nach „zahlbar bis“, ab 7 Uhr,
-einmal je Rechnung) · Tagesbericht freigegeben · Tagesbericht vom Kunden unterschrieben ·
+einmal je Rechnung) · Digitale Signatur einer Rechnung fehlgeschlagen · Archivprüfung der
+Rechnungen mit Fehlern · Tagesbericht freigegeben · Tagesbericht vom Kunden unterschrieben ·
 Tagesbericht wieder geöffnet · Stundenzettel freigegeben · Stundenzettel wieder geöffnet ·
 Arbeiter hilft bei einer anderen Partie aus · Wochenplan an die Partie geschickt · Urlaub
 beantragt · Urlaub genehmigt oder abgelehnt (geht immer an die Person selbst) · Krankenstand
@@ -711,6 +868,7 @@ Compose path `portainer-stack.yml`. Die Datei ist kommentiert; nötig ist nur:
 | `ORIGIN` | `https://intern.monsipan.at`, künftig `https://portal.monsipan.at` – muss exakt der öffentlichen Adresse entsprechen, sonst lehnt die App alle Formulare ab |
 | `INITIAL_ADMIN_PASSWORD` | Passwort des ersten Admins (leer lassen: die App erzeugt eines und zeigt es im Log) |
 | `SMTP_*`, `MAIL_FROM` | nur falls E-Mail gewünscht |
+| `SIGNATUR_*` | nur für die digitale Rechnungssignatur – siehe [Einrichten](#einrichten) |
 
 Der Tunnel zeigt auf `http://<Server-IP>:3000`. Läuft `cloudflared` als Container in
 einem eigenen Docker-Netz, stattdessen in `portainer-stack.yml` Variante B aktivieren
@@ -897,7 +1055,7 @@ Die Sicherungen der Datenbank bleiben dadurch klein.
 **Sicherungen:** Wird ein PDF entfernt oder alles zurückgesetzt, bleibt die Datei noch
 90 Tage liegen. Eine in dieser Zeit eingespielte Sicherung findet ihre PDFs also wieder.
 Danach räumt die tägliche Wartung unbenutzte Dateien weg. Für den Umzug auf einen anderen
-Server das ganze Volume mitnehmen (Datenbank, `/data/dokumente`, `/data/fotos`, `/data/krankmeldungen` **und** `/data/briefkopf`) – eine
+Server das ganze Volume mitnehmen (Datenbank, `/data/dokumente`, `/data/fotos`, `/data/krankmeldungen`, `/data/briefkopf`, **das Rechnungsarchiv `/data/rechnungen`** **und** `/data/signatur`) – eine
 hochgeladene Sicherung allein enthält die PDFs nicht.
 
 Die Fotos der Tagesberichte liegen genauso unter `/data/fotos/<sha256>.jpg` (Foto und Vorschau)
@@ -1042,7 +1200,8 @@ src/
     modules/
       auftraege/   Auftragsmanagement: offer.ts (Beträge, Summen, Nummern), inquiry.ts
                    (E-Mail auslesen), summary.ts (Summenblatt, Zuordnung zur Rechnung),
-                   server/ (Kunden, Anfragen, Angebote, Aufträge, Rechnungen, PDF), components/
+                   server/ (Kunden, Anfragen, Angebote, Aufträge, Rechnungen, PDF), components/,
+                   signature.ts (Stufen und Bezeichnungen), server/signatur/ (siehe unten)
       lager/       Alles zum Lager: server/ (Bestand, Buchungen, Warnungen),
                    components/, scan/ (Parser, Tastaturlayouts, Handscanner, Kamera)
       stunden/     Lohnwoche: Wochenrechnung und server/ (Zettel, Freigabe, Prüfung)
@@ -1051,10 +1210,27 @@ src/
   routes/
     (auth)/        Anmelden, Passwort vergessen/zurücksetzen
     (app)/         Übersicht, lager/…, verwaltung/…, Konto, App fürs Handy
-    (kunde)/       Seiten für Kunden ohne Anmeldung: Tagesbericht unterschreiben, Angebot annehmen
+    (kunde)/       Seiten für Kunden ohne Anmeldung: Tagesbericht unterschreiben, Angebot annehmen,
+                   Rechnung prüfen (/pruefen/<schlüssel>)
     api/           Code-Suche, Artikelsuche, Live-Ereignisse
     export/        CSV-Exporte (Excel-kompatibel) und Backup-Download
 ```
+
+**Rechnungssignatur** (`src/lib/modules/auftraege/server/signatur/`) – modular, jeder
+Baustein für sich getestet:
+
+| Baustein | Datei |
+|---|---|
+| InvoiceSigningService – ausstellen, signieren, stornieren | `signing.ts` |
+| InvoiceVerificationService – Archiv, Daten und Signatur prüfen, Prüfseite, Archivprüfung | `verification.ts` |
+| InvoiceArchiveService – unveränderliche Ablage, Prüfsummen, Aufbewahrung | `archive.ts` |
+| InvoiceAuditService – Protokoll mit Hash-Kette | `audit.ts` |
+| SignatureProviderInterface – eigenes Zertifikat und CSC-API (A-Trust) | `provider.ts`, `csc.ts`, `keys.ts` |
+| PAdES: PDF-Revisionen, CMS, Zeitstempel, OCSP/CRL, DSS, Prüfen | `pdf-update.ts`, `cms.ts`, `tsa.ts`, `revocation.ts`, `pades.ts`, `verify-pdf.ts` |
+
+Ein weiterer Anbieter implementiert `SignatureProvider` (Zertifikatskette liefern, Hash
+signieren) und bekommt einen Eintrag in `createProvider()`. Gebaut auf pkijs/asn1js (CMS,
+Zeitstempel, OCSP), node-forge (.p12 lesen) und qrcode.
 
 **Ein neuer Bereich** braucht: einen Eintrag in `modules.ts` (zunächst `status: 'geplant'`),
 seinen Rechte-Block in `permissions.ts`, seine Tabellen in `server/db/schema/<bereich>.ts`,

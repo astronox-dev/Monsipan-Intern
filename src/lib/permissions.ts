@@ -131,6 +131,8 @@ export const DEFAULT_PERMISSIONS = {
 	'rechnungen.sehen': [...BUERO, 'viewer'],
 	'rechnungen.erstellen': BUERO,
 	'rechnungen.bearbeiten': BUERO,
+	'rechnungen.ausstellen': BUERO,
+	'rechnungen.stornieren': ['admin', 'geschaeftsfuehrer', 'buchhaltung'],
 	'rechnungen.bezahlt': ['admin', 'geschaeftsfuehrer', 'buchhaltung'],
 	'rechnungen.loeschen': ['admin', 'geschaeftsfuehrer'],
 
@@ -328,9 +330,13 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 		section: 'Auftragsmanagement',
 		view: { all: 'rechnungen.sehen', hint: 'Mit Preisen' },
 		create: { key: 'rechnungen.erstellen', hint: 'Zum abgeschlossenen Auftrag' },
-		edit: { all: 'rechnungen.bearbeiten', hint: 'Solange sie offen ist' },
-		status: [{ key: 'rechnungen.bezahlt', label: 'Bezahlt / wieder offen' }],
-		remove: { all: 'rechnungen.loeschen', hint: 'Nur offene' }
+		edit: { all: 'rechnungen.bearbeiten', hint: 'Solange sie ein Entwurf ist' },
+		status: [
+			{ key: 'rechnungen.ausstellen', label: 'Endgültig ausstellen', hint: 'Archivieren und digital signieren' },
+			{ key: 'rechnungen.stornieren', label: 'Stornieren', hint: 'Mit Stornorechnung' },
+			{ key: 'rechnungen.bezahlt', label: 'Bezahlt / wieder offen' }
+		],
+		remove: { all: 'rechnungen.loeschen', hint: 'Nur Entwürfe' }
 	},
 	{
 		key: 'kunden',

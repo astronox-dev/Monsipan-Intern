@@ -45,6 +45,16 @@ services:
       # (Inhalt, Base64 oder Pfad) – hat dann Vorrang. Siehe README „Benachrichtigungen“.
       FIREBASE_SERVICE_ACCOUNT: ${FIREBASE_SERVICE_ACCOUNT:-}
 
+      # Digitale Rechnungssignatur (README „Rechnungen: Ausstellen, Signatur und Archiv“).
+      # Passwort für den Schlüssel des eigenen Zertifikats – mindestens 12 Zeichen.
+      SIGNATUR_PASSWORT: ${SIGNATUR_PASSWORT:-}
+      # Nur für A-Trust bzw. einen anderen Anbieter über die CSC-API
+      SIGNATUR_CSC_SECRET: ${SIGNATUR_CSC_SECRET:-}
+      SIGNATUR_CSC_PIN: ${SIGNATUR_CSC_PIN:-}
+      # Nur für einen Zeitstempeldienst mit Anmeldung
+      SIGNATUR_TSA_BENUTZER: ${SIGNATUR_TSA_BENUTZER:-}
+      SIGNATUR_TSA_PASSWORT: ${SIGNATUR_TSA_PASSWORT:-}
+
       # Beispieldaten beim allerersten Start (im Echtbetrieb false lassen)
       DEMO_DATA: ${DEMO_DATA:-false}
 

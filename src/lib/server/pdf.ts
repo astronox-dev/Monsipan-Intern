@@ -108,6 +108,8 @@ export function startPdf(opts: {
 	margin?: number;
 	/** Seiten behalten, um am Ende auf jede noch etwas zu setzen (Fußzeile, „Seite 1 von 3") */
 	bufferPages?: boolean;
+	/** Rechnungen: 1.7, die Grundlage für PAdES-Signaturen */
+	pdfVersion?: '1.7';
 }) {
 	const margin = opts.margin ?? 36;
 	const doc = new PDFDocument({
@@ -116,7 +118,8 @@ export function startPdf(opts: {
 		margins: { top: margin, bottom: margin, left: margin, right: margin },
 		bufferPages: opts.bufferPages ?? false,
 		info: { Title: opts.title, Author: APP_NAME, Creator: APP_NAME },
-		font: baseFont()
+		font: baseFont(),
+		...(opts.pdfVersion ? { pdfVersion: opts.pdfVersion } : {})
 	});
 	useFonts(doc);
 	const chunks: Buffer[] = [];

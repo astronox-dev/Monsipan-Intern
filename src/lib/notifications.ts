@@ -97,6 +97,20 @@ export const NOTIFICATION_EVENTS = {
 		requires: 'rechnungen.sehen',
 		defaults: ['geschaeftsfuehrer', 'buchhaltung']
 	},
+	'rechnung.signatur': {
+		label: 'Digitale Signatur einer Rechnung fehlgeschlagen',
+		section: 'Auftragsmanagement',
+		hint: 'Die Rechnung ist ausgestellt, aber nicht signiert – erneut versuchen',
+		requires: 'rechnungen.sehen',
+		defaults: ['admin', 'geschaeftsfuehrer', 'buchhaltung']
+	},
+	'rechnung.archiv': {
+		label: 'Archivprüfung der Rechnungen mit Fehlern',
+		section: 'Auftragsmanagement',
+		hint: 'Nächtliche Prüfung: Datei fehlt, Prüfsumme oder Signatur stimmt nicht',
+		requires: 'rechnungen.sehen',
+		defaults: ['admin', 'geschaeftsfuehrer']
+	},
 	'tagesbericht.freigegeben': {
 		label: 'Tagesbericht freigegeben',
 		section: 'Dokumentation',

@@ -5,6 +5,7 @@ import { purgeExpired } from './auth';
 import { tidyDocuments } from './documents';
 import { purgeOldNotifications } from './notifications';
 import { notifyOverdueInvoices } from '$lib/modules/auftraege/server/invoices';
+import { checkArchive } from '$lib/modules/auftraege/server/signatur/verification';
 import { tidyPhotos } from '$lib/modules/tagesberichte/server/photos';
 import { tidyBelege } from '$lib/modules/planung/server/belege';
 
@@ -144,6 +145,9 @@ export function scheduleMaintenance() {
 				const belege = await tidyBelege(now);
 				if (belege.removed) console.info(`[krankmeldungen] ${belege.removed} unbenutzte Belege gelöscht`);
 				await purgeOldNotifications(now);
+				// Ausgestellte Rechnungen: Dateien, Prüfsummen, Daten, Signaturen und die Protokoll-Kette
+				const archive = await checkArchive();
+				if (archive.problems.length || !archive.audit.ok) console.warn(`[rechnungen] Archivprüfung: ${archive.problems.length} mit Fehlern, Protokoll ${archive.audit.ok ? 'in Ordnung' : 'unterbrochen'}`);
 			}
 			// Überfällige Rechnungen melden – ab 7 Uhr, damit es nicht nachts summt
 			if (now.getHours() >= 7) await notifyOverdueInvoices();

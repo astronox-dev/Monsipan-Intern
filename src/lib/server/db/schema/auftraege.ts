@@ -6,6 +6,7 @@
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { createdAt } from './common';
 import { parties, users } from './core';
+import { INVOICE_STAGES } from '../../../modules/auftraege/signature';
 
 export const customers = sqliteTable(
 	'customers',
@@ -227,8 +228,8 @@ export const inquiries = sqliteTable(
 export const INVOICE_STATUS = ['offen', 'bezahlt'] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUS)[number];
 
-/** Rechnung über alles oder Teilrechnung über einen Teil der Tagesberichte */
-export const INVOICE_KINDS = ['rechnung', 'teilrechnung'] as const;
+/** Rechnung über alles, Teilrechnung über einen Teil der Tagesberichte, Stornorechnung zu einer ausgestellten */
+export const INVOICE_KINDS = ['rechnung', 'teilrechnung', 'storno'] as const;
 export type InvoiceKind = (typeof INVOICE_KINDS)[number];
 
 /**
@@ -277,12 +278,40 @@ export const invoices = sqliteTable(
 		paidBy: integer('paid_by').references(() => users.id, { onDelete: 'set null' }),
 		/** Benachrichtigung „überfällig" ist verschickt – einmal je Rechnung */
 		overdueNotifiedAt: integer('overdue_notified_at', { mode: 'timestamp_ms' }),
+		/**
+		 * Entwurf → ausgestellt → signiert (oder Signierung fehlgeschlagen) →
+		 * storniert; unabhängig von offen/bezahlt. Ab „ausgestellt" sperren
+		 * Trigger in der Datenbank alles, was auf der Rechnung steht.
+		 */
+		stage: text('stage', { enum: INVOICE_STAGES }).notNull().default('entwurf'),
+		issuedAt: integer('issued_at', { mode: 'timestamp_ms' }),
+		/** Wer ausgestellt bzw. storniert hat – ohne Fremdschlüssel, damit Benutzer löschbar bleiben */
+		issuedBy: integer('issued_by'),
+		/** Schlüssel des Prüfcodes (/pruefen/<token>): zufällig, nicht erratbar */
+		verifyToken: text('verify_token'),
+		/** Aufzubewahren mindestens bis „JJJJ-MM-TT" */
+		retainUntil: text('retain_until'),
+		/** Warum die letzte Signierung scheiterte */
+		signError: text('sign_error'),
+		/** Letzte Prüfung von Archiv und Signatur */
+		checkedAt: integer('checked_at', { mode: 'timestamp_ms' }),
+		checkResult: text('check_result'),
+		checkDetail: text('check_detail'),
+		cancelledAt: integer('cancelled_at', { mode: 'timestamp_ms' }),
+		cancelledBy: integer('cancelled_by'),
+		cancelReason: text('cancel_reason'),
+		/** Die Stornorechnung zu dieser Rechnung … */
+		stornoId: integer('storno_id'),
+		/** … bzw. bei der Stornorechnung die stornierte Rechnung */
+		cancelsId: integer('cancels_id'),
 		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: createdAt(),
 		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
 	},
 	(t) => [
 		uniqueIndex('invoices_number_idx').on(t.number),
+		uniqueIndex('invoices_verify_token_idx').on(t.verifyToken),
+		index('invoices_stage_idx').on(t.stage),
 		index('invoices_order_idx').on(t.orderId),
 		index('invoices_status_idx').on(t.status),
 		index('invoices_date_idx').on(t.date)

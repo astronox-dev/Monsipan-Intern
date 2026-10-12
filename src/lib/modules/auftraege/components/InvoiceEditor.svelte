@@ -335,7 +335,8 @@
 			<label class="col-span-2 block">
 				<span class="field-label">Art</span>
 				<select class="select" name="rechnungsart" bind:value={head.kind} onchange={() => (kindTouched = true)}>
-					{#each Object.entries(INVOICE_KIND_LABELS) as [value, label] (value)}<option {value}>{label}</option>{/each}
+					<!-- Stornorechnungen entstehen nur beim Stornieren einer ausgestellten Rechnung -->
+					{#each Object.entries(INVOICE_KIND_LABELS).filter(([value]) => value !== 'storno') as [value, label] (value)}<option {value}>{label}</option>{/each}
 				</select>
 			</label>
 			<label class="block">

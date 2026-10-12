@@ -2,15 +2,17 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { requirePermission } from '$lib/server/guard';
 import { getSettings } from '$lib/server/settings';
 import { invoiceDetail, readInvoice, saveInvoice } from '$lib/modules/auftraege/server/invoices';
+import { audit } from '$lib/modules/auftraege/server/signatur/audit';
 import type { Actions, PageServerLoad } from './$types';
 
-/** Nur offene Rechnungen lassen sich ändern */
+/** Nur offene Entwürfe lassen sich ändern – ausgestellte sind gesperrt */
 async function open(id: number, locals: App.Locals) {
-	requirePermission(locals, 'rechnungen.bearbeiten');
+	const user = requirePermission(locals, 'rechnungen.bearbeiten');
 	const invoice = await invoiceDetail(id);
 	if (!invoice) error(404, 'Rechnung nicht gefunden');
-	if (invoice.status !== 'offen') redirect(303, `/rechnungen/${invoice.id}`);
-	return invoice;
+	// Stornorechnungen entstehen fertig aus der stornierten Rechnung – sie werden nicht bearbeitet
+	if (invoice.status !== 'offen' || invoice.stage !== 'entwurf' || invoice.kind === 'storno') redirect(303, `/rechnungen/${invoice.id}`);
+	return { ...invoice, kind: invoice.kind as Exclude<typeof invoice.kind, 'storno'>, user };
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -50,7 +52,8 @@ export const actions: Actions = {
 		const invoice = await open(Number(params.id), locals);
 		const data = readInvoice(await request.formData());
 		if ('message' in data) return fail(400, { message: data.message });
-		if (!(await saveInvoice(invoice.id, data))) return fail(400, { message: 'Die Rechnung ist inzwischen bezahlt und lässt sich nicht mehr ändern.' });
+		if (!(await saveInvoice(invoice.id, data))) return fail(400, { message: 'Die Rechnung ist inzwischen ausgestellt oder bezahlt und lässt sich nicht mehr ändern.' });
+		await audit({ invoiceId: invoice.id, invoiceNumber: invoice.number, user: invoice.user, action: 'geaendert' });
 		redirect(303, `/rechnungen/${invoice.id}`);
 	}
 };

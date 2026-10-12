@@ -174,6 +174,13 @@ async function replaceContents(sourceFile: string) {
 	try {
 		// Fremdschlüssel erst beim Abschluss prüfen – die Reihenfolge ist dann egal
 		await tx.execute('PRAGMA defer_foreign_keys = ON');
+		// Die Sperren ausgestellter Rechnungen (Trigger) gelten für den Betrieb, nicht für das Einspielen:
+		// in derselben Transaktion ablegen und danach unverändert wieder anlegen
+		const triggers = (await tx.execute("select name, sql from sqlite_master where type = 'trigger' and sql is not null")).rows.map((r) => ({
+			name: String(r.name),
+			sql: String(r.sql)
+		}));
+		for (const t of triggers) await tx.execute(`drop trigger "${t.name}"`);
 		for (const t of [...order].reverse()) await tx.execute(`delete from "${t}"`);
 		for (const t of order) {
 			const { columns, rows } = data.get(t)!;
@@ -188,6 +195,7 @@ async function replaceContents(sourceFile: string) {
 				});
 			}
 		}
+		for (const t of triggers) await tx.execute(t.sql);
 		await tx.commit();
 	} catch (err) {
 		await tx.rollback().catch(() => {});

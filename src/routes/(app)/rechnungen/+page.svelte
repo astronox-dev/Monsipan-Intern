@@ -7,19 +7,23 @@
 	import ReceiptText from '@lucide/svelte/icons/receipt-text';
 	import Search from '@lucide/svelte/icons/search';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { date as dateLabel } from '$lib/format';
-	import { INVOICE_STATUS_LABELS, money, round2, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { INVOICE_STATUS_LABELS, invoiceLabel, money, round2, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { INVOICE_STAGE_LABELS } from '$lib/modules/auftraege/signature';
 
 	let { data } = $props();
 
 	const TABS = $derived([
 		{ key: 'offen', label: 'Offen', count: data.counts.open },
 		{ key: 'bezahlt', label: 'Bezahlt', count: data.counts.paid },
+		{ key: 'entwurf', label: 'Entwürfe', count: data.counts.drafts },
 		{ key: 'alle', label: 'Alle', count: data.counts.all }
 	]);
 	const gross = (i: (typeof data.invoices)[number]) => round2(i.net * (1 + (i.reverseCharge ? 0 : i.vatRate) / 100));
-	const overdue = (i: (typeof data.invoices)[number]) => i.status === 'offen' && i.dueDate < data.today;
+	const inactive = (i: (typeof data.invoices)[number]) => i.stage === 'storniert' || i.kind === 'storno';
+	const overdue = (i: (typeof data.invoices)[number]) => i.status === 'offen' && !inactive(i) && i.dueDate < data.today;
 </script>
 
 <svelte:head><title>{pageTitle('Rechnungen')}</title></svelte:head>
@@ -81,13 +85,19 @@
 				<a href="/rechnungen/{i.id}" class="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
 					<span class="num w-24 shrink-0 font-display text-lg font-semibold">{spacedNumber(i.number)}</span>
 					<span class="min-w-0 flex-1">
-						<span class="block truncate font-medium">{i.kind === 'teilrechnung' ? 'Teilrechnung · ' : ''}{i.title || 'Ohne BV'}</span>
+						<span class="block truncate font-medium">{i.kind === 'rechnung' ? '' : `${invoiceLabel(i.kind)} · `}{i.title || 'Ohne BV'}</span>
 						<span class="block truncate text-[0.8125rem] text-ink-3">
 							{[i.customerName, `vom ${dateLabel(i.date)}`, i.status === 'bezahlt' && i.paidOn ? `bezahlt am ${dateLabel(i.paidOn)}` : `zahlbar bis ${dateLabel(i.dueDate)}`].filter(Boolean).join(' · ')}
 						</span>
 					</span>
 					<span class="num hidden shrink-0 text-right text-sm sm:block">{money(gross(i))}</span>
-					{#if overdue(i)}
+					{#if i.stage === 'signiert'}<span title="Digital signiert" class="shrink-0 text-ok"><ShieldCheck size={18} aria-label="Digital signiert" /></span>{/if}
+					{#if i.stage === 'entwurf' || i.stage === 'fehlgeschlagen' || i.stage === 'storniert'}
+						<span class="badge {INVOICE_STAGE_LABELS[i.stage].tone}">{i.stage === 'fehlgeschlagen' ? 'Nicht signiert' : INVOICE_STAGE_LABELS[i.stage].label}</span>
+					{/if}
+					{#if inactive(i)}
+						<!-- Storniert bzw. Stornorechnung: keine Zahlung -->
+					{:else if overdue(i)}
 						<span class="badge badge-danger">Überfällig</span>
 					{:else}
 						<span class="badge {st.tone}">{st.label}</span>

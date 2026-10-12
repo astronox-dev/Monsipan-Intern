@@ -23,6 +23,7 @@
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import { date, dateTime } from '$lib/format';
+	import { INVOICE_STAGE_LABELS } from '$lib/modules/auftraege/signature';
 	import { addressLines, INVOICE_STATUS_LABELS, invoiceLabel, lineNumbers, money, ORDER_STATUS_LABELS, quantityLabel, spacedNumber } from '$lib/modules/auftraege/offer';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -283,7 +284,10 @@
 								</span>
 							</span>
 							<span class="num hidden font-medium sm:block">{money(i.gross)}</span>
-							{#if st}<span class="badge {st.tone}">{st.label}</span>{/if}
+							{#if i.stage === 'entwurf' || i.stage === 'fehlgeschlagen' || i.stage === 'storniert'}
+								<span class="badge {INVOICE_STAGE_LABELS[i.stage].tone}">{i.stage === 'fehlgeschlagen' ? 'Nicht signiert' : INVOICE_STAGE_LABELS[i.stage].label}</span>
+							{/if}
+							{#if st && i.stage !== 'storniert' && i.kind !== 'storno'}<span class="badge {st.tone}">{st.label}</span>{/if}
 							<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
 						</a>
 					</li>

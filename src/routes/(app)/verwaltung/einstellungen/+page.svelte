@@ -7,6 +7,7 @@
 	import Download from '@lucide/svelte/icons/download';
 	import Upload from '@lucide/svelte/icons/upload';
 	import FilePen from '@lucide/svelte/icons/file-pen-line';
+	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import History from '@lucide/svelte/icons/history';
 	import ScanBarcode from '@lucide/svelte/icons/scan-barcode';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
@@ -217,6 +218,14 @@
 			</div>
 			<button class="btn btn-secondary" disabled={busy === 'invoiceTexts'}>Speichern</button>
 		</form>
+
+		<div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
+			<div class="min-w-0">
+				<h3 class="font-display text-lg font-semibold">Digitale Signatur und Archiv</h3>
+				<p class="text-sm text-ink-2">PAdES-Signatur ausgestellter Rechnungen, Prüfcode, Zertifikat und Archivprüfung.</p>
+			</div>
+			<a href="/verwaltung/einstellungen/signatur" class="btn btn-secondary"><ShieldCheck size={18} aria-hidden="true" />Rechnungssignatur</a>
+		</div>
 	</section>
 
 	<section class="card p-4 lg:p-6" aria-labelledby="h-backup">

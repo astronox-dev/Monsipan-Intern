@@ -21,8 +21,8 @@ export const INVOICE_STATUS_LABELS: Record<string, { label: string; tone: string
 	bezahlt: { label: 'Bezahlt', tone: 'badge-ok' }
 };
 
-/** „Rechnung" über alles oder „Teilrechnung" über einen Teil der Tagesberichte */
-export const INVOICE_KIND_LABELS: Record<string, string> = { rechnung: 'Rechnung', teilrechnung: 'Teilrechnung' };
+/** „Rechnung" über alles, „Teilrechnung" über einen Teil der Tagesberichte, „Stornorechnung" zu einer ausgestellten */
+export const INVOICE_KIND_LABELS: Record<string, string> = { rechnung: 'Rechnung', teilrechnung: 'Teilrechnung', storno: 'Stornorechnung' };
 export const invoiceLabel = (kind: string) => INVOICE_KIND_LABELS[kind] ?? 'Rechnung';
 
 /** Steht auf der Rechnung, wenn die Steuerschuld auf den Kunden übergeht */

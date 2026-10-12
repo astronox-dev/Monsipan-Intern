@@ -7,6 +7,7 @@
  * Der Auftrag sieht gleich aus, aber ohne Preise und ohne die Texte für den
  * Kunden – dafür mit Partie, Ansprechpartner und Hinweis.
  */
+import QRCode from 'qrcode';
 import { dateTime } from '$lib/format';
 import { bufferResponse, drawLogo, startPdf } from '$lib/server/pdf';
 import { getSettings } from '$lib/server/settings';
@@ -411,10 +412,72 @@ const PRICED_COLUMNS: Column[] = [
 	{ label: 'GP', x: 168 * MM, w: RIGHT - 168 * MM, align: 'right' }
 ];
 
+/**
+ * Prüfcode: QR-Code zur öffentlichen Prüfseite, daneben Adresse und
+ * Ausstellungsdatum – ausdrücklich kein Registrierkassen-Code.
+ */
+function verifyBlock(doc: Doc, y: number, url: string, issuedAt: Date) {
+	const qr = QRCode.create(url, { errorCorrectionLevel: 'M' });
+	const n = qr.modules.size;
+	const width = 24 * MM;
+	const cell = width / n;
+	doc.save();
+	for (let r = 0; r < n; r++) {
+		for (let c = 0; c < n; c++) if (qr.modules.get(r, c)) doc.rect(LEFT + c * cell, y + r * cell, cell + 0.05, cell + 0.05);
+	}
+	doc.fillColor(INK).fill();
+	doc.restore();
+	const x = LEFT + width + 5 * MM;
+	const w = RIGHT - x;
+	doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text('Rechnung online prüfen', x, y + 1, { width: w });
+	doc
+		.font('Helvetica')
+		.fontSize(8)
+		.fillColor(MUTED)
+		.text('Echtheit und Unversehrtheit dieser Rechnung lassen sich über den Code oder diese Adresse prüfen:', x, doc.y + 1.5, { width: w });
+	doc.font('Helvetica').fontSize(8).fillColor(INK).text(url, x, doc.y + 1.5, { width: w, link: url });
+	doc
+		.font('Helvetica')
+		.fontSize(7.5)
+		.fillColor(MUTED)
+		.text(`Ausgestellt am ${dateTime(issuedAt)} · Prüfcode des Rechnungssystems, kein Registrierkassen-Beleg`, x, doc.y + 1.5, { width: w });
+	return Math.max(y + width, doc.y);
+}
+
+/** Entwürfe sind als solche erkennbar – gültig ist erst die ausgestellte Rechnung */
+function draftMark(doc: Doc) {
+	const range = doc.bufferedPageRange();
+	for (let i = range.start; i < range.start + range.count; i++) {
+		doc.switchToPage(i);
+		doc.save();
+		doc.rotate(-32, { origin: [doc.page.width / 2, doc.page.height / 2] });
+		doc.font('Helvetica-Bold').fontSize(110).fillColor('#8a9097').fillOpacity(0.16);
+		doc.text('ENTWURF', 0, doc.page.height / 2 - 60, { width: doc.page.width, align: 'center', lineBreak: false });
+		doc.restore();
+	}
+}
+
+export interface InvoicePdfOptions {
+	/** Endgültig ausgestellt: Ausstellungszeit und – wenn die Prüfseite an ist – der Prüfcode */
+	issued?: { issuedAt: Date; verifyUrl: string | null } | null;
+}
+
 export async function invoicePdf(invoice: InvoiceDetail): Promise<Response> {
+	const buffer = await invoicePdfBuffer(invoice);
+	return bufferResponse(invoicePdfName(invoice), buffer);
+}
+
+export const invoicePdfName = (invoice: Pick<InvoiceDetail, 'kind' | 'number'>) => `${invoice.kind}-${invoice.number}.pdf`.replace(/[^\w.-]/g, '_');
+
+/**
+ * Das Rechnungs-PDF. Entwürfe tragen „ENTWURF"; die ausgestellte Fassung wird
+ * genau einmal erzeugt, archiviert und dann nur noch aus dem Archiv geliefert.
+ */
+export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }: InvoicePdfOptions = {}): Promise<Buffer> {
 	const settings = await getSettings();
+	const isStorno = invoice.kind === 'storno';
 	const title = `${invoiceLabel(invoice.kind)} Nr. ${spacedNumber(invoice.number)}`;
-	const { doc, finish } = startPdf({ title, margin: 8, bufferPages: true });
+	const { doc, finish } = startPdf({ title, margin: 8, bufferPages: true, pdfVersion: '1.7' });
 
 	letterhead(doc, letterheadPath(settings.letterheadFile), { certificate: true });
 	let y = addressAndFacts(
@@ -425,7 +488,7 @@ export async function invoicePdf(invoice: InvoiceDetail): Promise<Response> {
 			['Kunden UID-Nummer:', invoice.customerUid],
 			['Projektnummer:', invoice.projectNumber],
 			['Rechnungsnummer:', invoice.number],
-			['Zahlbar bis:', isoDate(invoice.dueDate)]
+			...(isStorno ? [] : ([['Zahlbar bis:', isoDate(invoice.dueDate)]] as [string, string][]))
 		]
 	);
 
@@ -434,6 +497,9 @@ export async function invoicePdf(invoice: InvoiceDetail): Promise<Response> {
 	const heading = `${title}${invoice.title ? ` / BV: ${invoice.title}` : ''}`;
 	doc.text(heading, LEFT, y, { width: WIDTH, lineGap: 2 });
 	y += doc.heightOfString(heading, { width: WIDTH, lineGap: 2 }) + 5 * MM;
+	if (invoice.cancelsNumber && invoice.cancelsDate) {
+		y = labeled(doc, 'Storno zu', `${invoiceLabel(invoice.cancelsKind ?? 'rechnung')} Nr. ${spacedNumber(invoice.cancelsNumber)} vom ${isoDate(invoice.cancelsDate)}`, y);
+	}
 	y = labeled(doc, 'Ausführungsort', invoice.location, y);
 	if (invoice.serviceFrom) y = labeled(doc, 'Leistungszeitraum', reportDateLabel(invoice.serviceFrom, invoice.serviceTo), y);
 	if (invoice.reports.length) y = labeled(doc, 'Tagesberichte', `Nr. ${invoice.reports.map((r) => r.number || '–').join(', ')}`, y);
@@ -480,17 +546,28 @@ export async function invoicePdf(invoice: InvoiceDetail): Promise<Response> {
 		doc.addPage();
 		y = 20 * MM;
 	}
-	doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text(`Zahlbar bis ${isoDate(invoice.dueDate)} ohne Abzug.`, LEFT, y, { width: WIDTH, lineBreak: false });
-	y += 16;
-	paragraph(doc, invoice.closing, y + 3 * MM);
+	if (!isStorno) {
+		doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text(`Zahlbar bis ${isoDate(invoice.dueDate)} ohne Abzug.`, LEFT, y, { width: WIDTH, lineBreak: false });
+		y += 16;
+	}
+	y = paragraph(doc, invoice.closing, y + 3 * MM);
 
+	if (issued?.verifyUrl) {
+		y += 6 * MM;
+		if (y + 26 * MM > FOOTER_TOP - 4 * MM) {
+			doc.addPage();
+			y = 20 * MM;
+		}
+		verifyBlock(doc, y, issued.verifyUrl, issued.issuedAt);
+	}
+
+	if (!issued && invoice.stage === 'entwurf') draftMark(doc);
 	finishPages(doc, [
 		['Anschrift', settings.offerFooterAddress],
 		['Bankverbindung', settings.offerFooterBank],
 		['Kontakt', settings.offerFooterContact]
 	]);
-	const buffer = await finish();
-	return bufferResponse(`${invoice.kind}-${invoice.number}.pdf`.replace(/[^\w.-]/g, '_'), buffer);
+	return finish();
 }
 
 /* ---------------------------------------------------------- Summenblatt */

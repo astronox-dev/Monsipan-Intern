@@ -134,4 +134,21 @@ describe('Zwischendateien aufräumen', () => {
 		// unter Windows erst beim nächsten Aufräumen (die Datei ist noch gesperrt).
 		expect(fs.existsSync(altlast)).toBe(false);
 	});
+
+	it('spielt Sicherungen mit ausgestellten Rechnungen ein und behält die Sperren', async () => {
+		const { invoices } = await import('./db/schema');
+		const { client } = await import('./db');
+		const { eq } = await import('drizzle-orm');
+		const issued = { date: '2026-10-12', dueDate: '2026-11-11', customerName: 'Kunde', stage: 'ausgestellt' as const };
+		await db.insert(invoices).values({ ...issued, number: 'R-1' });
+		const backup = await createBackup();
+		// Danach ausgestellt – beim Einspielen der älteren Sicherung muss sie trotz Sperre weichen
+		await db.insert(invoices).values({ ...issued, number: 'R-2' });
+		await restoreFromFile(path.join(BACKUP_DIR, backup), 'Test');
+		expect((await db.select({ number: invoices.number }).from(invoices).all()).map((i) => i.number)).toEqual(['R-1']);
+		const triggers = (await client.execute("select name from sqlite_master where type = 'trigger'")).rows.map((r) => String(r.name));
+		expect(triggers).toContain('invoices_issued_locked');
+		expect(triggers).toContain('invoice_audit_no_delete');
+		await expect(db.delete(invoices).where(eq(invoices.number, 'R-1'))).rejects.toThrow();
+	});
 });

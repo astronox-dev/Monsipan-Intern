@@ -53,7 +53,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		// Rechnung über alles oder Teilrechnungen – jeder geprüfte Bericht einmal
 		invoices: seesInvoices ? invoices : [],
 		unbilled: seesInvoices ? unbilled : 0,
-		canCreateInvoice: can(user.role, 'rechnungen.erstellen') && !invoiceBlocker({ status: order.status, previous: invoices.length, available: unbilled })
+		// Stornierte Rechnungen und Stornorechnungen zählen nicht – danach geht eine neue (Korrektur-)Rechnung
+		canCreateInvoice:
+			can(user.role, 'rechnungen.erstellen') &&
+			!invoiceBlocker({ status: order.status, previous: invoices.filter((i) => i.stage !== 'storniert' && i.kind !== 'storno').length, available: unbilled })
 	};
 };
 

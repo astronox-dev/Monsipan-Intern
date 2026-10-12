@@ -9,3 +9,4 @@ export * from './tagesberichte';
 export * from './auftraege';
 export * from './benachrichtigungen';
 export * from './planung';
+export * from './rechnungsarchiv';

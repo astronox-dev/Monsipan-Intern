@@ -5,15 +5,16 @@
  * Teilrechnungen – jeder geprüfte Bericht wird genau einmal abgerechnet. Die
  * erste Rechnung trägt die Nummer des Auftrags, weitere „-2", „-3" …
  *
- * Eine Rechnung ist offen, bis sie als bezahlt markiert wird; solange sie
- * offen ist, lässt sie sich noch ändern oder löschen.
+ * Eine Rechnung beginnt als Entwurf – nur dann lässt sie sich ändern oder
+ * löschen. Endgültig ausgestellt wird sie archiviert und signiert (siehe
+ * signatur/signing.ts); Korrekturen gehen dann nur noch über ein Storno.
+ * Unabhängig davon ist sie offen, bis sie als bezahlt markiert wird.
  */
 import { and, asc, desc, eq, gt, inArray, isNull, like, lt, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db, type Tx } from '$lib/server/db';
 import {
 	dailyReports,
-	INVOICE_KINDS,
 	invoicePositions,
 	invoices,
 	offerPositions,
@@ -47,9 +48,18 @@ import {
 	type PricedLine
 } from '../summary';
 import { orderSummary } from './summary';
+import { audit } from './signatur/audit';
 
 const creator = alias(users, 'creator');
 const payer = alias(users, 'payer');
+const issuer = alias(users, 'issuer');
+const canceller = alias(users, 'canceller');
+const original = alias(invoices, 'original');
+const storno = alias(invoices, 'storno');
+
+/** Zählt für Zahlung und Abrechnung: weder storniert noch selbst eine Stornorechnung */
+export const activeInvoice = sql`${invoices.stage} <> 'storniert' and ${invoices.kind} <> 'storno'`;
+const activeCol = sql`${col(invoices.stage)} <> 'storniert' and ${col(invoices.kind)} <> 'storno'`;
 
 /** Netto je Rechnung, direkt in der Abfrage */
 const netSum = sql<number>`(select coalesce(sum(round(${col(invoicePositions.quantity)} * ${col(invoicePositions.unitPrice)}, 2)), 0) from ${invoicePositions} where ${col(invoicePositions.invoiceId)} = ${col(invoices.id)} and ${col(invoicePositions.kind)} = 'position')`.mapWith(
@@ -64,7 +74,8 @@ export interface InvoiceFilter {
 
 export async function listInvoices(filter: InvoiceFilter = {}, limit = 300) {
 	const where: (SQL | undefined)[] = [];
-	if (filter.status === 'offen' || filter.status === 'bezahlt') where.push(eq(invoices.status, filter.status));
+	if (filter.status === 'offen' || filter.status === 'bezahlt') where.push(eq(invoices.status, filter.status), activeInvoice);
+	if (filter.status === 'entwurf') where.push(eq(invoices.stage, 'entwurf'));
 	if (filter.q?.trim()) {
 		const q = `%${filter.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 		where.push(or(like(invoices.number, q), like(invoices.title, q), like(invoices.customerName, q), like(invoices.location, q), like(invoices.projectNumber, q)));
@@ -80,6 +91,7 @@ export async function listInvoices(filter: InvoiceFilter = {}, limit = 300) {
 			customerName: invoices.customerName,
 			customerCity: invoices.customerCity,
 			status: invoices.status,
+			stage: invoices.stage,
 			paidOn: invoices.paidOn,
 			vatRate: invoices.vatRate,
 			reverseCharge: invoices.reverseCharge,
@@ -96,14 +108,15 @@ export async function listInvoices(filter: InvoiceFilter = {}, limit = 300) {
 export async function countInvoices(day = today()) {
 	const row = await db
 		.select({
-			open: sql<number>`sum(case when ${invoices.status} = 'offen' then 1 else 0 end)`.mapWith(Number),
-			paid: sql<number>`sum(case when ${invoices.status} = 'bezahlt' then 1 else 0 end)`.mapWith(Number),
-			overdue: sql<number>`sum(case when ${invoices.status} = 'offen' and ${invoices.dueDate} < ${day} then 1 else 0 end)`.mapWith(Number),
+			open: sql<number>`sum(case when ${invoices.status} = 'offen' and ${activeInvoice} then 1 else 0 end)`.mapWith(Number),
+			paid: sql<number>`sum(case when ${invoices.status} = 'bezahlt' and ${activeInvoice} then 1 else 0 end)`.mapWith(Number),
+			overdue: sql<number>`sum(case when ${invoices.status} = 'offen' and ${activeInvoice} and ${invoices.dueDate} < ${day} then 1 else 0 end)`.mapWith(Number),
+			drafts: sql<number>`sum(case when ${invoices.stage} = 'entwurf' then 1 else 0 end)`.mapWith(Number),
 			all: sql<number>`count(*)`.mapWith(Number)
 		})
 		.from(invoices)
 		.get();
-	return { open: row?.open ?? 0, paid: row?.paid ?? 0, overdue: row?.overdue ?? 0, all: row?.all ?? 0 };
+	return { open: row?.open ?? 0, paid: row?.paid ?? 0, overdue: row?.overdue ?? 0, drafts: row?.drafts ?? 0, all: row?.all ?? 0 };
 }
 
 /** Geprüft, aber auf keiner Rechnung – als SQL für Unterabfragen je Auftrag */
@@ -123,7 +136,7 @@ export function ordersToInvoice() {
 		.where(
 			and(
 				eq(orders.status, 'abgeschlossen'),
-				or(sql`not exists (select 1 from ${invoices} where ${col(invoices.orderId)} = ${col(orders.id)})`, unbilledReport)
+				or(sql`not exists (select 1 from ${invoices} where ${col(invoices.orderId)} = ${col(orders.id)} and ${activeCol})`, unbilledReport)
 			)
 		)
 		.orderBy(asc(orders.statusAt))
@@ -140,6 +153,7 @@ export async function invoicesForOrder(orderId: number) {
 			kind: invoices.kind,
 			date: invoices.date,
 			status: invoices.status,
+			stage: invoices.stage,
 			vatRate: invoices.vatRate,
 			reverseCharge: invoices.reverseCharge,
 			net: netSum,
@@ -182,7 +196,7 @@ export async function invoiceStates(orderIds: number[]): Promise<Record<number, 
 	const rows = await db
 		.select({ orderId: invoices.orderId, status: invoices.status })
 		.from(invoices)
-		.where(inArray(invoices.orderId, orderIds))
+		.where(and(inArray(invoices.orderId, orderIds), activeInvoice))
 		.all();
 	const out: Record<number, InvoiceStatus> = {};
 	for (const r of rows) {
@@ -248,7 +262,7 @@ export async function invoiceDraft(orderId: number) {
 		db
 			.select({ id: invoices.id, number: invoices.number, kind: invoices.kind, date: invoices.date, status: invoices.status, state: invoices.state, section: invoices.section })
 			.from(invoices)
-			.where(eq(invoices.orderId, orderId))
+			.where(and(eq(invoices.orderId, orderId), activeInvoice))
 			.orderBy(asc(invoices.id))
 			.all()
 	]);
@@ -286,7 +300,7 @@ export async function invoiceDraft(orderId: number) {
 		blocked: invoiceBlocker({ status: order.status, previous: previous.length, available: reports.length }),
 		mapping: suggestMapping(columns, lines, order.invoiceMapping),
 		head: {
-			kind: suggestKind({ closed: order.status === 'abgeschlossen', previous: previous.length, available: reports.length, selected: reports.length, pending }) as InvoiceKind,
+			kind: suggestKind({ closed: order.status === 'abgeschlossen', previous: previous.length, available: reports.length, selected: reports.length, pending }) as Exclude<InvoiceKind, 'storno'>,
 			// Bundesland und Abschnitt wie auf der letzten Rechnung zum Auftrag
 			state: last?.state ?? '',
 			section: last?.section ?? '',
@@ -406,7 +420,8 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 	const kind = s('rechnungsart');
 	return {
 		head: {
-			kind: (INVOICE_KINDS as readonly string[]).includes(kind) ? (kind as InvoiceKind) : 'rechnung',
+			// Stornorechnungen entstehen nur beim Stornieren – nicht aus dem Formular
+			kind: kind === 'teilrechnung' ? 'teilrechnung' : 'rechnung',
 			state: s('bundesland').trim().slice(0, 60),
 			section: s('abschnitt').trim().slice(0, 120),
 			date,
@@ -479,7 +494,11 @@ export async function createInvoice(
 	return db.transaction(async (tx) => {
 		const order = await tx.select().from(orders).where(eq(orders.id, orderId)).get();
 		if (!order) return { message: 'Den Auftrag gibt es nicht mehr.' };
-		const previous = await tx.select({ id: invoices.id }).from(invoices).where(eq(invoices.orderId, orderId)).all();
+		const previous = await tx
+			.select({ id: invoices.id })
+			.from(invoices)
+			.where(and(eq(invoices.orderId, orderId), activeInvoice))
+			.all();
 		const chosen = reportIds.length
 			? await tx
 					.select({ id: dailyReports.id, status: dailyReports.status, invoiceId: dailyReports.invoiceId })
@@ -498,13 +517,14 @@ export async function createInvoice(
 			.where(or(eq(invoices.number, order.number), like(invoices.number, `${order.number}-%`)))
 			.all();
 		const offer = order.offerId ? await tx.select({ customerId: offers.customerId }).from(offers).where(eq(offers.id, order.offerId)).get() : undefined;
+		const number = nextInvoiceNumber(
+			order.number,
+			new Set(taken.map((t) => t.number))
+		);
 		const row = await tx
 			.insert(invoices)
 			.values({
-				number: nextInvoiceNumber(
-					order.number,
-					new Set(taken.map((t) => t.number))
-				),
+				number,
 				orderId,
 				offerId: order.offerId,
 				customerId: offer?.customerId ?? null,
@@ -516,6 +536,7 @@ export async function createInvoice(
 			.returning({ id: invoices.id })
 			.get();
 		await writeLines(tx, row.id, data.lines);
+		await audit({ invoiceId: row.id, invoiceNumber: number, user, action: 'erstellt', detail: { art: data.head.kind, tagesberichte: reportIds.length } }, tx);
 		if (reportIds.length) await tx.update(dailyReports).set({ invoiceId: row.id }).where(inArray(dailyReports.id, reportIds));
 		await tx
 			.update(orders)
@@ -525,14 +546,14 @@ export async function createInvoice(
 	});
 }
 
-/** Offene Rechnung ändern – bezahlte bleiben, wie sie sind */
+/** Entwurf ändern – ausgestellte und bezahlte bleiben, wie sie sind */
 export async function saveInvoice(id: number, data: SaveInvoice): Promise<boolean> {
 	return db.transaction(async (tx) => {
 		const done = await tx
 			.update(invoices)
 			// Neues Zahlungsziel: „überfällig" gilt dann wieder neu
 			.set({ ...data.head, overdueNotifiedAt: null, updatedAt: new Date() })
-			.where(and(eq(invoices.id, id), eq(invoices.status, 'offen')))
+			.where(and(eq(invoices.id, id), eq(invoices.status, 'offen'), eq(invoices.stage, 'entwurf')))
 			.returning({ id: invoices.id });
 		if (!done.length) return false;
 		await writeLines(tx, id, data.lines);
@@ -575,13 +596,38 @@ export async function invoiceDetail(id: number) {
 			paidByFirst: payer.firstName,
 			paidByLast: payer.lastName,
 			createdAt: invoices.createdAt,
+			updatedAt: invoices.updatedAt,
 			creatorFirst: creator.firstName,
-			creatorLast: creator.lastName
+			creatorLast: creator.lastName,
+			stage: invoices.stage,
+			issuedAt: invoices.issuedAt,
+			issuerFirst: issuer.firstName,
+			issuerLast: issuer.lastName,
+			verifyToken: invoices.verifyToken,
+			retainUntil: invoices.retainUntil,
+			signError: invoices.signError,
+			checkedAt: invoices.checkedAt,
+			checkResult: invoices.checkResult,
+			checkDetail: invoices.checkDetail,
+			cancelledAt: invoices.cancelledAt,
+			cancellerFirst: canceller.firstName,
+			cancellerLast: canceller.lastName,
+			cancelReason: invoices.cancelReason,
+			stornoId: invoices.stornoId,
+			stornoNumber: storno.number,
+			cancelsId: invoices.cancelsId,
+			cancelsNumber: original.number,
+			cancelsKind: original.kind,
+			cancelsDate: original.date
 		})
 		.from(invoices)
 		.leftJoin(orders, eq(orders.id, invoices.orderId))
 		.leftJoin(creator, eq(creator.id, invoices.createdBy))
 		.leftJoin(payer, eq(payer.id, invoices.paidBy))
+		.leftJoin(issuer, eq(issuer.id, invoices.issuedBy))
+		.leftJoin(canceller, eq(canceller.id, invoices.cancelledBy))
+		.leftJoin(original, eq(original.id, invoices.cancelsId))
+		.leftJoin(storno, eq(storno.id, invoices.stornoId))
 		.where(eq(invoices.id, id))
 		.get();
 	if (!invoice) return null;
@@ -641,7 +687,7 @@ export async function notifyOverdueInvoices(day = today()) {
 			net: netSum
 		})
 		.from(invoices)
-		.where(and(eq(invoices.status, 'offen'), lt(invoices.dueDate, day), isNull(invoices.overdueNotifiedAt)))
+		.where(and(eq(invoices.status, 'offen'), activeInvoice, lt(invoices.dueDate, day), isNull(invoices.overdueNotifiedAt)))
 		.all();
 	for (const i of due) {
 		await db.update(invoices).set({ overdueNotifiedAt: new Date() }).where(eq(invoices.id, i.id));
@@ -654,11 +700,11 @@ export async function notifyOverdueInvoices(day = today()) {
 	}
 }
 
-/** Nur offene Rechnungen lassen sich löschen – ihre Tagesberichte sind dann wieder abzurechnen */
+/** Nur offene Entwürfe lassen sich löschen – ihre Tagesberichte sind dann wieder abzurechnen */
 export async function deleteInvoice(id: number): Promise<boolean> {
 	return db.transaction(async (tx) => {
-		const invoice = await tx.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, id)).get();
-		if (invoice?.status !== 'offen') return false;
+		const invoice = await tx.select({ status: invoices.status, stage: invoices.stage }).from(invoices).where(eq(invoices.id, id)).get();
+		if (invoice?.status !== 'offen' || invoice.stage !== 'entwurf') return false;
 		// Erst die Berichte lösen – sie verweisen auf die Rechnung
 		await tx.update(dailyReports).set({ invoiceId: null }).where(eq(dailyReports.invoiceId, id));
 		await tx.delete(invoices).where(eq(invoices.id, id));
