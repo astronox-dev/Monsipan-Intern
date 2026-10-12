@@ -16,7 +16,7 @@ import { invoiceFiles, invoices, invoiceSignatures, settings as settingsTable } 
 import { getSettings } from '$lib/server/settings';
 import { notify } from '$lib/server/notifications';
 import type { SessionUser } from '$lib/server/auth';
-import { invoiceLabel, spacedNumber } from '../../offer';
+import { invoiceLabel, invoiceNo } from '../../offer';
 import { CHECK_LABELS, isLegacy, type CheckResult, type InvoiceStage } from '../../signature';
 import { audit, verifyAuditChain } from './audit';
 import { currentContentHash, readArchiveFile, sha256Hex } from './archive';
@@ -147,6 +147,7 @@ export async function verifyInvoice(id: number, opts: { user?: SessionUser | nul
 /* ------------------------------------------------------- Prüfseite */
 
 export interface PublicVerification {
+	/** Wie auf der Rechnung, mit Kostenstelle */
 	number: string;
 	kindLabel: string;
 	date: string;
@@ -181,7 +182,7 @@ export async function publicVerification(token: string): Promise<PublicVerificat
 	const hit = cache.get(token);
 	if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
 	const row = await db
-		.select({ id: invoices.id, number: invoices.number, kind: invoices.kind, date: invoices.date, issuedAt: invoices.issuedAt, cancelledAt: invoices.cancelledAt })
+		.select({ id: invoices.id, number: invoices.number, costCenter: invoices.costCenter, kind: invoices.kind, date: invoices.date, issuedAt: invoices.issuedAt, cancelledAt: invoices.cancelledAt })
 		.from(invoices)
 		.where(and(eq(invoices.verifyToken, token), ne(invoices.stage, 'entwurf')))
 		.get();
@@ -194,7 +195,7 @@ export async function publicVerification(token: string): Promise<PublicVerificat
 	]);
 	if (!check) return null;
 	const value: PublicVerification = {
-		number: row.number,
+		number: invoiceNo(row),
 		kindLabel: invoiceLabel(row.kind),
 		date: row.date,
 		issuedAt: row.issuedAt?.toISOString() ?? null,
@@ -246,14 +247,14 @@ export async function lastArchiveCheck(): Promise<ArchiveCheck | null> {
 export async function checkArchive(user: SessionUser | null = null): Promise<ArchiveCheck> {
 	// Entwürfe und importierter Altbestand (ohne Prüfcode-Schlüssel) haben kein Archiv
 	const issued = await db
-		.select({ id: invoices.id, number: invoices.number, kind: invoices.kind })
+		.select({ id: invoices.id, number: invoices.number, costCenter: invoices.costCenter, kind: invoices.kind })
 		.from(invoices)
 		.where(and(notInArray(invoices.stage, ['entwurf', 'importiert']), isNotNull(invoices.verifyToken)))
 		.all();
 	const problems: ArchiveCheck['problems'] = [];
 	for (const i of issued) {
 		const check = await verifyInvoice(i.id, { record: true });
-		if (check?.result === 'ungueltig') problems.push({ id: i.id, number: i.number, detail: check.problems.join(' ') });
+		if (check?.result === 'ungueltig') problems.push({ id: i.id, number: invoiceNo(i), detail: check.problems.join(' ') });
 	}
 	const chain = await verifyAuditChain();
 	const result: ArchiveCheck = { at: new Date().toISOString(), invoices: issued.length, problems, audit: chain };
@@ -265,7 +266,7 @@ export async function checkArchive(user: SessionUser | null = null): Promise<Arc
 			event: 'rechnung.archiv',
 			title: 'Archivprüfung: Rechnungen mit Fehlern',
 			body: [
-				...problems.slice(0, 3).map((p) => `${spacedNumber(p.number)}: ${p.detail}`),
+				...problems.slice(0, 3).map((p) => `${p.number}: ${p.detail}`),
 				...(chain.ok ? [] : [`Protokoll-Kette unterbrochen bei Eintrag ${chain.brokenAt}`])
 			].join(' · '),
 			url: problems[0] ? `/rechnungen/${problems[0].id}` : '/verwaltung/einstellungen/signatur'

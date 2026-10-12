@@ -169,7 +169,10 @@ describe('Angebote und Stornos', () => {
 		const accepted = await db.select().from(offers).where(eq(offers.number, '24016')).get();
 		expect(pending).toMatchObject({ status: 'freigegeben', title: 'Busstellplätze Hornstein' });
 		expect(pending?.customerId).toBe((await db.select().from(customers).where(eq(customers.name, 'Strabag AG')).get())?.id);
+		// „Abgerechnet" ist angenommen mit abgerechnetem Auftrag
 		expect(accepted?.status).toBe('angenommen');
+		expect(accepted?.billedAt).toBeInstanceOf(Date);
+		expect(pending?.billedAt).toBeNull();
 		expect((await db.select().from(offerPositions).where(eq(offerPositions.offerId, accepted!.id)).all()).map((l) => [l.quantity, l.unitPrice])).toEqual([[1, 6960.5]]);
 
 		const orderRows = table([
@@ -178,6 +181,37 @@ describe('Angebote und Stornos', () => {
 		]);
 		await runImport('auftraege', orderRows.slice(1), mapFor('auftraege', orderRows), { update: false }, user, 'auftraege.csv');
 		expect((await db.select().from(orders).where(eq(orders.number, '24016')).get())?.offerId).toBe(accepted!.id);
+	});
+
+	it('zieht bei vorhandenen Angeboten nur den Stand nach – nie zurück', async () => {
+		const rows = table([
+			['Angebotsnummer', 'Angebotsdatum', 'BV', 'Kunde', 'Stand', 'Netto gesamt'],
+			['24015', '11.04.2024', 'Anderer Titel', 'Strabag AG', 'Abgerechnet', '1'],
+			['24016', '12.04.2024', 'Parkplatz K3', 'Porr Bau GmbH', 'Ausstehend', '1']
+		]);
+		const skip = await planImport('angebote', rows.slice(1), mapFor('angebote', rows), { update: false });
+		expect(skip.counts).toMatchObject({ neu: 0, ueberspringen: 2 });
+		const { plan, result } = await runImport('angebote', rows.slice(1), mapFor('angebote', rows), { update: true }, user, 'stand.csv');
+		expect(plan.counts).toMatchObject({ aktualisieren: 1, ueberspringen: 1 });
+		expect(result.updated).toBe(1);
+		const moved = await db.select().from(offers).where(eq(offers.number, '24015')).get();
+		expect(moved).toMatchObject({ status: 'angenommen', title: 'Busstellplätze Hornstein' });
+		expect(moved?.billedAt).toBeInstanceOf(Date);
+		expect(await db.select({ s: offers.status }).from(offers).where(eq(offers.number, '24016')).get()).toEqual({ s: 'angenommen' });
+		expect((await db.select().from(offerPositions).where(eq(offerPositions.offerId, moved!.id)).all()).map((l) => l.unitPrice)).toEqual([1780]);
+	});
+
+	it('übernimmt die Kostenstelle der Rechnung', async () => {
+		const rows = table([
+			['Rechnungsnummer', 'Rechnungsdatum', 'Kunde', 'Kostenstelle', 'Netto gesamt'],
+			['42041', '20.04.2026', 'Strabag AG', '9526053', '1000']
+		]);
+		const { result } = await runImport('rechnungen', rows.slice(1), mapFor('rechnungen', rows), { update: false }, user, 'kostenstelle.csv');
+		expect(result.created).toBe(1);
+		expect((await db.select().from(invoices).where(eq(invoices.number, '42041')).get())?.costCenter).toBe('9526053');
+		const exported = await exportTable('rechnungen');
+		const row = exported.rows.find((r) => r[0] === '42041')!;
+		expect(row[exported.header.indexOf('Kostenstelle')]).toBe('9526053');
 	});
 
 	it('importiert stornierte Rechnungen mit ihrer Stornorechnung', async () => {

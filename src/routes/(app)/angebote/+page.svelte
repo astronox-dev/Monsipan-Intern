@@ -7,8 +7,11 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import HardHat from '@lucide/svelte/icons/hard-hat';
 	import Dialog from '$lib/components/Dialog.svelte';
+	import ListBar from '$lib/components/ListBar.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
+	import YearTabs from '$lib/components/YearTabs.svelte';
 	import { date as dateLabel } from '$lib/format';
-	import { money, OFFER_STATUS_LABELS, round2, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { money, OFFER_STATUS_LABELS, offerState, round2, spacedNumber } from '$lib/modules/auftraege/offer';
 
 	let { data, form } = $props();
 
@@ -17,10 +20,18 @@
 
 	const FILTERS = [
 		['', 'Alle'],
-		['offen', 'Offen'],
+		['offen', 'Offen (noch nicht angenommen)'],
+		['entwurf', 'In Arbeit'],
+		['freigegeben', 'Ausstehend'],
 		['aenderung', 'Änderung gewünscht'],
-		['angenommen', 'Angenommen']
+		['angenommen', 'Angenommen'],
+		['abgerechnet', 'Abgerechnet']
 	];
+
+	/** Überschrift, wo ein neues Jahr beginnt */
+	const yearOf = (o: { date: string }) => o.date.slice(0, 4);
+	const newYear = (n: number) => n === 0 || yearOf(data.offers[n - 1]) !== yearOf(data.offers[n]);
+	const yearCount = (y: string) => data.years.find((x) => x.year === y)?.n ?? 0;
 </script>
 
 <svelte:head><title>{pageTitle('Angebote')}</title></svelte:head>
@@ -35,25 +46,35 @@
 	{/if}
 </div>
 
-<form method="GET" class="card mb-4 flex flex-wrap items-end gap-3 p-3">
-	<label class="min-w-[12rem] flex-1">
-		<span class="field-label">Suche</span>
-		<input class="input" name="q" value={data.filter.q} placeholder="Nummer, BV, Kunde, Projektnummer" />
-	</label>
-	<label>
-		<span class="field-label">Stand</span>
-		<select class="select" name="status" value={data.filter.status}>
-			{#each FILTERS as [key, label] (key)}<option value={key}>{label}</option>{/each}
-		</select>
-	</label>
-	<button class="btn btn-secondary"><Search size={18} aria-hidden="true" />Filtern</button>
-	{#if data.filter.q || data.filter.status}<a href="/angebote" class="btn btn-ghost">Zurücksetzen</a>{/if}
-</form>
+<ListBar>
+	<form method="GET" class="card flex flex-wrap items-end gap-3 p-3">
+		{#if data.filter.year}<input type="hidden" name="jahr" value={data.filter.year} />{/if}
+		<label class="min-w-[12rem] flex-1">
+			<span class="field-label">Suche</span>
+			<input class="input" name="q" value={data.filter.q} placeholder="Nummer, BV, Kunde, Projektnummer" />
+		</label>
+		<label>
+			<span class="field-label">Stand</span>
+			<select class="select" name="status" value={data.filter.status} onchange={(e) => e.currentTarget.form?.requestSubmit()}>
+				{#each FILTERS as [key, label] (key)}<option value={key}>{label}</option>{/each}
+			</select>
+		</label>
+		<button class="btn btn-secondary"><Search size={18} aria-hidden="true" />Filtern</button>
+		{#if data.filter.q || data.filter.status || data.filter.year}<a href="/angebote" class="btn btn-ghost">Zurücksetzen</a>{/if}
+	</form>
+	<YearTabs years={data.years} current={data.filter.year} />
+</ListBar>
 
 <div class="card overflow-hidden">
 	<ul>
-		{#each data.offers as o (o.id)}
-			{@const st = OFFER_STATUS_LABELS[o.status] ?? OFFER_STATUS_LABELS.entwurf}
+		{#each data.offers as o, n (o.id)}
+			{@const st = OFFER_STATUS_LABELS[offerState(o)] ?? OFFER_STATUS_LABELS.entwurf}
+			{#if newYear(n)}
+				<li class="flex items-baseline gap-2 border-b border-line bg-surface-2 px-4 py-2">
+					<span class="num font-display text-base font-semibold">{yearOf(o)}</span>
+					<span class="text-[0.8125rem] text-ink-3">{yearCount(yearOf(o)) === 1 ? '1 Angebot' : `${yearCount(yearOf(o))} Angebote`}</span>
+				</li>
+			{/if}
 			<li class="border-b border-line last:border-0">
 				<a href="/angebote/{o.id}" class="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
 					<span class="num w-20 shrink-0 font-display text-lg font-semibold">{spacedNumber(o.number)}</span>
@@ -73,11 +94,12 @@
 			</li>
 		{:else}
 			<li class="p-10 text-center">
-				<p class="font-medium">{data.filter.q || data.filter.status ? 'Kein Angebot gefunden' : 'Noch kein Angebot'}</p>
+				<p class="font-medium">{data.filter.q || data.filter.status || data.filter.year ? 'Kein Angebot gefunden' : 'Noch kein Angebot'}</p>
 				{#if data.canCreate}<p class="mt-1 text-sm text-ink-3">Mit „Neues Angebot" das erste schreiben.</p>{/if}
 			</li>
 		{/each}
 	</ul>
+	<Pagination page={data.page} pageSize={data.pageSize} count={data.count} />
 </div>
 
 {#if data.suggestion}
@@ -119,7 +141,7 @@
 					<input class="input num" type="date" name="datum" required value={data.suggestion.date} />
 				</label>
 			</div>
-			<p class="field-hint">Nummern sind vorgeschlagen und frei änderbar – so passen sie zu den bisherigen Angeboten.</p>
+			<p class="field-hint">Die Nummer zählt je Jahr: „26" für 2026, dann die laufende Nummer – im neuen Jahr beginnt sie wieder bei 001. Frei änderbar.</p>
 			{#if form?.message}<p class="field-error" role="alert">{form.message}</p>{/if}
 			<div class="flex justify-end gap-2 pt-1">
 				<button type="button" class="btn btn-ghost" onclick={() => (newOpen = false)}>Abbrechen</button>

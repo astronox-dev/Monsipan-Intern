@@ -10,7 +10,7 @@
  * signatur/signing.ts); Korrekturen gehen dann nur noch über ein Storno.
  * Unabhängig davon ist sie offen, bis sie als bezahlt markiert wird.
  */
-import { and, asc, desc, eq, gt, inArray, isNull, like, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, like, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db, type Tx } from '$lib/server/db';
 import {
@@ -31,7 +31,7 @@ import type { SessionUser } from '$lib/server/auth';
 import { addDays, isValidIsoDate, today } from '$lib/modules/stunden/week';
 import { notify } from '$lib/server/notifications';
 import { date as dateLabel } from '$lib/format';
-import { lineNumbers, MAX_OFFER_LINES, money, parseAmount, round2, spacedNumber } from '../offer';
+import { invoiceNo, lineNumbers, MAX_OFFER_LINES, money, parseAmount, round2 } from '../offer';
 import {
 	billedLines,
 	COUNTED_STATUS,
@@ -49,6 +49,7 @@ import {
 } from '../summary';
 import { orderSummary } from './summary';
 import { audit } from './signatur/audit';
+import { orderOfInvoice, syncOfferBilling } from './billing';
 
 const creator = alias(users, 'creator');
 const payer = alias(users, 'payer');
@@ -72,9 +73,11 @@ export interface InvoiceFilter {
 	status?: string;
 	/** Stichtag für „überfällig" – ohne Angabe heute */
 	day?: string;
+	/** Nur ein Jahr (nach Rechnungsdatum), „2026" */
+	year?: string;
 }
 
-function invoiceWhere(filter: InvoiceFilter): SQL | undefined {
+function invoiceWhere(filter: InvoiceFilter, withYear = true): SQL | undefined {
 	const where: (SQL | undefined)[] = [];
 	if (filter.status === 'offen' || filter.status === 'bezahlt') where.push(eq(invoices.status, filter.status), activeInvoice);
 	// Überfällig: offen und „zahlbar bis" vorbei – genau wie das Abzeichen in der Liste
@@ -82,8 +85,11 @@ function invoiceWhere(filter: InvoiceFilter): SQL | undefined {
 	if (filter.status === 'entwurf') where.push(eq(invoices.stage, 'entwurf'));
 	if (filter.q?.trim()) {
 		const q = `%${filter.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-		where.push(or(like(invoices.number, q), like(invoices.title, q), like(invoices.customerName, q), like(invoices.location, q), like(invoices.projectNumber, q)));
+		where.push(
+			or(like(invoices.number, q), like(invoices.costCenter, q), like(invoices.title, q), like(invoices.customerName, q), like(invoices.location, q), like(invoices.projectNumber, q))
+		);
 	}
+	if (withYear && filter.year && /^\d{4}$/.test(filter.year)) where.push(gte(invoices.date, `${filter.year}-01-01`), lte(invoices.date, `${filter.year}-12-31`));
 	return and(...where);
 }
 
@@ -91,6 +97,18 @@ function invoiceWhere(filter: InvoiceFilter): SQL | undefined {
 export async function countListed(filter: InvoiceFilter = {}): Promise<number> {
 	const row = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(invoices).where(invoiceWhere(filter)).get();
 	return row?.n ?? 0;
+}
+
+/** Jahre (nach Rechnungsdatum) mit ihrer Anzahl – für die Einteilung der Liste, neueste zuerst */
+export async function invoiceYears(filter: InvoiceFilter = {}) {
+	const year = sql<string>`substr(${invoices.date}, 1, 4)`;
+	return db
+		.select({ year, n: sql<number>`count(*)`.mapWith(Number) })
+		.from(invoices)
+		.where(invoiceWhere(filter, false))
+		.groupBy(year)
+		.orderBy(desc(year))
+		.all();
 }
 
 /** Summe aller offenen Beträge (brutto) – unabhängig davon, wie viele es sind */
@@ -110,6 +128,7 @@ export async function listInvoices(filter: InvoiceFilter = {}, limit = 300, offs
 		.select({
 			id: invoices.id,
 			number: invoices.number,
+			costCenter: invoices.costCenter,
 			kind: invoices.kind,
 			date: invoices.date,
 			dueDate: invoices.dueDate,
@@ -125,8 +144,14 @@ export async function listInvoices(filter: InvoiceFilter = {}, limit = 300, offs
 		})
 		.from(invoices)
 		.where(invoiceWhere(filter))
-		// Offene nach Fälligkeit, bezahlte nach Datum
-		.orderBy(sql`case ${invoices.status} when 'offen' then 0 else 1 end`, sql`case ${invoices.status} when 'offen' then ${invoices.dueDate} end`, desc(invoices.date), desc(invoices.id))
+		// Nach Jahren, neueste zuerst; im Jahr offene nach Fälligkeit, bezahlte nach Datum
+		.orderBy(
+			desc(sql`substr(${invoices.date}, 1, 4)`),
+			sql`case ${invoices.status} when 'offen' then 0 else 1 end`,
+			sql`case ${invoices.status} when 'offen' then ${invoices.dueDate} end`,
+			desc(invoices.date),
+			desc(invoices.id)
+		)
 		.limit(limit)
 		.offset(offset)
 		.all();
@@ -177,6 +202,7 @@ export async function invoicesForOrder(orderId: number) {
 		.select({
 			id: invoices.id,
 			number: invoices.number,
+			costCenter: invoices.costCenter,
 			kind: invoices.kind,
 			date: invoices.date,
 			status: invoices.status,
@@ -287,7 +313,16 @@ export async function invoiceDraft(orderId: number) {
 		orderSummary(orderId),
 		getSettings(),
 		db
-			.select({ id: invoices.id, number: invoices.number, kind: invoices.kind, date: invoices.date, status: invoices.status, state: invoices.state, section: invoices.section })
+			.select({
+				id: invoices.id,
+				number: invoices.number,
+				costCenter: invoices.costCenter,
+				kind: invoices.kind,
+				date: invoices.date,
+				status: invoices.status,
+				state: invoices.state,
+				section: invoices.section
+			})
 			.from(invoices)
 			.where(and(eq(invoices.orderId, orderId), activeInvoice))
 			.orderBy(asc(invoices.id))
@@ -336,6 +371,8 @@ export async function invoiceDraft(orderId: number) {
 			serviceFrom: period?.from ?? '',
 			serviceTo: period?.to ?? '',
 			projectNumber: order.projectNumber,
+			// Die Kostenstelle wie auf der letzten Rechnung zum Auftrag
+			costCenter: last?.costCenter ?? '',
 			title: order.title,
 			location: order.location,
 			customerName: offer?.customerName ?? order.customerName,
@@ -374,6 +411,7 @@ export interface SaveInvoice {
 		title: string;
 		location: string;
 		projectNumber: string;
+		costCenter: string;
 		customerName: string;
 		customerAddition: string;
 		customerStreet: string;
@@ -458,6 +496,7 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 			title: s('titel').trim().slice(0, 300),
 			location: s('ort').trim().slice(0, 300),
 			projectNumber: s('projekt').trim().slice(0, 30),
+			costCenter: s('kostenstelle').replace(/\s+/g, ' ').trim().slice(0, 30),
 			customerName: name.slice(0, 160),
 			customerAddition: s('k_zusatz').trim().slice(0, 160),
 			customerStreet: s('k_strasse').trim().slice(0, 160),
@@ -564,6 +603,8 @@ export async function createInvoice(
 			.get();
 		await writeLines(tx, row.id, data.lines);
 		await audit({ invoiceId: row.id, invoiceNumber: number, user, action: 'erstellt', detail: { art: data.head.kind, tagesberichte: reportIds.length } }, tx);
+		// Eine neue, offene Rechnung: das Angebot ist (wieder) nicht fertig abgerechnet
+		await syncOfferBilling(orderId, 'nur_zuruecknehmen', tx);
 		if (reportIds.length) await tx.update(dailyReports).set({ invoiceId: row.id }).where(inArray(dailyReports.id, reportIds));
 		await tx
 			.update(orders)
@@ -606,6 +647,7 @@ export async function invoiceDetail(id: number) {
 			serviceTo: invoices.serviceTo,
 			dueDate: invoices.dueDate,
 			projectNumber: invoices.projectNumber,
+			costCenter: invoices.costCenter,
 			title: invoices.title,
 			location: invoices.location,
 			customerName: invoices.customerName,
@@ -642,8 +684,10 @@ export async function invoiceDetail(id: number) {
 			cancelReason: invoices.cancelReason,
 			stornoId: invoices.stornoId,
 			stornoNumber: storno.number,
+			stornoCostCenter: storno.costCenter,
 			cancelsId: invoices.cancelsId,
 			cancelsNumber: original.number,
+			cancelsCostCenter: original.costCenter,
 			cancelsKind: original.kind,
 			cancelsDate: original.date
 		})
@@ -689,6 +733,8 @@ export async function setInvoicePaid(id: number, paidOn: string, userId: number)
 		.update(invoices)
 		.set({ status: 'bezahlt', paidOn, paidBy: userId, updatedAt: new Date() })
 		.where(eq(invoices.id, id));
+	// Alles bezahlt und der Auftrag abgeschlossen → Angebot abgerechnet
+	await syncOfferBilling(await orderOfInvoice(id), 'nur_abrechnen');
 }
 
 export async function setInvoiceOpen(id: number) {
@@ -696,6 +742,7 @@ export async function setInvoiceOpen(id: number) {
 		.update(invoices)
 		.set({ status: 'offen', paidOn: null, paidBy: null, overdueNotifiedAt: null, updatedAt: new Date() })
 		.where(eq(invoices.id, id));
+	await syncOfferBilling(await orderOfInvoice(id), 'nur_zuruecknehmen');
 }
 
 /** Brutto einer Rechnung aus dem Netto der Abfrage */
@@ -707,6 +754,7 @@ export async function notifyOverdueInvoices(day = today()) {
 		.select({
 			id: invoices.id,
 			number: invoices.number,
+			costCenter: invoices.costCenter,
 			customerName: invoices.customerName,
 			dueDate: invoices.dueDate,
 			vatRate: invoices.vatRate,
@@ -720,7 +768,7 @@ export async function notifyOverdueInvoices(day = today()) {
 		await db.update(invoices).set({ overdueNotifiedAt: new Date() }).where(eq(invoices.id, i.id));
 		notify({
 			event: 'rechnung.ueberfaellig',
-			title: `Rechnung ${spacedNumber(i.number)} überfällig`,
+			title: `Rechnung ${invoiceNo(i)} überfällig`,
 			body: [i.customerName, money(grossOf(i)), `zahlbar bis ${dateLabel(i.dueDate)}`].filter(Boolean).join(' · '),
 			url: `/rechnungen/${i.id}`
 		});
@@ -730,11 +778,12 @@ export async function notifyOverdueInvoices(day = today()) {
 /** Nur offene Entwürfe lassen sich löschen – ihre Tagesberichte sind dann wieder abzurechnen */
 export async function deleteInvoice(id: number): Promise<boolean> {
 	return db.transaction(async (tx) => {
-		const invoice = await tx.select({ status: invoices.status, stage: invoices.stage }).from(invoices).where(eq(invoices.id, id)).get();
+		const invoice = await tx.select({ status: invoices.status, stage: invoices.stage, orderId: invoices.orderId }).from(invoices).where(eq(invoices.id, id)).get();
 		if (invoice?.status !== 'offen' || invoice.stage !== 'entwurf') return false;
 		// Erst die Berichte lösen – sie verweisen auf die Rechnung
 		await tx.update(dailyReports).set({ invoiceId: null }).where(eq(dailyReports.invoiceId, id));
 		await tx.delete(invoices).where(eq(invoices.id, id));
+		await syncOfferBilling(invoice.orderId, 'beide', tx);
 		return true;
 	});
 }

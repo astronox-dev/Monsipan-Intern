@@ -11,6 +11,8 @@
 		title: string;
 		location: string;
 		projectNumber: string;
+		/** Steht hinter der Rechnungsnummer: „Nummer/Kostenstelle" */
+		costCenter: string;
 		customerName: string;
 		customerAddition: string;
 		customerStreet: string;
@@ -377,6 +379,11 @@
 			<label class="block">
 				<span class="field-label">Projektnummer</span>
 				<input class="input num" name="projekt" maxlength="30" bind:value={head.projectNumber} />
+			</label>
+			<label class="block">
+				<span class="field-label">Kostenstelle</span>
+				<input class="input num" name="kostenstelle" maxlength="30" bind:value={head.costCenter} />
+				<span class="field-hint">Die Rechnungsnummer lautet dann „Nummer/Kostenstelle".</span>
 			</label>
 			<label class="block">
 				<span class="field-label">Umsatzsteuer in %</span>

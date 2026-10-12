@@ -5,10 +5,14 @@
 
 export const OFFER_STATUS_LABELS: Record<string, { label: string; tone: string }> = {
 	entwurf: { label: 'In Arbeit', tone: '' },
-	freigegeben: { label: 'Beim Kunden', tone: 'badge-info' },
+	freigegeben: { label: 'Ausstehend', tone: 'badge-info' },
 	aenderung: { label: 'Änderung gewünscht', tone: 'badge-warn' },
-	angenommen: { label: 'Angenommen', tone: 'badge-ok' }
+	angenommen: { label: 'Angenommen', tone: 'badge-ok' },
+	abgerechnet: { label: 'Abgerechnet', tone: 'badge-brand' }
 };
+
+/** Stand fürs Anzeigen: ein angenommenes Angebot mit abgerechnetem Auftrag heißt „abgerechnet" */
+export const offerState = (o: { status: string; billedAt?: Date | number | null }) => (o.status === 'angenommen' && o.billedAt ? 'abgerechnet' : o.status);
 
 export const ORDER_STATUS_LABELS: Record<string, { label: string; tone: string }> = {
 	erstellt: { label: 'Auftrag erstellt', tone: 'badge-info' },
@@ -130,10 +134,23 @@ export function spacedNumber(n: string): string {
 	return m ? `${m[1].slice(0, -3)} ${m[1].slice(-3)}${m[2] ?? ''}` : n;
 }
 
-/** Nächste Angebotsnummer: höchste rein numerische plus eins, sonst „JJ001" */
+/**
+ * Nächste Angebotsnummer: Jahr und laufende Nummer, „26001", „26002" … – im
+ * neuen Jahr beginnt die Zählung wieder bei „27001".
+ */
 export function nextOfferNumber(existing: string[], year: number): string {
-	const max = existing.reduce((m, n) => (/^\d+$/.test(n) && Number(n) > m ? Number(n) : m), 0);
-	return max ? String(max + 1) : `${String(year % 100).padStart(2, '0')}001`;
+	const yy = String(year % 100).padStart(2, '0');
+	const max = existing.reduce((m, n) => {
+		const hit = /^(\d{2})(\d{3,})$/.exec(n);
+		return hit && hit[1] === yy && Number(hit[2]) > m ? Number(hit[2]) : m;
+	}, 0);
+	return `${yy}${String(max + 1).padStart(3, '0')}`;
+}
+
+/** Rechnungsnummer, wie sie auf der Rechnung steht: „26 659" bzw. mit Kostenstelle „42 041/9526053" */
+export function invoiceNo(i: { number: string; costCenter?: string | null }): string {
+	const n = spacedNumber(i.number);
+	return i.costCenter ? `${n}/${i.costCenter}` : n;
 }
 
 /** Nächste Projektnummer im Jahr: „26-00785" → „26-00786" */

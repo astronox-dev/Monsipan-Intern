@@ -32,6 +32,7 @@
 		money,
 		OFFER_STATUS_LABELS,
 		OFFER_UNITS,
+		offerState,
 		offerTotals,
 		parseAmount,
 		spacedNumber
@@ -79,12 +80,13 @@
 	const numbers = $derived(lineNumbers(lines));
 	const parsed = $derived(lines.map((l) => ({ kind: l.kind, quantity: parseAmount(l.quantity), unitPrice: parseAmount(l.price) })));
 	const totals = $derived(offerTotals(parsed, parseAmount(head.vat) ?? 0));
-	const st = $derived(OFFER_STATUS_LABELS[offer.status] ?? OFFER_STATUS_LABELS.entwurf);
+	const st = $derived(OFFER_STATUS_LABELS[offerState(offer)] ?? OFFER_STATUS_LABELS.entwurf);
 
 	let busy = $state(false);
 	let releaseOpen = $state(false);
 	let withdrawOpen = $state(false);
 	let reopenOpen = $state(false);
+	let acceptOpen = $state(false);
 	let deleteOpen = $state(false);
 	let customerOpen = $state(false);
 	let orderOpen = $state(false);
@@ -205,8 +207,29 @@
 			</svg>
 		{/if}
 		<div>
-			<p class="flex items-center gap-2 font-medium"><CircleCheck size={18} class="text-ok" aria-hidden="true" />Vom Kunden angenommen</p>
-			<p class="text-sm text-ink-2">{offer.acceptedName}{offer.acceptedAt ? `, ${dateTime(offer.acceptedAt)}` : ''}</p>
+			{#if offer.acceptedSignature}
+				<p class="flex items-center gap-2 font-medium"><CircleCheck size={18} class="text-ok" aria-hidden="true" />Vom Kunden angenommen</p>
+				<p class="text-sm text-ink-2">{offer.acceptedName}{offer.acceptedAt ? `, ${dateTime(offer.acceptedAt)}` : ''}</p>
+			{:else}
+				<!-- Intern markiert (Zusage am Telefon o. Ä.) oder aus dem bisherigen Programm übernommen -->
+				<p class="flex items-center gap-2 font-medium">
+					<CircleCheck size={18} class="text-ok" aria-hidden="true" />{offer.acceptedAt ? 'Intern als angenommen markiert' : 'Angenommen'}
+				</p>
+				{#if offer.acceptedAt}
+					<p class="text-sm text-ink-2">
+						{[
+							offer.acceptedName && `Zusage von ${offer.acceptedName}`,
+							`am ${dateTime(offer.acceptedAt)}`,
+							name(offer.acceptedByFirst, offer.acceptedByLast) && `eingetragen von ${name(offer.acceptedByFirst, offer.acceptedByLast)}`
+						]
+							.filter(Boolean)
+							.join(' · ')}
+					</p>
+				{/if}
+			{/if}
+			{#if offer.billedAt}
+				<p class="mt-1 text-sm text-ink-2">Abgerechnet am {dateTime(offer.billedAt)} – Auftrag abgeschlossen, Rechnungen bezahlt.</p>
+			{/if}
 			{#if offer.order}
 				<a href="/auftraege/{offer.order.id}" class="btn btn-secondary mt-3"><HardHat size={18} aria-hidden="true" />Zum Auftrag {spacedNumber(offer.number)}</a>
 			{:else if data.canCreateOrder}
@@ -403,7 +426,7 @@
 		</section>
 	</fieldset>
 
-	{#if data.editable || data.canRelease || data.canWithdraw}
+	{#if data.editable || data.canRelease || data.canWithdraw || data.canAccept}
 		<div class="card sticky bottom-24 mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			{#if data.editable}
 				<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
@@ -413,6 +436,11 @@
 					<Send size={18} aria-hidden="true" />Freigeben
 				</button>
 			{/if}
+			{#if data.canAccept}
+				<button type="button" class="btn btn-primary" disabled={busy} onclick={() => (acceptOpen = true)}>
+					<CircleCheck size={18} aria-hidden="true" />Als angenommen markieren
+				</button>
+			{/if}
 			{#if data.canWithdraw && offer.status === 'freigegeben'}
 				<button type="button" class="btn btn-secondary" disabled={busy} onclick={() => (withdrawOpen = true)}>
 					<Pencil size={18} aria-hidden="true" />Überarbeiten
@@ -420,7 +448,7 @@
 			{/if}
 			<span class="ml-auto text-sm text-ink-2">
 				{offer.status === 'freigegeben'
-					? `Beim Kunden seit ${offer.releasedAt ? dateTime(offer.releasedAt) : '–'}`
+					? `Ausstehend seit ${offer.releasedAt ? dateTime(offer.releasedAt) : '–'}`
 					: `${lines.filter((l) => l.kind === 'position').length} Positionen · ${money(totals.gross)} brutto`}
 			</span>
 		</div>
@@ -486,6 +514,33 @@
 	>
 		<button type="button" class="btn btn-ghost" onclick={() => (withdrawOpen = false)}>Abbrechen</button>
 		<button class="btn btn-primary"><Pencil size={18} aria-hidden="true" />Überarbeiten</button>
+	</form>
+</Dialog>
+
+<Dialog bind:open={acceptOpen} title="Als angenommen markieren?">
+	<p class="text-ink-2">
+		Für eine Zusage ohne Unterschrift über den Link – etwa am Telefon, per E-Mail oder unterschrieben zurückgeschickt. Danach lässt sich der Auftrag
+		erstellen.
+	</p>
+	<form
+		method="POST"
+		action="?/accept"
+		class="mt-4 space-y-4"
+		use:enhance={() => async ({ result, update }) => {
+			acceptOpen = false;
+			if (result.type === 'success') toast.success('Angebot angenommen');
+			await update();
+		}}
+	>
+		<label class="block">
+			<span class="field-label">Zusage von</span>
+			<input class="input" name="name" maxlength="120" placeholder="z. B. Hr. Maier, telefonisch" />
+			<span class="field-hint">Freiwillig – steht beim Angebot und auf der Seite des Kunden.</span>
+		</label>
+		<div class="flex justify-end gap-2">
+			<button type="button" class="btn btn-ghost" onclick={() => (acceptOpen = false)}>Abbrechen</button>
+			<button class="btn btn-primary"><CircleCheck size={18} aria-hidden="true" />Angenommen</button>
+		</div>
 	</form>
 </Dialog>
 

@@ -16,7 +16,6 @@
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import { date as dateLabel, dateTime } from '$lib/format';
 	import { can } from '$lib/permissions';
-	import { spacedNumber } from '$lib/modules/auftraege/offer';
 	import { PADES_LEVEL_LABELS, PROVIDER_LABELS } from '$lib/modules/auftraege/signature';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -364,7 +363,7 @@
 				{#if check.problems.length}
 					<ul class="mt-2 space-y-1 text-sm">
 						{#each check.problems as p (p.id)}
-							<li><a class="font-medium text-danger underline" href="/rechnungen/{p.id}">{spacedNumber(p.number)}</a>: {p.detail}</li>
+							<li><a class="font-medium text-danger underline" href="/rechnungen/{p.id}">{p.number}</a>: {p.detail}</li>
 						{/each}
 					</ul>
 				{/if}

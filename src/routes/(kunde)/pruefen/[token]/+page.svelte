@@ -8,7 +8,6 @@
 	import CircleHelp from '@lucide/svelte/icons/circle-help';
 	import FileSearch from '@lucide/svelte/icons/file-search';
 	import { date as dateLabel, dateTime } from '$lib/format';
-	import { spacedNumber } from '$lib/modules/auftraege/offer';
 	import { CHECK_LABELS, PADES_LEVEL_LABELS } from '$lib/modules/auftraege/signature';
 
 	let { data, form } = $props();
@@ -65,7 +64,7 @@
 	<section class="card mt-4 p-5">
 		<dl class="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[13rem_1fr]">
 			<dt class="text-sm text-ink-3">Rechnungsnummer</dt>
-			<dd class="num font-medium">{v.kindLabel} {spacedNumber(v.number)}</dd>
+			<dd class="num font-medium">{v.kindLabel} {v.number}</dd>
 			<dt class="text-sm text-ink-3">Rechnungsdatum</dt>
 			<dd>{dateLabel(v.date)}</dd>
 			<dt class="text-sm text-ink-3">Ausgestellt am</dt>

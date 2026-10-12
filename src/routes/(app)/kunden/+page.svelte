@@ -6,6 +6,8 @@
 	import Search from '@lucide/svelte/icons/search';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Dialog from '$lib/components/Dialog.svelte';
+	import ListBar from '$lib/components/ListBar.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 	import CustomerFields from '$lib/modules/auftraege/components/CustomerFields.svelte';
 	import { addressLines } from '$lib/modules/auftraege/offer';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -41,17 +43,26 @@
 	{#if canCreate}<button class="btn btn-primary" onclick={() => edit(null)}><Plus size={18} aria-hidden="true" />Neuer Kunde</button>{/if}
 </div>
 
-<form method="GET" class="card mb-4 flex flex-wrap items-end gap-3 p-3">
-	<label class="min-w-[12rem] flex-1">
-		<span class="field-label">Suche</span>
-		<input class="input" name="q" value={data.filter.q} placeholder="Name, Ort, Ansprechpartner, UID" />
-	</label>
-	<label class="flex items-center gap-2 pb-2.5 text-sm">
-		<input type="checkbox" name="alle" value="1" class="size-5 accent-[var(--c-ink)]" checked={data.filter.all} />Auch ausgeblendete
-	</label>
-	<button class="btn btn-secondary"><Search size={18} aria-hidden="true" />Suchen</button>
-	{#if data.filter.q || data.filter.all}<a href="/kunden" class="btn btn-ghost">Zurücksetzen</a>{/if}
-</form>
+<ListBar>
+	<form method="GET" class="card flex flex-wrap items-end gap-3 p-3">
+		<label class="min-w-[12rem] flex-1">
+			<span class="field-label">Suche</span>
+			<input class="input" name="q" value={data.filter.q} placeholder="Name, Ort, Ansprechpartner, UID" />
+		</label>
+		<label class="flex items-center gap-2 pb-2.5 text-sm">
+			<input
+				type="checkbox"
+				name="alle"
+				value="1"
+				class="size-5 accent-[var(--c-ink)]"
+				checked={data.filter.all}
+				onchange={(e) => e.currentTarget.form?.requestSubmit()}
+			/>Auch ausgeblendete
+		</label>
+		<button class="btn btn-secondary"><Search size={18} aria-hidden="true" />Suchen</button>
+		{#if data.filter.q || data.filter.all}<a href="/kunden" class="btn btn-ghost">Zurücksetzen</a>{/if}
+	</form>
+</ListBar>
 
 <div class="card overflow-hidden">
 	<ul>
@@ -81,6 +92,7 @@
 			</li>
 		{/each}
 	</ul>
+	<Pagination page={data.page} pageSize={data.pageSize} count={data.count} />
 </div>
 
 <Dialog bind:open title={editing ? (canEdit ? 'Kunde bearbeiten' : 'Kunde') : 'Neuer Kunde'} wide>

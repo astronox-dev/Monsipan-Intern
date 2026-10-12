@@ -19,7 +19,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const invoice = await open(Number(params.id), locals);
 	const settings = await getSettings();
 	return {
-		invoice: { id: invoice.id, number: invoice.number, title: invoice.title, kind: invoice.kind },
+		invoice: { id: invoice.id, number: invoice.number, costCenter: invoice.costCenter, title: invoice.title, kind: invoice.kind },
 		head: {
 			kind: invoice.kind,
 			state: invoice.state,
@@ -31,6 +31,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			title: invoice.title,
 			location: invoice.location,
 			projectNumber: invoice.projectNumber,
+			costCenter: invoice.costCenter,
 			customerName: invoice.customerName,
 			customerAddition: invoice.customerAddition,
 			customerStreet: invoice.customerStreet,

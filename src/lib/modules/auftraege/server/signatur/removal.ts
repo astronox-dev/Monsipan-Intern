@@ -19,6 +19,7 @@ import type { SessionUser } from '$lib/server/auth';
 import { audit } from './audit';
 import { removeUnreferenced } from './archive';
 import { forgetVerification } from './verification';
+import { syncOfferBilling } from '../billing';
 
 /** Diese Tabellen sperren Trigger – das Protokoll nicht: dort wird nur angefügt */
 const LOCKED_TABLES = ['invoices', 'invoice_positions', 'invoice_files', 'invoice_signatures'];
@@ -98,6 +99,7 @@ export async function deleteIssuedInvoice(user: SessionUser, id: number, why: st
 			);
 		}
 		if (restore) await audit({ invoiceId: restore.id, invoiceNumber: restore.number, user, action: 'storno_aufgehoben', detail: { grund: reason, stornorechnung: row.number } }, tx);
+		await syncOfferBilling(row.orderId, 'beide', tx);
 
 		for (const t of triggers) await tx.run(sql.raw(t.sql));
 	});

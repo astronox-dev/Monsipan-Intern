@@ -42,7 +42,7 @@
 		priceLabel,
 		quantityLabel,
 		REVERSE_CHARGE_NOTE,
-		spacedNumber
+		invoiceNo
 	} from '$lib/modules/auftraege/offer';
 	import { AUDIT_LABELS, CHECK_LABELS, INVOICE_STAGE_LABELS, isLegacy, PADES_LEVEL_LABELS, PROVIDER_LABELS, type CheckResult } from '$lib/modules/auftraege/signature';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
@@ -61,7 +61,9 @@
 	const numbers = $derived(lineNumbers(invoice.lines));
 	const totals = $derived(invoiceTotals(invoice.lines, invoice.vatRate, invoice.reverseCharge));
 	const name = (first: string | null, last: string | null) => [first, last].filter(Boolean).join(' ');
-	const label = $derived(`${invoiceLabel(invoice.kind)} ${spacedNumber(invoice.number)}`);
+	const label = $derived(`${invoiceLabel(invoice.kind)} ${invoiceNo(invoice)}`);
+	const stornoNo = $derived(invoiceNo({ number: invoice.stornoNumber ?? '', costCenter: invoice.stornoCostCenter }));
+	const cancelsNo = $derived(invoiceNo({ number: invoice.cancelsNumber ?? '', costCenter: invoice.cancelsCostCenter }));
 	const original = $derived(data.files.find((f) => f.kind === 'original'));
 	const signed = $derived(data.files.find((f) => f.kind === 'signiert'));
 	const check = $derived(invoice.checkResult ? CHECK_LABELS[invoice.checkResult as CheckResult] : null);
@@ -151,7 +153,7 @@
 			{#if invoice.cancelReason}<span class="block text-sm text-ink-2">Grund: {invoice.cancelReason}</span>{/if}
 		</p>
 		{#if invoice.stornoId}
-			<a href="/rechnungen/{invoice.stornoId}" class="btn btn-secondary">Stornorechnung {spacedNumber(invoice.stornoNumber ?? '')}</a>
+			<a href="/rechnungen/{invoice.stornoId}" class="btn btn-secondary">Stornorechnung {stornoNo}</a>
 		{/if}
 	</section>
 {/if}
@@ -159,7 +161,7 @@
 	<section class="card mb-4 flex flex-wrap items-center gap-3 p-4 lg:p-5">
 		<Ban size={22} class="shrink-0 text-ink-3" aria-hidden="true" />
 		<p class="min-w-[14rem] flex-1">
-			Storno zu {invoiceLabel(invoice.cancelsKind ?? 'rechnung')} Nr. {spacedNumber(invoice.cancelsNumber ?? '')}{invoice.cancelsDate ? ` vom ${dateLabel(invoice.cancelsDate)}` : ''}
+			Storno zu {invoiceLabel(invoice.cancelsKind ?? 'rechnung')} Nr. {cancelsNo}{invoice.cancelsDate ? ` vom ${dateLabel(invoice.cancelsDate)}` : ''}
 		</p>
 		<a href="/rechnungen/{invoice.cancelsId}" class="btn btn-secondary">Zur stornierten Rechnung</a>
 	</section>
@@ -239,6 +241,10 @@
 			{#if invoice.projectNumber}
 				<dt class="text-ink-3">Projektnummer</dt>
 				<dd class="num">{invoice.projectNumber}</dd>
+			{/if}
+			{#if invoice.costCenter}
+				<dt class="text-ink-3">Kostenstelle</dt>
+				<dd class="num">{invoice.costCenter}</dd>
 			{/if}
 			{#if invoice.state}
 				<dt class="text-ink-3">Bundesland</dt>
@@ -472,11 +478,11 @@
 			</p>
 			{#if isStorno && invoice.cancelsId}
 				<p>
-					Die {invoiceLabel(invoice.cancelsKind ?? 'rechnung')} {spacedNumber(invoice.cancelsNumber ?? '')} gilt danach wieder (nicht mehr storniert), ihre Tagesberichte hängen wieder
+					Die {invoiceLabel(invoice.cancelsKind ?? 'rechnung')} {cancelsNo} gilt danach wieder (nicht mehr storniert), ihre Tagesberichte hängen wieder
 					an ihr.
 				</p>
 			{:else if invoice.stornoId}
-				<p>Die Stornorechnung {spacedNumber(invoice.stornoNumber ?? '')} wird mitgelöscht.</p>
+				<p>Die Stornorechnung {stornoNo} wird mitgelöscht.</p>
 			{:else if invoice.reports.length}
 				<p>Ihre Tagesberichte sind danach wieder abzurechnen.</p>
 			{/if}

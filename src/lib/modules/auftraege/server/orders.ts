@@ -16,6 +16,7 @@ import type { SessionUser } from '$lib/server/auth';
 import { storeDocument } from '$lib/server/documents';
 import { titleFromFileName } from '$lib/documents';
 import { lineNumbers } from '../offer';
+import { syncOfferBilling } from './billing';
 
 const creator = alias(users, 'creator');
 const statusUser = alias(users, 'status_user');
@@ -181,6 +182,8 @@ export async function createOrderFromOffer(offerId: number, partyId: number | nu
 
 export async function setOrderStatus(id: number, status: OrderStatus, userId: number) {
 	await db.update(orders).set({ status, statusBy: userId, statusAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, id));
+	// Abgeschlossen und alles bezahlt → Angebot abgerechnet; wieder geöffnet → nicht mehr
+	await syncOfferBilling(id);
 }
 
 export async function updateOrder(id: number, data: { partyId: number | null; location: string; note: string }) {

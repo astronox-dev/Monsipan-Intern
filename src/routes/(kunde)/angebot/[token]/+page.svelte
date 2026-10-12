@@ -51,7 +51,8 @@
 		<div class="card mt-4 flex flex-wrap items-center gap-4 p-4 sm:p-5">
 			<CircleCheck size={28} class="shrink-0 text-ok" aria-hidden="true" />
 			<p class="min-w-[14rem] flex-1">
-				Angenommen von <span class="font-medium">{data.offer.acceptedName}</span> am {dateTime(data.offer.acceptedAt)}. Vielen Dank für Ihren Auftrag!
+				Angenommen{#if data.offer.acceptedName}
+					von <span class="font-medium">{data.offer.acceptedName}</span>{/if} am {dateTime(data.offer.acceptedAt)}. Vielen Dank für Ihren Auftrag!
 				<span class="block text-sm text-ink-2">Über diesen Link können Sie das Angebot jederzeit wieder öffnen, drucken oder herunterladen.</span>
 			</p>
 		</div>

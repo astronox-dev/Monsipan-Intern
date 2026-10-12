@@ -16,14 +16,14 @@
  * Stornierte kommen als storniert, Stornorechnungen hängen an der Rechnung,
  * die sie stornieren. Aufträge hängen am Angebot mit derselben Nummer.
  */
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
 import { customers, inquiries, invoicePositions, invoices, offerPositions, offers, orderPositions, orders, parties } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
 import { getSettings } from '$lib/server/settings';
 import type { TableCell } from '$lib/server/table';
 import { addDays, isValidIsoDate } from '$lib/modules/stunden/week';
-import { invoiceLabel, invoiceTotals, OFFER_STATUS_LABELS, parseAmount } from '../offer';
+import { invoiceLabel, invoiceTotals, OFFER_STATUS_LABELS, offerState, parseAmount } from '../offer';
 import { INVOICE_STAGE_LABELS } from '../signature';
 import { TRANSFER, type TransferKind, type TransferMapping } from '../transfer';
 import { audit } from './signatur/audit';
@@ -96,10 +96,12 @@ function orderStatus(s: string): 'erstellt' | 'in_arbeit' | 'abgeschlossen' | nu
 	return 'erstellt';
 }
 
-function offerStatus(s: string): 'entwurf' | 'freigegeben' | 'angenommen' {
+/** „abgerechnet" ist ein angenommenes Angebot, dessen Auftrag abgerechnet ist */
+function offerStatus(s: string): 'entwurf' | 'freigegeben' | 'angenommen' | 'abgerechnet' {
 	const t = key(s);
 	if (!t) return 'entwurf';
-	if (/angenommen|abgerechnet|beauftragt|auftrag/.test(t)) return 'angenommen';
+	if (/abgerechnet|verrechnet|fakturiert/.test(t)) return 'abgerechnet';
+	if (/angenommen|beauftragt|auftrag/.test(t)) return 'angenommen';
 	if (/entwurf|arbeit|bearbeitung/.test(t)) return 'entwurf';
 	return 'freigegeben';
 }
@@ -198,7 +200,7 @@ export async function planImport(kind: TransferKind, rows: Row[], mapping: Trans
 
 	if (kind === 'kunden') await planCustomers(rows, mapping, options, items, issues);
 	else if (kind === 'anfragen') await planInquiries(rows, mapping, items, issues);
-	else if (kind === 'angebote') await planOffers(rows, mapping, items, issues);
+	else if (kind === 'angebote') await planOffers(rows, mapping, options, items, issues);
 	else if (kind === 'auftraege') await planOrders(rows, mapping, options, items, issues);
 	else await planInvoices(rows, mapping, items, issues);
 	return finish(kind, items, issues);
@@ -346,12 +348,16 @@ function readPositions(data: Row[], rows: number[], mapping: TransferMapping, is
 
 /* --------------------------------------------------- Angebote */
 
-async function planOffers(rows: Row[], mapping: TransferMapping, items: Item[], issues: ImportIssue[]) {
+/** Wie weit ein Angebot ist – vorhandene rücken beim Aktualisieren nur vor, nie zurück */
+const OFFER_STEP: Record<string, number> = { entwurf: 0, freigegeben: 1, aenderung: 1, angenommen: 2, abgerechnet: 3 };
+
+async function planOffers(rows: Row[], mapping: TransferMapping, options: ImportOptions, items: Item[], issues: ImportIssue[]) {
 	const [existing, known] = await Promise.all([
-		db.select({ number: offers.number }).from(offers).all(),
+		db.select({ id: offers.id, number: offers.number, status: offers.status, billedAt: offers.billedAt }).from(offers).all(),
 		db.select({ id: customers.id, name: customers.name, zip: customers.zip }).from(customers).all()
 	]);
-	const taken = new Set(existing.map((o) => key(o.number)));
+	const taken = new Set<string>();
+	const byNumber = new Map(existing.map((o) => [key(o.number), o]));
 	for (const [number, g] of group(rows, mapping, issues)) {
 		const first = g.rows[0];
 		const get = (f: string) => head(g.data, mapping, f);
@@ -392,8 +398,12 @@ async function planOffers(rows: Row[], mapping: TransferMapping, items: Item[], 
 			else problems.push('Keine Position mit Menge und kein „Netto gesamt".');
 		}
 		for (const p of problems) issues.push({ row: first, level: 'fehler', message: `Angebot ${number}: ${p}` });
-		const action: ImportAction = problems.length || bad ? 'fehler' : taken.has(key(number)) ? 'ueberspringen' : 'neu';
-		items.push({ rows: g.rows, label: `Angebot ${number}${customerName ? ` · ${customerName}` : ''}`, action, existingId: null, data, positions });
+		const found = byNumber.get(key(number));
+		// Vorhanden: beim Aktualisieren nur, wenn der Stand der Datei weiter ist
+		const ahead = !!found && mapped(mapping, 'status') && OFFER_STEP[String(data.status)] > OFFER_STEP[offerState(found)];
+		const action: ImportAction =
+			problems.length || bad ? 'fehler' : taken.has(key(number)) ? 'ueberspringen' : found ? (options.update && ahead ? 'aktualisieren' : 'ueberspringen') : 'neu';
+		items.push({ rows: g.rows, label: `Angebot ${number}${customerName ? ` · ${customerName}` : ''}`, action, existingId: found?.id ?? null, data, positions });
 		taken.add(key(number));
 	}
 }
@@ -489,6 +499,7 @@ async function planInvoices(rows: Row[], mapping: TransferMapping, items: Item[]
 			serviceTo: to ?? null,
 			...texts(get, mapping, [
 				['projectNumber', 30],
+				['costCenter', 30],
 				['title', 300],
 				['location', 300],
 				['customerAddition', 160],
@@ -662,13 +673,16 @@ async function insertItem(tx: Tx, kind: TransferKind, item: Item, user: SessionU
 		const { closed, ...rest } = d;
 		await tx.insert(inquiries).values({ ...(rest as { receivedOn: string }), closedAt: closed ? now : null, createdBy: user.id, updatedAt: now });
 	} else if (kind === 'angebote') {
-		const status = d.status as 'entwurf' | 'freigegeben' | 'angenommen';
+		// Abgerechnet heißt: angenommen, und der Auftrag ist abgerechnet
+		const billed = d.status === 'abgerechnet';
+		const status = billed ? 'angenommen' : (d.status as 'entwurf' | 'freigegeben' | 'angenommen');
 		const row = await tx
 			.insert(offers)
 			.values({
 				...(d as { number: string; date: string }),
 				status,
-				// Seit wann beim Kunden: das Angebotsdatum
+				billedAt: billed ? now : null,
+				// Seit wann ausstehend: das Angebotsdatum
 				releasedAt: status === 'entwurf' ? null : new Date(`${String(d.date)}T12:00:00Z`),
 				createdBy: user.id,
 				updatedAt: now
@@ -712,6 +726,18 @@ async function updateItem(tx: Tx, kind: TransferKind, item: Item, now: Date) {
 			.update(customers)
 			.set({ ...set, updatedAt: now })
 			.where(eq(customers.id, item.existingId!));
+	} else if (kind === 'angebote') {
+		// Nur der Stand rückt vor – Texte, Positionen und eine Annahme des Kunden bleiben
+		const target = String(item.data.status);
+		const where = eq(offers.id, item.existingId!);
+		if (target === 'abgerechnet') await tx.update(offers).set({ status: 'angenommen', billedAt: now, updatedAt: now }).where(where);
+		else if (target === 'angenommen') await tx.update(offers).set({ status: 'angenommen', updatedAt: now }).where(where);
+		else if (target === 'freigegeben') {
+			await tx
+				.update(offers)
+				.set({ status: 'freigegeben', releasedAt: new Date(`${String(item.data.date)}T12:00:00Z`), updatedAt: now })
+				.where(and(where, eq(offers.status, 'entwurf')));
+		}
 	} else if (kind === 'auftraege') {
 		if ('partyId' in item.data) set.partyId = item.data.partyId;
 		await tx
@@ -818,7 +844,7 @@ export async function exportTable(kind: TransferKind): Promise<ExportTable> {
 				o.intro,
 				o.closing,
 				o.vatRate,
-				OFFER_STATUS_LABELS[o.status]?.label ?? o.status,
+				OFFER_STATUS_LABELS[offerState(o)]?.label ?? o.status,
 				invoiceTotals(own, o.vatRate, false).net
 			];
 			if (!own.length) rows.push([...headCells, '', '', null, '', null]);
@@ -881,6 +907,7 @@ export async function exportTable(kind: TransferKind): Promise<ExportTable> {
 			asDate(i.serviceTo),
 			orderNumber ?? '',
 			i.projectNumber,
+			i.costCenter,
 			i.title,
 			i.location,
 			i.customerName,

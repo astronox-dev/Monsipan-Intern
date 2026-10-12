@@ -32,9 +32,11 @@ export const customers = sqliteTable(
 );
 
 /**
- * Ablauf: in Arbeit → freigegeben (Link an den Kunden) → angenommen, oder der
- * Kunde wünscht Änderungen (aenderung) – dann wird es überarbeitet und neu
- * freigegeben. Aus einem angenommenen Angebot entsteht der Auftrag.
+ * Ablauf: in Arbeit → freigegeben („ausstehend", Link an den Kunden) →
+ * angenommen, oder der Kunde wünscht Änderungen (aenderung) – dann wird es
+ * überarbeitet und neu freigegeben. Angenommen wird über den Link oder intern.
+ * Aus einem angenommenen Angebot entsteht der Auftrag; ist er abgeschlossen und
+ * alles bezahlt, gilt das Angebot als abgerechnet (billedAt).
  */
 export const OFFER_STATUS = ['entwurf', 'freigegeben', 'aenderung', 'angenommen'] as const;
 export type OfferStatus = (typeof OFFER_STATUS)[number];
@@ -79,6 +81,10 @@ export const offers = sqliteTable(
 		acceptedName: text('accepted_name'),
 		acceptedSignature: text('accepted_signature'),
 		acceptedAt: integer('accepted_at', { mode: 'timestamp_ms' }),
+		/** Intern als angenommen markiert (ohne Unterschrift über den Link) – von wem */
+		acceptedBy: integer('accepted_by').references(() => users.id, { onDelete: 'set null' }),
+		/** Abgerechnet: Auftrag abgeschlossen und seine Rechnungen bezahlt – bzw. so übernommen */
+		billedAt: integer('billed_at', { mode: 'timestamp_ms' }),
 		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: createdAt(),
 		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
@@ -254,6 +260,8 @@ export const invoices = sqliteTable(
 		/** Zahlbar bis */
 		dueDate: text('due_date').notNull(),
 		projectNumber: text('project_number').notNull().default(''),
+		/** Kostenstelle – die Rechnungsnummer lautet dann „Nummer/Kostenstelle" */
+		costCenter: text('cost_center').notNull().default(''),
 		title: text('title').notNull().default(''),
 		location: text('location').notNull().default(''),
 		customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),

@@ -22,10 +22,11 @@ import type { SessionUser } from '$lib/server/auth';
 import { notify } from '$lib/server/notifications';
 import { today } from '$lib/modules/stunden/week';
 import { date as dateLabel } from '$lib/format';
-import { invoiceLabel, spacedNumber } from '../../offer';
+import { invoiceLabel, invoiceNo } from '../../offer';
 import { nextInvoiceNumber } from '../../summary';
 import { verifyPath, type InvoiceStage } from '../../signature';
 import { invoiceDetail, type InvoiceDetail } from '../invoices';
+import { syncOfferBilling } from '../billing';
 import { invoicePdfBuffer } from '../pdf';
 import { audit } from './audit';
 import { contentHash, readArchiveFile, readContent, removeUnreferenced, retentionDate, sha256Hex, writeArchiveFile } from './archive';
@@ -140,7 +141,7 @@ export async function signIssued(user: SessionUser | null, id: number, given?: S
 			validation: collectValidationData,
 			field: 'Rechnungssiegel',
 			name: leaf.organization || leaf.name,
-			reason: `${settings.reason} – ${invoiceLabel(row.kind)} Nr. ${spacedNumber(row.number)}`,
+			reason: `${settings.reason} – ${invoiceLabel(row.kind)} Nr. ${invoiceNo(row)}`,
 			location: settings.location,
 			time: now
 		});
@@ -201,7 +202,7 @@ export async function signIssued(user: SessionUser | null, id: number, given?: S
 		await audit({ ...ref, action: 'fehlgeschlagen', detail: { fehler: message } });
 		notify({
 			event: 'rechnung.signatur',
-			title: `Signierung fehlgeschlagen: ${invoiceLabel(row.kind)} ${spacedNumber(row.number)}`,
+			title: `Signierung fehlgeschlagen: ${invoiceLabel(row.kind)} ${invoiceNo(row)}`,
 			body: message,
 			url: `/rechnungen/${id}`,
 			actorId: user?.id
@@ -260,6 +261,8 @@ export async function cancelInvoice(user: SessionUser, id: number, why: string, 
 			{ invoiceId: id, invoiceNumber: invoice.number, user, action: 'storniert', detail: { grund: text, stornorechnung: stornoNumber, tagesberichte: released.map((r) => r.id) } },
 			tx
 		);
+		// Storniert zählt nicht mehr – das Angebot ist dann womöglich nicht mehr abgerechnet
+		await syncOfferBilling(invoice.orderId, 'beide', tx);
 	});
 	forgetVerification(invoice.verifyToken);
 	return { ok: true, stornoId: storno.id, stage, warning };
@@ -275,7 +278,7 @@ async function createStorno(user: SessionUser, invoice: InvoiceDetail, why: stri
 			.where(or(eq(invoices.number, base), like(invoices.number, `${base}-%`)))
 			.all();
 		const date = today();
-		const label = `${invoiceLabel(invoice.kind)} Nr. ${spacedNumber(invoice.number)}`;
+		const label = `${invoiceLabel(invoice.kind)} Nr. ${invoiceNo(invoice)}`;
 		const row = await tx
 			.insert(invoices)
 			.values({
@@ -288,6 +291,7 @@ async function createStorno(user: SessionUser, invoice: InvoiceDetail, why: stri
 				serviceTo: invoice.serviceTo,
 				dueDate: date,
 				projectNumber: invoice.projectNumber,
+				costCenter: invoice.costCenter,
 				title: invoice.title,
 				location: invoice.location,
 				customerName: invoice.customerName,

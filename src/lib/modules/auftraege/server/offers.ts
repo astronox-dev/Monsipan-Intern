@@ -2,9 +2,10 @@
  * Angebote: anlegen, bearbeiten, freigeben, Link an den Kunden. Der Kunde
  * nimmt über den Link an (Name und Unterschrift) oder wünscht Änderungen –
  * dann wird das Angebot überarbeitet und neu freigegeben, der Link bleibt.
+ * Sagt er anders zu (Telefon, E-Mail), wird es intern auf angenommen gesetzt.
  */
 import { randomBytes } from 'node:crypto';
-import { and, asc, desc, eq, inArray, like, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lte, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { can } from '$lib/permissions';
 import { db } from '$lib/server/db';
@@ -16,6 +17,7 @@ import { MAX_OFFER_LINES, nextOfferNumber, nextProjectNumber, parseAmount } from
 
 const creator = alias(users, 'creator');
 const releaser = alias(users, 'releaser');
+const accepter = alias(users, 'accepter');
 
 /** Netto-Summe je Angebot, direkt in der Abfrage */
 const netSum = sql<number>`(select coalesce(sum(round(${col(offerPositions.quantity)} * ${col(offerPositions.unitPrice)}, 2)), 0) from ${offerPositions} where ${col(offerPositions.offerId)} = ${col(offers.id)} and ${col(offerPositions.kind)} = 'position')`.mapWith(
@@ -25,12 +27,18 @@ const orderOf = sql<number | null>`(select ${col(orders.id)} from ${orders} wher
 
 export interface OfferFilter {
 	q?: string;
+	/** „offen" (noch nicht angenommen), ein Stand oder „abgerechnet" */
 	status?: string;
+	/** Nur ein Jahr (nach Angebotsdatum), „2026" */
+	year?: string;
 }
 
-export async function listOffers(filter: OfferFilter = {}, limit = 200) {
+function offerWhere(filter: OfferFilter, withYear = true): SQL | undefined {
 	const where: (SQL | undefined)[] = [];
 	if (filter.status === 'offen') where.push(inArray(offers.status, ['entwurf', 'freigegeben', 'aenderung']));
+	// „Angenommen" sind die noch nicht abgerechneten – abgerechnet ist ein eigener Stand
+	else if (filter.status === 'angenommen') where.push(eq(offers.status, 'angenommen'), isNull(offers.billedAt));
+	else if (filter.status === 'abgerechnet') where.push(eq(offers.status, 'angenommen'), isNotNull(offers.billedAt));
 	else if (filter.status) where.push(eq(offers.status, filter.status as OfferStatus));
 	if (filter.q?.trim()) {
 		const q = `%${filter.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -38,6 +46,29 @@ export async function listOffers(filter: OfferFilter = {}, limit = 200) {
 			or(like(offers.number, q), like(offers.title, q), like(offers.location, q), like(offers.customerName, q), like(offers.projectNumber, q))
 		);
 	}
+	if (withYear && filter.year && /^\d{4}$/.test(filter.year)) where.push(gte(offers.date, `${filter.year}-01-01`), lte(offers.date, `${filter.year}-12-31`));
+	return and(...where);
+}
+
+/** Wie viele Angebote der Filter trifft – zum Blättern */
+export async function countOffers(filter: OfferFilter = {}): Promise<number> {
+	const row = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(offers).where(offerWhere(filter)).get();
+	return row?.n ?? 0;
+}
+
+/** Jahre (nach Angebotsdatum) mit ihrer Anzahl, neueste zuerst */
+export async function offerYears(filter: OfferFilter = {}) {
+	const year = sql<string>`substr(${offers.date}, 1, 4)`;
+	return db
+		.select({ year, n: sql<number>`count(*)`.mapWith(Number) })
+		.from(offers)
+		.where(offerWhere(filter, false))
+		.groupBy(year)
+		.orderBy(desc(year))
+		.all();
+}
+
+export async function listOffers(filter: OfferFilter = {}, limit = 100, offset = 0) {
 	return db
 		.select({
 			id: offers.id,
@@ -48,14 +79,16 @@ export async function listOffers(filter: OfferFilter = {}, limit = 200) {
 			customerName: offers.customerName,
 			customerCity: offers.customerCity,
 			status: offers.status,
+			billedAt: offers.billedAt,
 			vatRate: offers.vatRate,
 			net: netSum,
 			orderId: orderOf
 		})
 		.from(offers)
-		.where(and(...where))
+		.where(offerWhere(filter))
 		.orderBy(desc(offers.date), desc(offers.id))
 		.limit(limit)
+		.offset(offset)
 		.all();
 }
 
@@ -179,6 +212,9 @@ async function loadOffer(where: SQL) {
 			acceptedName: offers.acceptedName,
 			acceptedSignature: offers.acceptedSignature,
 			acceptedAt: offers.acceptedAt,
+			acceptedByFirst: accepter.firstName,
+			acceptedByLast: accepter.lastName,
+			billedAt: offers.billedAt,
 			createdBy: offers.createdBy,
 			createdAt: offers.createdAt,
 			creatorFirst: creator.firstName,
@@ -189,6 +225,7 @@ async function loadOffer(where: SQL) {
 		.leftJoin(customers, eq(customers.id, offers.customerId))
 		.leftJoin(creator, eq(creator.id, offers.createdBy))
 		.leftJoin(releaser, eq(releaser.id, offers.releasedBy))
+		.leftJoin(accepter, eq(accepter.id, offers.acceptedBy))
 		.where(where)
 		.get();
 	if (!offer) return null;
@@ -300,7 +337,7 @@ export function releaseProblem(o: { customerName: string; title: string; lines: 
 /* ------------------------------------------------------------- Ablauf */
 
 const NO_RELEASE = { releasedBy: null, releasedAt: null };
-const NO_ACCEPT = { acceptedName: null, acceptedSignature: null, acceptedAt: null };
+const NO_ACCEPT = { acceptedName: null, acceptedSignature: null, acceptedAt: null, acceptedBy: null, billedAt: null };
 
 /** Freigeben – dabei entsteht der Link für den Kunden, falls es noch keinen gibt */
 export async function releaseOffer(id: number, userId: number) {
@@ -337,6 +374,27 @@ export async function customerAccept(id: number, name: string, signature: string
 		.update(offers)
 		.set({ status: 'angenommen', acceptedName: name, acceptedSignature: signature, acceptedAt: new Date(), updatedAt: new Date() })
 		.where(and(eq(offers.id, id), eq(offers.status, 'freigegeben')))
+		.returning({ id: offers.id });
+	return done.length > 0;
+}
+
+/**
+ * Intern als angenommen markieren – der Kunde hat anders zugesagt (Telefon,
+ * E-Mail, unterschrieben zurück). Geht aus „ausstehend" und „Änderung
+ * gewünscht"; wer und wann, steht am Angebot. Der Name ist der des Kunden.
+ */
+export async function acceptInternally(id: number, userId: number, name: string): Promise<boolean> {
+	const done = await db
+		.update(offers)
+		.set({
+			status: 'angenommen',
+			acceptedName: name.replace(/\s+/g, ' ').trim().slice(0, 120) || null,
+			acceptedSignature: null,
+			acceptedAt: new Date(),
+			acceptedBy: userId,
+			updatedAt: new Date()
+		})
+		.where(and(eq(offers.id, id), inArray(offers.status, ['freigegeben', 'aenderung'])))
 		.returning({ id: offers.id });
 	return done.length > 0;
 }

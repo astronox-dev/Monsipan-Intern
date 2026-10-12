@@ -222,6 +222,8 @@ describe('Manipulation erkennen', () => {
 		await saveSignatureSettings({ ...SIGNATURE_DEFAULTS, enabled: false });
 		const { id } = await draft();
 		await issueInvoice(user, id, ORIGIN);
+		// Die Sperre, wie sie nach allen Migrationen gilt – danach wieder anlegen
+		const trigger = String((await client.execute("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'invoices_issued_locked'")).rows[0].sql);
 		await client.execute('DROP TRIGGER invoices_issued_locked');
 		try {
 			await client.execute({ sql: 'UPDATE invoices SET customer_name = ? WHERE id = ?', args: ['Jemand anderer', id] });
@@ -230,9 +232,7 @@ describe('Manipulation erkennen', () => {
 			expect(check?.database.ok).toBe(false);
 		} finally {
 			await client.execute({ sql: 'UPDATE invoices SET customer_name = ? WHERE id = ?', args: ['Straßenbau GmbH', id] });
-			const sql = fs.readFileSync(path.resolve('drizzle/0034_rechnungssignatur.sql'), 'utf8');
-			const trigger = sql.split('--> statement-breakpoint').find((p) => p.includes('CREATE TRIGGER `invoices_issued_locked`'))!;
-			await client.execute(trigger.replace(/^\s*--.*$/gm, '').trim());
+			await client.execute(trigger);
 		}
 		expect((await verifyInvoice(id))?.database.ok).toBe(true);
 	});

@@ -24,7 +24,7 @@
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import { date, dateTime } from '$lib/format';
 	import { INVOICE_STAGE_LABELS } from '$lib/modules/auftraege/signature';
-	import { addressLines, INVOICE_STATUS_LABELS, invoiceLabel, lineNumbers, money, ORDER_STATUS_LABELS, quantityLabel, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { invoiceNo, addressLines, INVOICE_STATUS_LABELS, invoiceLabel, lineNumbers, money, ORDER_STATUS_LABELS, quantityLabel, spacedNumber } from '$lib/modules/auftraege/offer';
 	import { toast } from '$lib/stores/toast.svelte';
 
 	let { data, form } = $props();
@@ -278,7 +278,7 @@
 					<li>
 						<a href="/rechnungen/{i.id}" class="flex items-center gap-3 px-3 py-2.5 hover:bg-surface-2">
 							<span class="min-w-0 flex-1">
-								<span class="block font-medium">{invoiceLabel(i.kind)} <span class="num">{spacedNumber(i.number)}</span></span>
+								<span class="block font-medium">{invoiceLabel(i.kind)} <span class="num">{invoiceNo(i)}</span></span>
 								<span class="num block truncate text-[0.8125rem] text-ink-3">
 									{date(i.date)}{i.reports ? ` · ${i.reports} ${i.reports === 1 ? 'Tagesbericht' : 'Tagesberichte'}` : ''}
 								</span>

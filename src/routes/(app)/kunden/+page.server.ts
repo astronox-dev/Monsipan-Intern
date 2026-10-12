@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { requirePermission } from '$lib/server/guard';
 import {
+	countCustomers,
 	createCustomer,
 	customerProblem,
 	deleteCustomer,
@@ -12,10 +13,16 @@ import {
 } from '$lib/modules/auftraege/server/customers';
 import type { Actions, PageServerLoad } from './$types';
 
+const PAGE_SIZE = 50;
+
 export const load: PageServerLoad = async ({ locals, url }) => {
 	requirePermission(locals, 'kunden.sehen');
 	const filter = { q: url.searchParams.get('q') ?? '', all: url.searchParams.get('alle') === '1' };
-	return { customers: await listCustomers(filter), filter };
+	const count = await countCustomers(filter);
+	const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+	const page = Math.min(pages, Math.max(1, Math.floor(Number(url.searchParams.get('seite')) || 1)));
+	const customers = await listCustomers(filter, { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+	return { customers, filter, page, pageSize: PAGE_SIZE, count };
 };
 
 export const actions: Actions = {

@@ -21,7 +21,7 @@ Oberfläche, auf dem Handy wie am PC. Die übrigen Bereiche kommen nach und nach
 angenommene Angebote ohne Auftrag, Anfragen ohne Angebot, Tagesberichte zum Prüfen oder
 Freigeben, Stundenzettel zum Prüfen bzw. aus der Vorwoche noch offen, neue Aufträge der
 Partie, Artikel zum Nachbestellen. Darunter je Bereich die Kennzahlen – Auftragsmanagement
-(Anfragen, Angebote beim Kunden, Aufträge in Arbeit, offene Rechnungen, laufende Aufträge),
+(Anfragen, ausstehende Angebote, Aufträge in Arbeit, offene Rechnungen, laufende Aufträge),
 Dokumentation (Tagesberichte der Woche, Stundenzettel der Woche bzw. der eigene) und Lager.
 Jeder sieht nur, was er auch öffnen darf – ein Partieführer etwa die Aufträge und Berichte
 seiner Partie, keine Preise. Jeder Punkt führt in die passende, schon gefilterte Liste.
@@ -423,6 +423,12 @@ ablegen** ab. Erkannt wird nur im Browser – die E-Mail geht an keinen fremden 
 anlegen, im Angebot auswählen. Ein neuer Kunde lässt sich auch direkt beim Schreiben eines
 Angebots anlegen. Kunden, die schon in Angeboten stehen, werden ausgeblendet statt gelöscht.
 
+**Listen:** Bei Kunden, Angeboten und Rechnungen bleibt die Leiste mit Suche und Filter beim
+Scrollen oben stehen, darunter wird geblättert (Kunden 50, Angebote und Rechnungen 100 je
+Seite). Angebote und Rechnungen sind zusätzlich **nach Jahren** eingeteilt: je Jahr eine
+Überschrift mit der Anzahl, neueste zuerst, und oben die Jahre zum Auswählen (Angebote nach
+Angebotsdatum, Rechnungen nach Rechnungsdatum).
+
 **Angebote** (`/angebote`) sehen aus wie die bisherigen aus dem Büro: Briefkopf, Anschrift
 links, rechts Angebotsdatum, Kunden-UID, Projektnummer und Angebotsnummer, darunter
 „Angebot Nr. 26 659 / BV: …“, die Einleitung, die Positionen mit **Nr., Bezeichnung, Menge,
@@ -434,7 +440,9 @@ Bankverbindung und Kontakt.
   den Auftrag über.
 - Positionen werden 1.1, 1.2 … nummeriert; eine **Überschrift** beginnt eine neue Gruppe (2,
   2.1, 2.2 …). Positionen lassen sich verschieben und entfernen.
-- Angebots- und Projektnummer schlägt die App vor (nächste freie), beide bleiben frei änderbar.
+- **Angebotsnummer:** zwei Stellen fürs Jahr, dann die laufende Nummer – „26001“ ist das erste
+  Angebot 2026, „26002“ das zweite; im neuen Jahr beginnt die Zählung wieder („27001“). Die App
+  schlägt die nächste vor, die Projektnummer ebenso; beide bleiben frei änderbar.
 - Einleitung und Schlusstext kommen aus der Vorlage unter **Einstellungen → Angebote,
   Aufträge und Rechnungen** und lassen sich im einzelnen Angebot ändern. Dort stehen auch die drei Spalten
   der Fußzeile und der **Briefkopf**: als hochgeladenes Bild (PNG/JPG, oben mittig
@@ -451,9 +459,9 @@ Bankverbindung und Kontakt.
 **Ablauf:**
 
 1. **In Arbeit:** Angebot schreiben, Vorschau über **PDF**.
-2. **Freigeben** (Admin, Geschäftsführung, Bauleitung): Danach gibt es den **Link für den
-   Kunden** – kopieren, am Handy teilen oder per E-Mail schicken (der Vorschlag ist die
-   E-Mail aus dem Kundenstamm).
+2. **Freigeben** (Admin, Geschäftsführung, Bauleitung): Das Angebot ist dann **ausstehend**,
+   und es gibt den **Link für den Kunden** – kopieren, am Handy teilen oder per E-Mail
+   schicken (der Vorschlag ist die E-Mail aus dem Kundenstamm).
 3. Der Kunde sieht das Angebot (als Blatt oder als Liste, als PDF zum Laden) und
    - **nimmt es an** – mit Name und Unterschrift; sie steht danach unten im PDF, oder
    - **wünscht Änderungen** – mit einem kurzen Text. Im Büro steht der Wunsch oben am
@@ -462,12 +470,22 @@ Bankverbindung und Kontakt.
      überarbeitet“.
    Wer das Angebot angelegt und freigegeben hat, bekommt bei beidem eine E-Mail (wenn SMTP
    eingerichtet ist und eine Adresse hinterlegt ist).
+   Sagt der Kunde anders zu (am Telefon, per E-Mail, unterschrieben zurück), setzt man es mit
+   **Als angenommen markieren** intern auf angenommen (Recht „Intern annehmen“, von Haus aus
+   Admin, Geschäftsführung, Bauleitung) – auf Wunsch mit dem Namen, wer zugesagt hat. Am
+   Angebot steht dann, wer es wann eingetragen hat.
 4. **Angenommen:** **Auftrag erstellen** – Partie wählen (freiwillig: ohne Partie bleibt der
    Auftrag „nicht zugeteilt“ und wird später zugeteilt, z. B. beim Einplanen in der
    Wochenplanung), optional ein Hinweis für die Partie und gleich die **Pläne als PDF**
    (mehrere auf einmal).
    Ein angenommenes Angebot lässt sich nur wieder öffnen (Admin, Geschäftsführung), solange
    es keinen Auftrag gibt; die Annahme verfällt dabei.
+5. **Abgerechnet:** Ist der Auftrag abgeschlossen und sind alle seine Rechnungen bezahlt
+   (stornierte zählen nicht), steht das Angebot von selbst auf **Abgerechnet**. Wird eine
+   Rechnung wieder offen, storniert oder kommt eine neue dazu, geht es zurück auf angenommen.
+
+In der Liste filtert **Stand** nach Offen (alles noch nicht Angenommene), In Arbeit,
+Ausstehend, Änderung gewünscht, Angenommen und Abgerechnet.
 
 **Aufträge** (`/auftraege`) bekommen dieselbe Nummer wie das Angebot, die Anschrift und alle
 Positionen – **ohne Preise** und ohne Einleitung, Schlusstext und Fußzeile, dafür mit Partie,
@@ -517,6 +535,14 @@ Teilrechnungen gehen schon, während der Auftrag **in Arbeit** ist (sobald es ge
 gibt); eine Rechnung ohne Berichte nur nach dem Abschluss. Oben in der Liste stehen die
 abgeschlossenen Aufträge, bei denen noch etwas abzurechnen ist („Bereit zur Rechnung“),
 darunter die Reiter **Offen**, **Bezahlt** und **Alle**; überfällige sind rot markiert.
+
+**Kostenstelle:** Jede Rechnung hat ein Feld **Kostenstelle** (im Entwurf, neben der
+Projektnummer). Ist eine eingetragen, lautet die Rechnungsnummer **Nummer/Kostenstelle**, etwa
+„42 041/9526053“ – so steht sie im PDF (Überschrift und „Rechnungsnummer“), in der Liste, auf
+der Prüfseite, im Summenblatt und in den Benachrichtigungen. Weitere Rechnungen zum selben
+Auftrag übernehmen die Kostenstelle der letzten; eine Stornorechnung die der stornierten. Die
+Suche findet Rechnungen auch über die Kostenstelle. Nach dem Ausstellen ist sie gesperrt wie
+alles andere auf der Rechnung.
 
 - **Rechnung erstellen** (im Auftrag oder in der Liste): Ganz oben die **Tagesberichte**, die
   noch auf keiner Rechnung stehen – alle sind angekreuzt; wer nur einen Teil abrechnen will,
@@ -771,8 +797,13 @@ bisherigen Programm:
 - **Reihenfolge:** zuerst Kunden, dann Anfragen, Angebote und Aufträge, zuletzt Rechnungen.
   Rechnungen hängen sich über die Auftragsnummer an ihren Auftrag, ein Auftrag an das Angebot
   mit derselben Nummer, Angebote und Anfragen über den Namen an den Kunden.
-- **Angebote:** Stand „beim Kunden“ (auch „ausstehend“, „versendet“), „angenommen“ (auch
-  „abgerechnet“) oder „in Arbeit“; ohne Positionen wird „Netto gesamt“ eine Position.
+- **Angebote:** Stand „ausstehend“ (auch „beim Kunden“, „versendet“), „angenommen“,
+  „abgerechnet“ oder „in Arbeit“; ohne Positionen wird „Netto gesamt“ eine Position.
+  **Aktualisieren** zieht bei schon vorhandenen Angeboten nur den Stand nach – vorwärts
+  (ausstehend → angenommen → abgerechnet), nie zurück; Texte und Positionen bleiben. So lassen
+  sich schon übernommene Angebote nachträglich auf „abgerechnet“ setzen.
+- **Rechnungen:** Die Spalte „Kostenstelle“ kommt ins gleichnamige Feld (Rechnungsnummer dann
+  „Nummer/Kostenstelle“).
 - **Angebote, Aufträge und Rechnungen** haben je Zeile eine Position; Zeilen mit gleicher Nummer – oder
   ohne Nummer direkt darunter – gehören zum selben Beleg. „Titel“ in der Positionsart (oder
   eine Zeile nur mit Text) wird zur Zwischenüberschrift. Eine Rechnung ohne Positionen braucht
@@ -783,7 +814,8 @@ bisherigen Programm:
   „Partie Erich“); unbekannte Partien bleiben „nicht zugeteilt“.
 - **Schon vorhanden:** Kunden (gleicher Name, bei Angabe gleiche PLZ) und Aufträge (gleiche
   Nummer) lassen sich überspringen oder **aktualisieren** – leere Felder ändern dabei nichts,
-  Positionen eines Auftrags werden ersetzt. Anfragen und Rechnungen werden übersprungen.
+  Positionen eines Auftrags werden ersetzt. Bei Angeboten heißt aktualisieren: nur den Stand
+  nachziehen (siehe oben). Anfragen und Rechnungen werden übersprungen.
 - **Rechnungen kommen als Altbestand** (Stufe „Importiert“): gesperrt wie ausgestellte, aber
   ohne Archiv, Signatur und Prüfcode – maßgeblich bleibt das ursprünglich ausgestellte
   Dokument; das PDF trägt dazu einen Hinweis. Offen/bezahlt lässt sich ändern, korrigiert wird

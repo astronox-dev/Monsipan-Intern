@@ -35,6 +35,8 @@ export interface TransferDef {
 	positions: boolean;
 	/** Was bei schon vorhandenen geht */
 	update: boolean;
+	/** Was „aktualisieren" hier heißt, wenn es nicht alle Felder sind */
+	updateLabel?: string;
 	/** Woran ein vorhandener erkannt wird */
 	matchHint: string;
 	/** Exportieren darf, wer im Bereich alles sieht */
@@ -105,8 +107,9 @@ export const TRANSFER: Record<TransferKind, TransferDef> = {
 		one: 'Angebot',
 		permission: 'angebote.sehen',
 		positions: true,
-		update: false,
-		matchHint: 'Vorhanden heißt: gleiche Angebotsnummer – es wird übersprungen.',
+		update: true,
+		updateLabel: 'nur den Stand nachziehen (ausstehend → angenommen → abgerechnet, nie zurück) – Texte und Positionen bleiben',
+		matchHint: 'Vorhanden heißt: gleiche Angebotsnummer.',
 		fields: [
 			f('number', 'Angebotsnummer', ['angebotsnummer', 'angebotsnr', 'angebot', 'nr', 'nummer', 'belegnummer'], { required: true }),
 			f('date', 'Angebotsdatum', ['angebotsdatum', 'datum', 'belegdatum'], { required: true }),
@@ -119,7 +122,7 @@ export const TRANSFER: Record<TransferKind, TransferDef> = {
 			f('intro', 'Einleitung', ['einleitung', 'kopftext']),
 			f('closing', 'Schlusstext', ['schlusstext', 'fusstext']),
 			f('vatRate', 'USt-Satz', ['ustsatz', 'mwstsatz', 'steuersatz', 'ust', 'mwst'], { hint: 'Leer: 20 %' }),
-			f('status', 'Stand', ['stand', 'status', 'zustand'], { hint: 'in Arbeit, beim Kunden (auch: ausstehend, versendet) oder angenommen' }),
+			f('status', 'Stand', ['stand', 'status', 'zustand'], { hint: 'in Arbeit, ausstehend (auch: beim Kunden, versendet), angenommen oder abgerechnet' }),
 			f('netTotal', 'Netto gesamt', ['nettogesamt', 'netto', 'nettobetrag', 'summenetto', 'betragnetto'], {
 				hint: 'Nur nötig, wenn die Datei keine Positionen hat – dann wird es eine Position'
 			}),
@@ -165,6 +168,7 @@ export const TRANSFER: Record<TransferKind, TransferDef> = {
 			f('serviceTo', 'Leistung bis', ['leistungbis', 'leistungsende']),
 			f('orderNumber', 'Auftragsnummer', ['auftragsnummer', 'auftragsnr', 'auftrag'], { hint: 'Verknüpft mit dem Auftrag, wenn es ihn gibt' }),
 			f('projectNumber', 'Projektnummer', ['projektnummer', 'projekt', 'projektnr']),
+			f('costCenter', 'Kostenstelle', ['kostenstelle', 'kst', 'kostenst', 'kostenstellennummer'], { hint: 'Steht hinter der Rechnungsnummer: „Nummer/Kostenstelle"' }),
 			f('title', 'BV', ['bv', 'bauvorhaben', 'titel', 'bezeichnung', 'objekt']),
 			f('location', 'Ausführungsort', ['ausfuehrungsort', 'ort', 'baustelle', 'leistungsort']),
 			f('customerName', 'Kunde', ['kunde', 'kundenname', 'firma', 'rechnungsempfaenger', 'empfaenger'], { required: true }),

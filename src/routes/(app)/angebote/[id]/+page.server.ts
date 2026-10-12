@@ -4,6 +4,7 @@ import { requirePermission } from '$lib/server/guard';
 import { customerOfferMail, isMailConfigured, sendMail } from '$lib/server/mail';
 import { createCustomer, customerProblem, getCustomer, listCustomers, readCustomer } from '$lib/modules/auftraege/server/customers';
 import {
+	acceptInternally,
 	deleteOffer,
 	mayDeleteOffer,
 	ensureOfferToken,
@@ -46,6 +47,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		canAddCustomer: editable && can(user.role, 'kunden.erstellen'),
 		canRelease: offer.status === 'entwurf' && can(user.role, 'angebote.freigeben'),
 		canWithdraw: (offer.status === 'freigegeben' || offer.status === 'aenderung') && can(user.role, 'angebote.bearbeiten'),
+		canAccept: (offer.status === 'freigegeben' || offer.status === 'aenderung') && can(user.role, 'angebote.annehmen'),
 		canReopen: offer.status === 'angenommen' && !offer.order && can(user.role, 'angebote.oeffnen.angenommen'),
 		canDelete: mayDeleteOffer(user, offer),
 		// Den Auftrag gleich mitlöschen darf, wer ihn auch einzeln löschen dürfte
@@ -159,6 +161,16 @@ export const actions: Actions = {
 		if (!can(user.role, 'angebote.bearbeiten')) return fail(403, { message: 'Dafür fehlt dir die Berechtigung.' });
 		await withdrawOffer(offer.id);
 		return { withdrawn: true };
+	},
+
+	/** Intern als angenommen markieren – der Kunde hat anders zugesagt */
+	accept: async ({ params, request, locals }) => {
+		const { user, offer } = await open(Number(params.id), locals);
+		if (!can(user.role, 'angebote.annehmen')) return fail(403, { message: 'Dafür fehlt dir die Berechtigung.' });
+		const name = String((await request.formData()).get('name') ?? '');
+		if (!(await acceptInternally(offer.id, user.id, name))) return fail(400, { message: 'Angenommen werden kann nur ein ausstehendes Angebot.' });
+		notifyOffer('angebot.angenommen', offer.id, { actorId: user.id, name: name.trim() || undefined });
+		return { accepted: true };
 	},
 
 	reopen: async ({ params, locals }) => {

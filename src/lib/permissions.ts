@@ -113,6 +113,7 @@ export const DEFAULT_PERMISSIONS = {
 	'angebote.erstellen': BUERO,
 	'angebote.bearbeiten': BUERO,
 	'angebote.freigeben': LEITUNG,
+	'angebote.annehmen': LEITUNG,
 	'angebote.oeffnen.angenommen': ['admin', 'geschaeftsfuehrer'],
 	'angebote.loeschen.entwurf': BUERO,
 	'angebote.loeschen': ['admin', 'geschaeftsfuehrer'],
@@ -312,6 +313,7 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 		edit: { all: 'angebote.bearbeiten', hint: 'In Arbeit, auch überarbeiten' },
 		status: [
 			{ key: 'angebote.freigeben', label: 'Freigeben', hint: 'Und den Link an den Kunden schicken' },
+			{ key: 'angebote.annehmen', label: 'Intern annehmen', hint: 'Zusage ohne Unterschrift über den Link, etwa am Telefon' },
 			{ key: 'angebote.oeffnen.angenommen', label: 'Angenommene öffnen', hint: 'Nur ohne Auftrag – die Annahme verfällt' }
 		],
 		remove: { own: 'angebote.loeschen.entwurf', all: 'angebote.loeschen', ownLabel: 'In Arbeit' }

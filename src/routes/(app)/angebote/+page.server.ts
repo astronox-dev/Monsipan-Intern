@@ -2,21 +2,32 @@ import { fail, redirect } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
 import { requirePermission } from '$lib/server/guard';
 import { listCustomers } from '$lib/modules/auftraege/server/customers';
-import { createOffer, listOffers, numberTaken, suggestNumbers } from '$lib/modules/auftraege/server/offers';
+import { countOffers, createOffer, listOffers, numberTaken, offerYears, suggestNumbers } from '$lib/modules/auftraege/server/offers';
 import { isValidIsoDate, today } from '$lib/modules/stunden/week';
 import type { Actions, PageServerLoad } from './$types';
 
+const PAGE_SIZE = 100;
+
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = requirePermission(locals, 'angebote.sehen');
-	const filter = { q: url.searchParams.get('q') ?? '', status: url.searchParams.get('status') ?? '' };
+	const year = url.searchParams.get('jahr') ?? '';
+	const filter = { q: url.searchParams.get('q') ?? '', status: url.searchParams.get('status') ?? '', year: /^[0-9]{4}$/.test(year) ? year : '' };
 	const canCreate = can(user.role, 'angebote.erstellen');
-	const [offers, customers, numbers] = await Promise.all([
-		listOffers(filter),
+	const count = await countOffers(filter);
+	const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+	const page = Math.min(pages, Math.max(1, Math.floor(Number(url.searchParams.get('seite')) || 1)));
+	const [offers, years, customers, numbers] = await Promise.all([
+		listOffers(filter, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+		offerYears(filter),
 		canCreate ? listCustomers() : Promise.resolve([]),
 		canCreate ? suggestNumbers() : Promise.resolve(null)
 	]);
 	return {
 		offers,
+		years,
+		page,
+		pageSize: PAGE_SIZE,
+		count,
 		filter,
 		canCreate,
 		customers: customers.map((c) => ({ id: c.id, name: c.name, city: c.city })),

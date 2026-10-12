@@ -67,22 +67,39 @@ const customerFields = {
 	active: customers.active
 };
 
-export async function listCustomers(opts: { q?: string; all?: boolean } = {}) {
+export interface CustomerFilter {
+	q?: string;
+	/** Auch ausgeblendete */
+	all?: boolean;
+}
+
+function customerWhere(opts: CustomerFilter): SQL | undefined {
 	const where: (SQL | undefined)[] = [];
 	if (!opts.all) where.push(eq(customers.active, true));
 	if (opts.q?.trim()) {
 		const q = `%${opts.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 		where.push(or(like(customers.name, q), like(customers.city, q), like(customers.contact, q), like(customers.uid, q)));
 	}
-	return db
+	return and(...where);
+}
+
+/** Kunden nach Namen – ohne Grenze alle (für die Auswahl im Angebot), sonst eine Seite */
+export async function listCustomers(opts: CustomerFilter = {}, page?: { limit: number; offset: number }) {
+	const query = db
 		.select({
 			...customerFields,
 			offers: sql<number>`(select count(*) from ${offers} where ${col(offers.customerId)} = ${col(customers.id)})`.mapWith(Number)
 		})
 		.from(customers)
-		.where(and(...where))
-		.orderBy(asc(sql`lower(${customers.name})`))
-		.all();
+		.where(customerWhere(opts))
+		.orderBy(asc(sql`lower(${customers.name})`), asc(customers.id));
+	return page ? query.limit(page.limit).offset(page.offset).all() : query.all();
+}
+
+/** Wie viele Kunden der Filter trifft – zum Blättern */
+export async function countCustomers(opts: CustomerFilter = {}): Promise<number> {
+	const row = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(customers).where(customerWhere(opts)).get();
+	return row?.n ?? 0;
 }
 
 export type CustomerRow = Awaited<ReturnType<typeof listCustomers>>[number];

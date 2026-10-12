@@ -4,20 +4,20 @@
 	import { enhance } from '$app/forms';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import InvoiceEditor from '$lib/modules/auftraege/components/InvoiceEditor.svelte';
-	import { invoiceLabel, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { invoiceLabel, invoiceNo } from '$lib/modules/auftraege/offer';
 
 	let { data, form } = $props();
 	let busy = $state(false);
 </script>
 
-<svelte:head><title>{pageTitle(`${invoiceLabel(data.invoice.kind)} ${spacedNumber(data.invoice.number)} bearbeiten`)}</title></svelte:head>
+<svelte:head><title>{pageTitle(`${invoiceLabel(data.invoice.kind)} ${invoiceNo(data.invoice)} bearbeiten`)}</title></svelte:head>
 
 <a href="/rechnungen/{data.invoice.id}" class="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-ink-2 hover:text-ink">
-	<ArrowLeft size={16} aria-hidden="true" />{invoiceLabel(data.invoice.kind)} {spacedNumber(data.invoice.number)}
+	<ArrowLeft size={16} aria-hidden="true" />{invoiceLabel(data.invoice.kind)} {invoiceNo(data.invoice)}
 </a>
 
 <div class="mt-3 mb-5">
-	<h1 class="text-[2rem] leading-tight">{invoiceLabel(data.invoice.kind)} {spacedNumber(data.invoice.number)} bearbeiten</h1>
+	<h1 class="text-[2rem] leading-tight">{invoiceLabel(data.invoice.kind)} {invoiceNo(data.invoice)} bearbeiten</h1>
 	<p class="text-ink-2">Solange sie offen ist. Wurde sie schon verschickt, am besten eine neue PDF mitschicken.</p>
 </div>
 

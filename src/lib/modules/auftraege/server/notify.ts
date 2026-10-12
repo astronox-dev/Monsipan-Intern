@@ -5,7 +5,7 @@
  */
 import { notify } from '$lib/server/notifications';
 import { date as dateLabel } from '$lib/format';
-import { invoiceLabel, invoiceTotals, money, spacedNumber } from '../offer';
+import { invoiceLabel, invoiceNo, invoiceTotals, money, spacedNumber } from '../offer';
 import { offerDetail } from './offers';
 import { orderDetail } from './orders';
 import { invoiceDetail } from './invoices';
@@ -110,7 +110,7 @@ export function notifyInvoice(event: 'rechnung.erstellt' | 'rechnung.bezahlt', i
 		if (!i) return;
 		notify({
 			event,
-			title: `${invoiceLabel(i.kind)} ${spacedNumber(i.number)} ${event === 'rechnung.erstellt' ? 'erstellt' : 'bezahlt'}`,
+			title: `${invoiceLabel(i.kind)} ${invoiceNo(i)} ${event === 'rechnung.erstellt' ? 'erstellt' : 'bezahlt'}`,
 			body: join(i.customerName, money(invoiceTotals(i.lines, i.vatRate, i.reverseCharge).gross), event === 'rechnung.erstellt' && `zahlbar bis ${dateLabel(i.dueDate)}`),
 			url: `/rechnungen/${i.id}`,
 			actorId

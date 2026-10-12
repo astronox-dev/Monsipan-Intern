@@ -191,9 +191,8 @@
 							<div class="mt-1 flex flex-wrap gap-4 text-sm">
 								<label class="flex items-center gap-2"><input type="radio" name="vorhandene" value="ueberspringen" bind:group={update} />überspringen</label>
 								<label class="flex items-center gap-2"
-									><input type="radio" name="vorhandene" value="aktualisieren" bind:group={update} />aktualisieren (leere Felder ändern nichts{def.positions
-										? ', Positionen werden ersetzt'
-										: ''})</label
+									><input type="radio" name="vorhandene" value="aktualisieren" bind:group={update} />aktualisieren ({def.updateLabel ??
+										`leere Felder ändern nichts${def.positions ? ', Positionen werden ersetzt' : ''}`})</label
 								>
 							</div>
 						</fieldset>

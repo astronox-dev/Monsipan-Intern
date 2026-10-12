@@ -7,7 +7,7 @@ import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { dailyReportMaterials, dailyReportPositions, dailyReportRows, dailyReports, invoices, offerPositions, orders, parties } from '$lib/server/db/schema';
 import { today } from '$lib/modules/stunden/week';
-import { lineNumbers, spacedNumber } from '../offer';
+import { invoiceNo, lineNumbers } from '../offer';
 import { summarize, type OrderSummary, type SummaryReportInput } from '../summary';
 import type { SummarySheet } from './pdf';
 
@@ -26,13 +26,16 @@ export async function orderSummary(orderId: number | null, { invoiceId }: { invo
 			status: dailyReports.status,
 			partyName: parties.name,
 			invoiceId: dailyReports.invoiceId,
-			invoiceNumber: invoices.number
+			invoiceNumber: invoices.number,
+			invoiceCostCenter: invoices.costCenter
 		})
 		.from(dailyReports)
 		.leftJoin(parties, eq(parties.id, dailyReports.partyId))
 		.leftJoin(invoices, eq(invoices.id, dailyReports.invoiceId))
 		.where(and(...where))
-		.all();
+		.all()
+		// Die Rechnungsnummer, wie sie auf der Rechnung steht – mit Kostenstelle
+		.then((rows) => rows.map(({ invoiceCostCenter, ...r }) => ({ ...r, invoiceNumber: r.invoiceNumber == null ? null : invoiceNo({ number: r.invoiceNumber, costCenter: invoiceCostCenter }) })));
 	if (!reports.length) return summarize([]);
 	const ids = reports.map((r) => r.id);
 	const [positions, rows, materials] = await Promise.all([
@@ -101,7 +104,7 @@ export async function lvNumbers(orderId: number | null): Promise<Record<string, 
  */
 export async function summarySheet(
 	orderId: number | null,
-	invoice?: { id: number; number: string; date: string; state: string; section: string }
+	invoice?: { id: number; number: string; costCenter?: string; date: string; state: string; section: string }
 ): Promise<SummarySheet> {
 	const [summary, lv, order] = await Promise.all([
 		orderSummary(orderId, { invoiceId: invoice?.id }),
@@ -110,7 +113,7 @@ export async function summarySheet(
 	]);
 	const counted = summary.reports.filter((r) => r.counted);
 	let head = invoice;
-	let numbers = invoice ? [invoice.number] : [];
+	let numbers = invoice ? [invoiceNo(invoice)] : [];
 	if (!head && counted.length && counted.every((r) => r.invoiceId != null)) {
 		numbers = [...new Set(counted.map((r) => r.invoiceNumber ?? ''))].filter(Boolean);
 		const ids = [...new Set(counted.map((r) => r.invoiceId))];
@@ -125,7 +128,7 @@ export async function summarySheet(
 	return {
 		name: invoice ? invoice.number : `Auftrag ${order?.number ?? ''}`.trim(),
 		year: Number((invoice?.date ?? summary.to ?? today()).slice(0, 4)),
-		invoiceNumber: numbers.map(spacedNumber).join(', '),
+		invoiceNumber: numbers.join(', '),
 		state: head?.state ?? '',
 		section: head?.section ?? '',
 		reports: counted,

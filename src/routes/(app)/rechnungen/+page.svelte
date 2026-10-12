@@ -1,9 +1,14 @@
 <script lang="ts">
 	/**
-	 * Rechnungen: offen und bezahlt. Oben die abgeschlossenen Aufträge, bei denen
-	 * noch etwas abzurechnen ist – von dort geht es direkt zum Abrechnen.
+	 * Rechnungen: offen und bezahlt, nach Jahren. Oben die abgeschlossenen
+	 * Aufträge, bei denen noch etwas abzurechnen ist – von dort geht es direkt
+	 * zum Abrechnen. Suche und Filter bleiben beim Blättern stehen.
 	 */
 	import { pageTitle } from '$lib/app';
+	import { page as pageState } from '$app/state';
+	import ListBar from '$lib/components/ListBar.svelte';
+	import YearTabs from '$lib/components/YearTabs.svelte';
+	import { withParams } from '$lib/url';
 	import ReceiptText from '@lucide/svelte/icons/receipt-text';
 	import Search from '@lucide/svelte/icons/search';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -11,7 +16,7 @@
 	import Pagination from '$lib/components/Pagination.svelte';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { date as dateLabel } from '$lib/format';
-	import { INVOICE_STATUS_LABELS, invoiceLabel, money, round2, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { INVOICE_STATUS_LABELS, invoiceLabel, invoiceNo, money, round2, spacedNumber } from '$lib/modules/auftraege/offer';
 	import { INVOICE_STAGE_LABELS } from '$lib/modules/auftraege/signature';
 
 	let { data } = $props();
@@ -26,6 +31,10 @@
 	const gross = (i: (typeof data.invoices)[number]) => round2(i.net * (1 + (i.reverseCharge ? 0 : i.vatRate) / 100));
 	const inactive = (i: (typeof data.invoices)[number]) => i.stage === 'storniert' || i.kind === 'storno';
 	const overdue = (i: (typeof data.invoices)[number]) => i.status === 'offen' && !inactive(i) && i.dueDate < data.today;
+	/** Überschrift, wo ein neues Jahr beginnt */
+	const yearOf = (i: { date: string }) => i.date.slice(0, 4);
+	const newYear = (n: number) => n === 0 || yearOf(data.invoices[n - 1]) !== yearOf(data.invoices[n]);
+	const yearCount = (y: string) => data.years.find((x) => x.year === y)?.n ?? 0;
 </script>
 
 <svelte:head><title>{pageTitle('Rechnungen')}</title></svelte:head>
@@ -57,35 +66,48 @@
 	</section>
 {/if}
 
-<div class="mb-4 flex flex-wrap items-center gap-3">
-	<div class="inline-flex rounded-xl border border-line bg-surface p-1" role="tablist" aria-label="Stand">
-		{#each TABS as t (t.key)}
-			<a
-				href="/rechnungen?stand={t.key}{data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}"
-				role="tab"
-				aria-selected={data.filter.state === t.key}
-				class="flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors {data.filter.state === t.key
-					? 'bg-ink text-surface'
-					: 'text-ink-2 hover:bg-surface-3 hover:text-ink'}"
-			>
-				{t.label}<span class="num text-[0.75rem] opacity-70">{t.count}</span>
-			</a>
-		{/each}
+<ListBar>
+	<div class="flex flex-wrap items-center gap-3">
+		<div class="flex max-w-full overflow-x-auto rounded-xl border border-line bg-surface p-1" role="tablist" aria-label="Stand">
+			{#each TABS as t (t.key)}
+				<a
+					href={withParams(pageState.url, { stand: t.key })}
+					role="tab"
+					aria-selected={data.filter.state === t.key}
+					data-sveltekit-noscroll
+					class="flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors {data.filter.state === t.key
+						? 'bg-ink text-surface'
+						: 'text-ink-2 hover:bg-surface-3 hover:text-ink'}"
+				>
+					{t.label}<span class="num text-[0.75rem] opacity-70">{t.count}</span>
+				</a>
+			{/each}
+		</div>
+		<form method="GET" class="flex min-w-[14rem] flex-1 gap-2">
+			<input type="hidden" name="stand" value={data.filter.state} />
+			{#if data.filter.year}<input type="hidden" name="jahr" value={data.filter.year} />{/if}
+			<input class="input" name="q" value={data.filter.q} placeholder="Nummer, Kostenstelle, BV, Kunde, Ort" aria-label="Suche" />
+			<button class="btn btn-secondary btn-icon" aria-label="Suchen"><Search size={18} /></button>
+		</form>
 	</div>
-	<form method="GET" class="flex min-w-[14rem] flex-1 gap-2">
-		<input type="hidden" name="stand" value={data.filter.state} />
-		<input class="input" name="q" value={data.filter.q} placeholder="Nummer, BV, Kunde, Ort" aria-label="Suche" />
-		<button class="btn btn-secondary btn-icon" aria-label="Suchen"><Search size={18} /></button>
-	</form>
-</div>
+	<YearTabs years={data.years} current={data.filter.year} />
+</ListBar>
 
 <div class="card overflow-hidden">
 	<ul>
-		{#each data.invoices as i (i.id)}
+		{#each data.invoices as i, n (i.id)}
 			{@const st = INVOICE_STATUS_LABELS[i.status] ?? INVOICE_STATUS_LABELS.offen}
+			{#if newYear(n)}
+				<li class="flex items-baseline gap-2 border-b border-line bg-surface-2 px-4 py-2">
+					<span class="num font-display text-base font-semibold">{yearOf(i)}</span>
+					<span class="text-[0.8125rem] text-ink-3">{yearCount(yearOf(i)) === 1 ? '1 Rechnung' : `${yearCount(yearOf(i))} Rechnungen`}</span>
+				</li>
+			{/if}
 			<li class="border-b border-line last:border-0">
 				<a href="/rechnungen/{i.id}" class="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
-					<span class="num w-24 shrink-0 font-display text-lg font-semibold">{spacedNumber(i.number)}</span>
+					<span class="num w-24 shrink-0 font-display text-lg font-semibold" title="Rechnung Nr. {invoiceNo(i)}">
+						{spacedNumber(i.number)}{#if i.costCenter}<span class="block truncate font-sans text-[0.75rem] font-normal text-ink-3">/{i.costCenter}</span>{/if}
+					</span>
 					<span class="min-w-0 flex-1">
 						<span class="block truncate font-medium">{i.kind === 'rechnung' ? '' : `${invoiceLabel(i.kind)} · `}{i.title || 'Ohne BV'}</span>
 						<span class="block truncate text-[0.8125rem] text-ink-3">

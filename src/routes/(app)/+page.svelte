@@ -224,7 +224,7 @@
 		{#if auftrag.offers}
 			{@render tile(
 				'/angebote?status=offen',
-				'Angebote beim Kunden',
+				'Angebote ausstehend',
 				auftrag.offers.freigegeben,
 				[`${auftrag.offers.entwurf} in Arbeit`, auftrag.offers.aenderung ? `${auftrag.offers.aenderung} Änderung` : ''].filter(Boolean).join(' · ')
 			)}

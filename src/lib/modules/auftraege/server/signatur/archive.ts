@@ -83,6 +83,8 @@ export interface InvoiceContent {
 	serviceFrom: string | null;
 	serviceTo: string | null;
 	projectNumber: string;
+	/** Kam später dazu – zählt nur, wenn eine eingetragen ist, damit frühere Prüfsummen stimmen */
+	costCenter?: string;
 	title: string;
 	location: string;
 	customerName: string;
@@ -124,7 +126,8 @@ export function contentHash(i: InvoiceContent): string {
 			i.section,
 			i.vatRate,
 			i.reverseCharge,
-			i.lines.map((l) => [l.number, l.kind, l.text, l.quantity, l.unit, l.unitPrice])
+			i.lines.map((l) => [l.number, l.kind, l.text, l.quantity, l.unit, l.unitPrice]),
+			...(i.costCenter ? [i.costCenter] : [])
 		])
 	);
 }

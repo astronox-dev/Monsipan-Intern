@@ -5,7 +5,7 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Sigma from '@lucide/svelte/icons/sigma';
 	import InvoiceEditor from '$lib/modules/auftraege/components/InvoiceEditor.svelte';
-	import { INVOICE_STATUS_LABELS, invoiceLabel, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { invoiceNo, INVOICE_STATUS_LABELS, invoiceLabel, spacedNumber } from '$lib/modules/auftraege/offer';
 	import { date } from '$lib/format';
 
 	let { data, form } = $props();
@@ -37,7 +37,7 @@
 		<ul class="mt-1.5 space-y-1">
 			{#each data.previous as p (p.id)}
 				<li class="flex flex-wrap items-center gap-x-2">
-					<a href="/rechnungen/{p.id}" class="num font-medium underline-offset-2 hover:underline">{invoiceLabel(p.kind)} {spacedNumber(p.number)}</a>
+					<a href="/rechnungen/{p.id}" class="num font-medium underline-offset-2 hover:underline">{invoiceLabel(p.kind)} {invoiceNo(p)}</a>
 					<span class="num text-ink-3">vom {date(p.date)}</span>
 					<span class="badge {INVOICE_STATUS_LABELS[p.status]?.tone ?? ''}">{INVOICE_STATUS_LABELS[p.status]?.label ?? p.status}</span>
 				</li>

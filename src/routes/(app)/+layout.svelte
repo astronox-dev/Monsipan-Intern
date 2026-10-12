@@ -98,7 +98,7 @@
 <div class="print:hidden"><Sidebar user={data.user} lowStockCount={data.lowStockCount} theme={data.theme} /></div>
 
 <div class="min-h-dvh lg:pl-64 print:pl-0">
-	<div class="print:hidden"><TopBar unread={data.notifications.unread} onscan={() => scanner.openCamera()} /></div>
+	<div class="contents print:hidden"><TopBar unread={data.notifications.unread} onscan={() => scanner.openCamera()} /></div>
 	<main
 		id="main"
 		tabindex="-1"

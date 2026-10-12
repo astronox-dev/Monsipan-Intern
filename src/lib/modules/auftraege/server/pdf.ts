@@ -17,6 +17,7 @@ import { LETTERHEAD, reportDateLabel } from '$lib/modules/tagesberichte/sheet';
 import {
 	addressLines,
 	invoiceLabel,
+	invoiceNo,
 	invoiceTotals,
 	lineNumbers,
 	lineTotal,
@@ -477,7 +478,7 @@ export const invoicePdfName = (invoice: Pick<InvoiceDetail, 'kind' | 'number'>) 
 export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }: InvoicePdfOptions = {}): Promise<Buffer> {
 	const settings = await getSettings();
 	const isStorno = invoice.kind === 'storno';
-	const title = `${invoiceLabel(invoice.kind)} Nr. ${spacedNumber(invoice.number)}`;
+	const title = `${invoiceLabel(invoice.kind)} Nr. ${invoiceNo(invoice)}`;
 	const { doc, finish } = startPdf({ title, margin: 8, bufferPages: true, pdfVersion: '1.7' });
 
 	letterhead(doc, letterheadPath(settings.letterheadFile), { certificate: true });
@@ -488,7 +489,7 @@ export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }
 			['Rechnungsdatum:', isoDate(invoice.date)],
 			['Kunden UID-Nummer:', invoice.customerUid],
 			['Projektnummer:', invoice.projectNumber],
-			['Rechnungsnummer:', invoice.number],
+			['Rechnungsnummer:', invoice.costCenter ? `${invoice.number}/${invoice.costCenter}` : invoice.number],
 			...(isStorno ? [] : ([['Zahlbar bis:', isoDate(invoice.dueDate)]] as [string, string][]))
 		]
 	);
@@ -499,7 +500,12 @@ export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }
 	doc.text(heading, LEFT, y, { width: WIDTH, lineGap: 2 });
 	y += doc.heightOfString(heading, { width: WIDTH, lineGap: 2 }) + 5 * MM;
 	if (invoice.cancelsNumber && invoice.cancelsDate) {
-		y = labeled(doc, 'Storno zu', `${invoiceLabel(invoice.cancelsKind ?? 'rechnung')} Nr. ${spacedNumber(invoice.cancelsNumber)} vom ${isoDate(invoice.cancelsDate)}`, y);
+		y = labeled(
+			doc,
+			'Storno zu',
+			`${invoiceLabel(invoice.cancelsKind ?? 'rechnung')} Nr. ${invoiceNo({ number: invoice.cancelsNumber, costCenter: invoice.cancelsCostCenter })} vom ${isoDate(invoice.cancelsDate)}`,
+			y
+		);
 	}
 	y = labeled(doc, 'Ausführungsort', invoice.location, y);
 	if (invoice.serviceFrom) y = labeled(doc, 'Leistungszeitraum', reportDateLabel(invoice.serviceFrom, invoice.serviceTo), y);
