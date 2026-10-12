@@ -44,12 +44,38 @@ export function allNavItems(role: Role): NavItem[] {
 	return out;
 }
 
-/** Rechter Reiter der Handy-Leiste: Bewegungen, ohne Einblick in Bewegungen stattdessen Buchen */
-export function bottomRightTab(role: Role): NavItem | null {
-	const lager = MODULES.find((m) => m.key === 'lager')!;
-	if (can(role, 'lager.bewegungen.sehen')) return lager.items.find((i) => i.href === '/lager/bewegungen')!;
-	if (can(role, 'lager.bestand.buchen')) return lager.items.find((i) => i.href === '/lager/buchen')!;
-	return null;
+/**
+ * Die zwei Reiter der Handy-Leiste neben „Übersicht" – je nachdem, wofür jemand
+ * das Handy braucht: Büro und Leitung (sehen alle Aufträge) für Aufträge und
+ * Planung, die Partien für Tagesberichte und Stunden. Was die Rolle nicht
+ * öffnen darf, fällt weg; dann rückt der nächste nach. Kurze Beschriftung,
+ * damit es in die Leiste passt.
+ */
+const BOTTOM_OFFICE: [string, string][] = [
+	['/auftraege', 'Aufträge'],
+	['/planung', 'Planung'],
+	['/tagesberichte', 'Berichte'],
+	['/rechnungen', 'Rechnungen'],
+	['/lager/bestand', 'Bestand']
+];
+const BOTTOM_FIELD: [string, string][] = [
+	['/tagesberichte', 'Berichte'],
+	['/stundenzettel', 'Stunden'],
+	['/auftraege', 'Aufträge'],
+	['/lager/bestand', 'Bestand'],
+	['/lager/buchen', 'Buchen']
+];
+
+export function bottomTabs(role: Role): NavItem[] {
+	const all = allNavItems(role);
+	const wanted = can(role, 'auftraege.alle.sehen') ? BOTTOM_OFFICE : BOTTOM_FIELD;
+	return wanted
+		.map(([href, label]) => {
+			const item = all.find((i) => i.href === href);
+			return item ? { ...item, label } : null;
+		})
+		.filter((i): i is NavItem => !!i)
+		.slice(0, 2);
 }
 
 /**

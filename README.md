@@ -31,6 +31,12 @@ Welche Bereiche es gibt und welche davon freigeschaltet sind, steht an einer Ste
 seine Seiten unter `src/routes/(app)/<bereich>/` und seinen Code unter
 `src/lib/modules/<bereich>/`.
 
+**Am Handy** steht unten eine Leiste: Übersicht, zwei Reiter je nach Rolle, in der Mitte
+**Scannen** (Artikel im Lager suchen) und **Mehr**. Büro und Leitung – wer alle Aufträge sieht –
+haben **Aufträge** und **Planung**, die Partien **Tagesberichte** und **Stundenzettel**; was eine
+Rolle nicht öffnen darf, rückt nach (`bottomTabs` in [`src/lib/nav.ts`](src/lib/nav.ts)). **Mehr**
+zeigt alle Seiten gegliedert wie die Seitenleiste, dazu Konto, Darstellung und Abmelden.
+
 ## Lagermanagement
 
 Lagerverwaltung für die Bodenmarkierung: Bestand je Lagerort, Ein-/Ausbuchen per Scan,
