@@ -1,18 +1,19 @@
 /**
- * Import und Export von Kunden, Anfragen, Aufträgen und Rechnungen: welche
+ * Import und Export von Kunden, Anfragen, Angeboten, Aufträgen und Rechnungen: welche
  * Felder es gibt, wie sie in der Datei heißen (die Bezeichnung ist zugleich
  * die Spaltenüberschrift beim Export) und unter welchen Namen sie in Dateien
  * anderer Programme meist stehen – daraus wird die Zuordnung der Spalten
  * vorgeschlagen. Läuft auch im Browser.
  *
- * Aufträge und Rechnungen haben je Zeile eine Position; die Kopfdaten stehen
+ * Angebote, Aufträge und Rechnungen haben je Zeile eine Position; die Kopfdaten stehen
  * in jeder Zeile (oder nur in der ersten) und werden über die Nummer
  * zusammengefasst.
  */
 
 import type { Permission } from '$lib/permissions';
 
-export const TRANSFER_KINDS = ['kunden', 'anfragen', 'auftraege', 'rechnungen'] as const;
+/** In dieser Reihenfolge importieren: Rechnungen finden ihren Auftrag, Aufträge ihr Angebot */
+export const TRANSFER_KINDS = ['kunden', 'anfragen', 'angebote', 'auftraege', 'rechnungen'] as const;
 export type TransferKind = (typeof TRANSFER_KINDS)[number];
 
 export interface TransferField {
@@ -99,13 +100,40 @@ export const TRANSFER: Record<TransferKind, TransferDef> = {
 			f('closed', 'Erledigt', ['erledigt', 'abgeschlossen', 'geschlossen'], { hint: 'ja/nein' })
 		]
 	},
+	angebote: {
+		label: 'Angebote',
+		one: 'Angebot',
+		permission: 'angebote.sehen',
+		positions: true,
+		update: false,
+		matchHint: 'Vorhanden heißt: gleiche Angebotsnummer – es wird übersprungen.',
+		fields: [
+			f('number', 'Angebotsnummer', ['angebotsnummer', 'angebotsnr', 'angebot', 'nr', 'nummer', 'belegnummer'], { required: true }),
+			f('date', 'Angebotsdatum', ['angebotsdatum', 'datum', 'belegdatum'], { required: true }),
+			f('projectNumber', 'Projektnummer', ['projektnummer', 'projekt', 'projektnr']),
+			f('title', 'BV', ['bv', 'bauvorhaben', 'titel', 'bezeichnung', 'objekt', 'betreff']),
+			f('location', 'Ausführungsort', ['ausfuehrungsort', 'ort', 'baustelle', 'leistungsort']),
+			f('customerName', 'Kunde', ['kunde', 'kundenname', 'firma', 'empfaenger'], { required: true }),
+			...customerAddress,
+			f('customerUid', 'UID des Kunden', ['uiddeskunden', 'uid', 'kundenuid', 'uidnummer', 'ustid']),
+			f('intro', 'Einleitung', ['einleitung', 'kopftext']),
+			f('closing', 'Schlusstext', ['schlusstext', 'fusstext']),
+			f('vatRate', 'USt-Satz', ['ustsatz', 'mwstsatz', 'steuersatz', 'ust', 'mwst'], { hint: 'Leer: 20 %' }),
+			f('status', 'Stand', ['stand', 'status', 'zustand'], { hint: 'in Arbeit, beim Kunden (auch: ausstehend, versendet) oder angenommen' }),
+			f('netTotal', 'Netto gesamt', ['nettogesamt', 'netto', 'nettobetrag', 'summenetto', 'betragnetto'], {
+				hint: 'Nur nötig, wenn die Datei keine Positionen hat – dann wird es eine Position'
+			}),
+			...positionFields,
+			p('posPrice', 'Einheitspreis', ['einheitspreis', 'ep', 'preis', 'einzelpreis', 'stueckpreis'])
+		]
+	},
 	auftraege: {
 		label: 'Aufträge',
 		one: 'Auftrag',
 		permission: 'auftraege.alle.sehen',
 		positions: true,
 		update: true,
-		matchHint: 'Vorhanden heißt: gleiche Auftragsnummer.',
+		matchHint: 'Vorhanden heißt: gleiche Auftragsnummer. Gibt es ein Angebot mit derselben Nummer, hängt der Auftrag daran.',
 		fields: [
 			f('number', 'Auftragsnummer', ['auftragsnummer', 'auftragsnr', 'auftrag', 'auftragnr', 'nr', 'nummer', 'belegnummer'], { required: true }),
 			f('projectNumber', 'Projektnummer', ['projektnummer', 'projekt', 'projektnr']),
@@ -148,6 +176,10 @@ export const TRANSFER: Record<TransferKind, TransferDef> = {
 			f('reverseCharge', 'Reverse Charge', ['reversecharge', 'uebergangdersteuerschuld', 'steuerschuld', 'rc'], { hint: 'ja/nein' }),
 			f('paid', 'Bezahlt', ['bezahlt', 'zahlungsstatus', 'beglichen'], { hint: 'ja/nein' }),
 			f('paidOn', 'Bezahlt am', ['bezahltam', 'zahlungsdatum', 'zahldatum', 'zahlungseingang']),
+			f('cancelled', 'Storniert', ['storniert'], { hint: 'ja/nein – im bisherigen Programm storniert' }),
+			f('cancelsNumber', 'Storno zu Rechnung', ['stornozurechnung', 'stornozu', 'storniertenummer'], {
+				hint: 'Bei Stornorechnungen: Nummer der stornierten Rechnung'
+			}),
 			f('netTotal', 'Netto gesamt', ['nettogesamt', 'netto', 'nettobetrag', 'summenetto', 'betragnetto'], {
 				hint: 'Nur nötig, wenn die Datei keine Positionen hat – dann wird es eine Position'
 			}),

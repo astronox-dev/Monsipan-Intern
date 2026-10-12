@@ -7,6 +7,7 @@ import { requirePermission } from '$lib/server/guard';
 import { invoiceDetail } from '$lib/modules/auftraege/server/invoices';
 import { invoicePdf, invoicePdfName } from '$lib/modules/auftraege/server/pdf';
 import { readArchiveFile, sha256Hex } from '$lib/modules/auftraege/server/signatur/archive';
+import { isLegacy } from '$lib/modules/auftraege/signature';
 import type { RequestHandler } from './$types';
 
 /**
@@ -19,7 +20,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	const invoice = await invoiceDetail(Number(params.id));
 	if (!invoice) error(404, 'Rechnung nicht gefunden');
 	// Entwürfe und importierter Altbestand haben kein Archiv – das PDF entsteht aus den Daten
-	if (invoice.stage === 'entwurf' || invoice.stage === 'importiert') return invoicePdf(invoice);
+	if (invoice.stage === 'entwurf' || isLegacy(invoice)) return invoicePdf(invoice);
 	const files = await db.select().from(invoiceFiles).where(eq(invoiceFiles.invoiceId, invoice.id)).all();
 	const file = files.find((f) => f.kind === 'signiert') ?? files.find((f) => f.kind === 'original');
 	const data = file ? readArchiveFile(file.fileName) : null;

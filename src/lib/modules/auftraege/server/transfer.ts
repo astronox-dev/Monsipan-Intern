@@ -1,5 +1,5 @@
 /**
- * Import und Export von Kunden, Anfragen, Aufträgen und Rechnungen.
+ * Import und Export von Kunden, Anfragen, Angeboten, Aufträgen und Rechnungen.
  *
  * Import in zwei Schritten: `planImport` prüft die Datei mit der gewählten
  * Spaltenzuordnung und sagt, was neu ist, was schon da ist und was nicht
@@ -13,15 +13,17 @@
  * Rechnungen kommen als **Altbestand** („importiert"): gesperrt wie
  * ausgestellte, aber ohne Archiv, Signatur und Prüfcode; offen/bezahlt bleibt
  * änderbar. Schon überfällige, offene melden sich nicht als „überfällig".
+ * Stornierte kommen als storniert, Stornorechnungen hängen an der Rechnung,
+ * die sie stornieren. Aufträge hängen am Angebot mit derselben Nummer.
  */
 import { asc, eq, inArray } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
-import { customers, inquiries, invoicePositions, invoices, offers, orderPositions, orders, parties } from '$lib/server/db/schema';
+import { customers, inquiries, invoicePositions, invoices, offerPositions, offers, orderPositions, orders, parties } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
 import { getSettings } from '$lib/server/settings';
 import type { TableCell } from '$lib/server/table';
 import { addDays, isValidIsoDate } from '$lib/modules/stunden/week';
-import { invoiceLabel, invoiceTotals, parseAmount } from '../offer';
+import { invoiceLabel, invoiceTotals, OFFER_STATUS_LABELS, parseAmount } from '../offer';
 import { INVOICE_STAGE_LABELS } from '../signature';
 import { TRANSFER, type TransferKind, type TransferMapping } from '../transfer';
 import { audit } from './signatur/audit';
@@ -92,6 +94,14 @@ function orderStatus(s: string): 'erstellt' | 'in_arbeit' | 'abgeschlossen' | nu
 	if (/abgeschlossen|fertig|erledigt|beendet|abgerechnet/.test(t)) return 'abgeschlossen';
 	if (/arbeit|laufend|läuft|begonnen|aktiv|gestartet/.test(t)) return 'in_arbeit';
 	return 'erstellt';
+}
+
+function offerStatus(s: string): 'entwurf' | 'freigegeben' | 'angenommen' {
+	const t = key(s);
+	if (!t) return 'entwurf';
+	if (/angenommen|abgerechnet|beauftragt|auftrag/.test(t)) return 'angenommen';
+	if (/entwurf|arbeit|bearbeitung/.test(t)) return 'entwurf';
+	return 'freigegeben';
 }
 
 function invoiceKind(s: string): 'rechnung' | 'teilrechnung' | 'storno' {
@@ -188,6 +198,7 @@ export async function planImport(kind: TransferKind, rows: Row[], mapping: Trans
 
 	if (kind === 'kunden') await planCustomers(rows, mapping, options, items, issues);
 	else if (kind === 'anfragen') await planInquiries(rows, mapping, items, issues);
+	else if (kind === 'angebote') await planOffers(rows, mapping, items, issues);
 	else if (kind === 'auftraege') await planOrders(rows, mapping, options, items, issues);
 	else await planInvoices(rows, mapping, items, issues);
 	return finish(kind, items, issues);
@@ -333,14 +344,72 @@ function readPositions(data: Row[], rows: number[], mapping: TransferMapping, is
 	return { positions: out, bad };
 }
 
+/* --------------------------------------------------- Angebote */
+
+async function planOffers(rows: Row[], mapping: TransferMapping, items: Item[], issues: ImportIssue[]) {
+	const [existing, known] = await Promise.all([
+		db.select({ number: offers.number }).from(offers).all(),
+		db.select({ id: customers.id, name: customers.name, zip: customers.zip }).from(customers).all()
+	]);
+	const taken = new Set(existing.map((o) => key(o.number)));
+	for (const [number, g] of group(rows, mapping, issues)) {
+		const first = g.rows[0];
+		const get = (f: string) => head(g.data, mapping, f);
+		const problems: string[] = [];
+		const date = toDate(get('date'));
+		if (!date) problems.push(date === undefined ? `Angebotsdatum „${toText(get('date'))}" ist kein Datum.` : 'Das Angebotsdatum fehlt.');
+		const vat = toNumber(get('vatRate'));
+		if (vat === undefined || (vat != null && (vat < 0 || vat > 100))) problems.push(`USt-Satz „${toText(get('vatRate'))}" stimmt nicht.`);
+		const net = toNumber(get('netTotal'));
+		if (net === undefined) problems.push(`„Netto gesamt" („${toText(get('netTotal'))}") ist keine Zahl.`);
+		const customerName = limit(toText(get('customerName')), 160);
+		if (!customerName) problems.push('Der Kunde fehlt.');
+		const zip = limit(toText(get('customerZip')), 12);
+		const customer = known.find((c) => key(c.name) === key(customerName) && (!zip || !c.zip || key(c.zip) === key(zip)));
+		const data: Record<string, unknown> = {
+			number: limit(number, 30),
+			date,
+			...texts(get, mapping, [
+				['projectNumber', 30],
+				['title', 300],
+				['location', 300],
+				['customerAddition', 160],
+				['customerStreet', 160],
+				['customerZip', 12],
+				['customerCity', 120],
+				['intro', 3000],
+				['closing', 5000]
+			]),
+			customerName,
+			customerUid: toText(get('customerUid')).replace(/\s+/g, '').toUpperCase().slice(0, 30),
+			customerId: customer?.id ?? null,
+			vatRate: vat ?? 20,
+			status: offerStatus(toText(get('status')))
+		};
+		let { positions, bad } = readPositions(g.data, g.rows, mapping, issues, true);
+		if (!positions.some((l) => l.kind === 'position' && l.quantity != null)) {
+			if (net != null) positions = [{ kind: 'position', text: data.title ? String(data.title) : 'Leistungen lt. Angebot', quantity: 1, unit: 'pauschal', unitPrice: net }];
+			else problems.push('Keine Position mit Menge und kein „Netto gesamt".');
+		}
+		for (const p of problems) issues.push({ row: first, level: 'fehler', message: `Angebot ${number}: ${p}` });
+		const action: ImportAction = problems.length || bad ? 'fehler' : taken.has(key(number)) ? 'ueberspringen' : 'neu';
+		items.push({ rows: g.rows, label: `Angebot ${number}${customerName ? ` · ${customerName}` : ''}`, action, existingId: null, data, positions });
+		taken.add(key(number));
+	}
+}
+
 /* --------------------------------------------------- Aufträge */
 
 async function planOrders(rows: Row[], mapping: TransferMapping, options: ImportOptions, items: Item[], issues: ImportIssue[]) {
-	const [existing, partyRows] = await Promise.all([
-		db.select({ id: orders.id, number: orders.number }).from(orders).all(),
-		db.select({ id: parties.id, name: parties.name }).from(parties).where(eq(parties.kind, 'gruppe')).all()
+	const [existing, partyRows, offerRows] = await Promise.all([
+		db.select({ id: orders.id, number: orders.number, offerId: orders.offerId }).from(orders).all(),
+		db.select({ id: parties.id, name: parties.name }).from(parties).where(eq(parties.kind, 'gruppe')).all(),
+		db.select({ id: offers.id, number: offers.number }).from(offers).all()
 	]);
 	const byNumber = new Map(existing.map((o) => [key(o.number), o.id]));
+	// Ein Angebot gehört zu höchstens einem Auftrag
+	const linked = new Set(existing.map((o) => o.offerId).filter((id): id is number => id != null));
+	const offerBy = new Map(offerRows.map((o) => [key(o.number), o.id]));
 	for (const [number, g] of group(rows, mapping, issues)) {
 		const get = (f: string) => head(g.data, mapping, f);
 		const data: Record<string, unknown> = {
@@ -366,6 +435,11 @@ async function planOrders(rows: Row[], mapping: TransferMapping, options: Import
 			if (name && !hit) issues.push({ row: g.rows[0], level: 'hinweis', message: `Partie „${name}" gibt es nicht – Auftrag ${number} bleibt nicht zugeteilt.` });
 		}
 		if (mapped(mapping, 'status')) data.status = orderStatus(toText(get('status'))) ?? 'erstellt';
+		const offerId = offerBy.get(key(number));
+		if (offerId && !linked.has(offerId)) {
+			data.offerId = offerId;
+			linked.add(offerId);
+		}
 		const { positions, bad } = readPositions(g.data, g.rows, mapping, issues, false);
 		const existingId = byNumber.get(key(number)) ?? null;
 		const action: ImportAction = bad ? 'fehler' : existingId ? (options.update ? 'aktualisieren' : 'ueberspringen') : 'neu';
@@ -432,6 +506,9 @@ async function planInvoices(rows: Row[], mapping: TransferMapping, items: Item[]
 		if (data.dueDate && date && String(data.dueDate) < date) problems.push('„Zahlbar bis" liegt vor dem Rechnungsdatum.');
 		const paid = toBool(get('paid')) === true || !!paidOn;
 		data.status = paid ? 'bezahlt' : 'offen';
+		data.cancelled = toBool(get('cancelled')) === true;
+		data.cancelsNumber = limit(toText(get('cancelsNumber')), 30);
+		if (data.cancelsNumber) data.kind = 'storno';
 		data.paidOn = paid ? (paidOn ?? date ?? null) : null;
 		const orderNumber = toText(get('orderNumber'));
 		const order = orderNumber ? orderBy.get(key(orderNumber)) : undefined;
@@ -482,9 +559,13 @@ export async function runImport(
 	if (plan.issues.some((i) => i.row === 1 && i.level === 'fehler')) return { plan, result };
 	const now = new Date();
 	await db.transaction(async (tx) => {
+		if (kind === 'rechnungen') {
+			result.created = await insertInvoices(tx, plan.items.filter((i) => i.action === 'neu'), plan.issues, user, now, fileName);
+			return;
+		}
 		for (const item of plan.items) {
 			if (item.action === 'neu') {
-				await insertItem(tx, kind, item, user, now, fileName);
+				await insertItem(tx, kind, item, user, now);
 				result.created++;
 			} else if (item.action === 'aktualisieren' && item.existingId) {
 				await updateItem(tx, kind, item, now);
@@ -493,6 +574,63 @@ export async function runImport(
 		}
 	});
 	return { plan, result };
+}
+
+/**
+ * Rechnungen in zwei Schritten: erst alle als Entwurf mit Positionen (nur
+ * dort lassen die Trigger Positionen zu), dann gesperrt als Altbestand bzw.
+ * storniert – jetzt sind alle Nummern bekannt, also auch die Paare aus
+ * stornierter Rechnung und Stornorechnung.
+ */
+async function insertInvoices(tx: Tx, items: Item[], issues: ImportIssue[], user: SessionUser, now: Date, fileName: string): Promise<number> {
+	const ids = new Map<string, number>();
+	for (const item of items) {
+		const { cancelled: _c, cancelsNumber: _n, ...d } = item.data;
+		const row = await tx
+			.insert(invoices)
+			.values({ ...(d as { number: string; date: string; dueDate: string }), stage: 'entwurf', createdBy: user.id, updatedAt: now })
+			.returning({ id: invoices.id })
+			.get();
+		await writePositions(tx, 'invoice', row.id, item.positions);
+		ids.set(key(String(d.number)), row.id);
+	}
+	// Stornierte Rechnungen aus der Datenbank (frühere Importe) – nur für den Verweis der Stornorechnung
+	const wanted = items.map((i) => String(i.data.cancelsNumber ?? '')).filter((n) => n && !ids.has(key(n)));
+	const earlier = wanted.length ? await tx.select({ id: invoices.id, number: invoices.number }).from(invoices).where(inArray(invoices.number, wanted)).all() : [];
+	const idOf = (n: string) => ids.get(key(n)) ?? earlier.find((e) => key(e.number) === key(n))?.id ?? null;
+	const stornoFor = new Map<number, Item>();
+	for (const item of items) {
+		const target = item.data.cancelsNumber ? idOf(String(item.data.cancelsNumber)) : null;
+		if (item.data.cancelsNumber && !target) issues.push({ row: item.rows[0], level: 'hinweis', message: `Rechnung ${String(item.data.cancelsNumber)} zur Stornorechnung ${String(item.data.number)} nicht gefunden.` });
+		if (target) stornoFor.set(target, item);
+	}
+	const today = now.toISOString().slice(0, 10);
+	for (const item of items) {
+		const d = item.data;
+		const id = ids.get(key(String(d.number)))!;
+		const storno = stornoFor.get(id);
+		const date = String(d.date);
+		const open = d.status === 'offen';
+		await tx
+			.update(invoices)
+			.set({
+				stage: d.cancelled ? 'storniert' : 'importiert',
+				issuedAt: new Date(`${date}T12:00:00Z`),
+				cancelsId: d.cancelsNumber ? idOf(String(d.cancelsNumber)) : null,
+				...(d.cancelled
+					? {
+							cancelledAt: new Date(`${storno ? String(storno.data.date) : date}T12:00:00Z`),
+							cancelReason: 'Im bisherigen Programm storniert',
+							stornoId: storno ? ids.get(key(String(storno.data.number))) : null
+						}
+					: {}),
+				// Schon überfällig beim Import: keine Meldung „überfällig" für alte Rechnungen
+				overdueNotifiedAt: open && String(d.dueDate) < today ? now : null
+			})
+			.where(eq(invoices.id, id));
+		await audit({ invoiceId: id, invoiceNumber: String(d.number), user, action: 'importiert', detail: { datei: fileName, zeilen: item.rows, storniert: !!d.cancelled } }, tx);
+	}
+	return items.length;
 }
 
 async function writePositions(tx: Tx, table: 'order' | 'invoice', id: number, positions: Record<string, unknown>[]) {
@@ -516,13 +654,38 @@ async function writePositions(tx: Tx, table: 'order' | 'invoice', id: number, po
 	}
 }
 
-async function insertItem(tx: Tx, kind: TransferKind, item: Item, user: SessionUser, now: Date, fileName: string) {
+async function insertItem(tx: Tx, kind: TransferKind, item: Item, user: SessionUser, now: Date) {
 	const d = item.data;
 	if (kind === 'kunden') {
 		await tx.insert(customers).values({ ...(d as { name: string }), updatedAt: now });
 	} else if (kind === 'anfragen') {
 		const { closed, ...rest } = d;
 		await tx.insert(inquiries).values({ ...(rest as { receivedOn: string }), closedAt: closed ? now : null, createdBy: user.id, updatedAt: now });
+	} else if (kind === 'angebote') {
+		const status = d.status as 'entwurf' | 'freigegeben' | 'angenommen';
+		const row = await tx
+			.insert(offers)
+			.values({
+				...(d as { number: string; date: string }),
+				status,
+				// Seit wann beim Kunden: das Angebotsdatum
+				releasedAt: status === 'entwurf' ? null : new Date(`${String(d.date)}T12:00:00Z`),
+				createdBy: user.id,
+				updatedAt: now
+			})
+			.returning({ id: offers.id })
+			.get();
+		for (const [i, l] of item.positions.entries()) {
+			await tx.insert(offerPositions).values({
+				offerId: row.id,
+				sortOrder: i,
+				kind: l.kind as 'position',
+				text: String(l.text),
+				quantity: l.quantity as number | null,
+				unit: String(l.unit),
+				unitPrice: l.unitPrice as number | null
+			});
+		}
 	} else if (kind === 'auftraege') {
 		const status = (d.status as 'erstellt' | 'in_arbeit' | 'abgeschlossen' | undefined) ?? 'erstellt';
 		const row = await tx
@@ -538,26 +701,6 @@ async function insertItem(tx: Tx, kind: TransferKind, item: Item, user: SessionU
 			.returning({ id: orders.id })
 			.get();
 		await writePositions(tx, 'order', row.id, item.positions);
-	} else {
-		// Erst als Entwurf mit Positionen, dann gesperrt als Altbestand – die Trigger lassen Positionen nur an Entwürfen zu
-		const date = String(d.date);
-		const open = d.status === 'offen';
-		const row = await tx
-			.insert(invoices)
-			.values({ ...(d as { number: string; date: string; dueDate: string }), stage: 'entwurf', createdBy: user.id, updatedAt: now })
-			.returning({ id: invoices.id })
-			.get();
-		await writePositions(tx, 'invoice', row.id, item.positions);
-		await tx
-			.update(invoices)
-			.set({
-				stage: 'importiert',
-				issuedAt: new Date(`${date}T12:00:00Z`),
-				// Schon überfällig beim Import: keine Meldung „überfällig" für alte Rechnungen
-				overdueNotifiedAt: open && String(d.dueDate) < now.toISOString().slice(0, 10) ? now : null
-			})
-			.where(eq(invoices.id, row.id));
-		await audit({ invoiceId: row.id, invoiceNumber: String(d.number), user, action: 'importiert', detail: { datei: fileName, zeilen: item.rows } }, tx);
 	}
 }
 
@@ -646,6 +789,43 @@ export async function exportTable(kind: TransferKind): Promise<ExportTable> {
 			])
 		};
 	}
+	if (kind === 'angebote') {
+		const header = headerOf(kind);
+		const list = await db.select().from(offers).orderBy(asc(offers.number)).all();
+		const lines = list.length
+			? await db
+					.select()
+					.from(offerPositions)
+					.where(inArray(offerPositions.offerId, list.map((o) => o.id)))
+					.orderBy(asc(offerPositions.sortOrder), asc(offerPositions.id))
+					.all()
+			: [];
+		const rows: TableCell[][] = [];
+		for (const o of list) {
+			const own = lines.filter((l) => l.offerId === o.id);
+			const headCells: TableCell[] = [
+				o.number,
+				asDate(o.date),
+				o.projectNumber,
+				o.title,
+				o.location,
+				o.customerName,
+				o.customerAddition,
+				o.customerStreet,
+				o.customerZip,
+				o.customerCity,
+				o.customerUid,
+				o.intro,
+				o.closing,
+				o.vatRate,
+				OFFER_STATUS_LABELS[o.status]?.label ?? o.status,
+				invoiceTotals(own, o.vatRate, false).net
+			];
+			if (!own.length) rows.push([...headCells, '', '', null, '', null]);
+			for (const l of own) rows.push([...headCells, l.kind === 'titel' ? 'Titel' : 'Position', l.text, l.quantity, l.unit, l.unitPrice]);
+		}
+		return { header, rows, widths: widthsOf(header) };
+	}
 	if (kind === 'auftraege') {
 		const header = headerOf(kind);
 		const list = await db
@@ -686,6 +866,7 @@ export async function exportTable(kind: TransferKind): Promise<ExportTable> {
 		.leftJoin(orders, eq(orders.id, invoices.orderId))
 		.orderBy(asc(invoices.date), asc(invoices.number))
 		.all();
+	const numberOf = new Map(list.map((l) => [l.i.id, l.i.number]));
 	const lines = list.length ? await db.select().from(invoicePositions).where(inArray(invoicePositions.invoiceId, list.map((l) => l.i.id))).orderBy(asc(invoicePositions.sortOrder), asc(invoicePositions.id)).all() : [];
 	const rows: TableCell[][] = [];
 	for (const { i, orderNumber } of list) {
@@ -714,6 +895,8 @@ export async function exportTable(kind: TransferKind): Promise<ExportTable> {
 			yesNo(i.reverseCharge),
 			yesNo(i.status === 'bezahlt'),
 			asDate(i.paidOn),
+			yesNo(i.stage === 'storniert'),
+			i.cancelsId ? (numberOf.get(i.cancelsId) ?? '') : '',
 			totals.net
 		];
 		const tail: TableCell[] = [INVOICE_STAGE_LABELS[i.stage]?.label ?? i.stage, totals.vat, totals.gross];

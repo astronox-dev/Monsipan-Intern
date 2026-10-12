@@ -10,14 +10,14 @@
  * gültig, ungültig, storniert oder nicht feststellbar. Dazu die nächtliche
  * Prüfung des ganzen Archivs samt Protokoll-Kette.
  */
-import { and, eq, ne, notInArray } from 'drizzle-orm';
+import { and, eq, isNotNull, ne, notInArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { invoiceFiles, invoices, invoiceSignatures, settings as settingsTable } from '$lib/server/db/schema';
 import { getSettings } from '$lib/server/settings';
 import { notify } from '$lib/server/notifications';
 import type { SessionUser } from '$lib/server/auth';
 import { invoiceLabel, spacedNumber } from '../../offer';
-import { CHECK_LABELS, type CheckResult, type InvoiceStage } from '../../signature';
+import { CHECK_LABELS, isLegacy, type CheckResult, type InvoiceStage } from '../../signature';
 import { audit, verifyAuditChain } from './audit';
 import { currentContentHash, readArchiveFile, sha256Hex } from './archive';
 import { QUALIFICATION_LABELS, type CertInfo, type Qualification } from './cert';
@@ -62,8 +62,9 @@ export async function verifyInvoice(id: number, opts: { user?: SessionUser | nul
 		out.archive.detail = 'Noch nicht ausgestellt.';
 		return out;
 	}
-	if (row.stage === 'importiert') {
+	if (isLegacy(row)) {
 		out.archive.detail = 'Aus einem anderen Programm importiert – nicht im Portal ausgestellt, daher ohne Archiv und Signatur.';
+		if (row.stage === 'storniert') out.result = 'storniert';
 		return out;
 	}
 	const files = await db.select().from(invoiceFiles).where(eq(invoiceFiles.invoiceId, id)).all();
@@ -243,11 +244,11 @@ export async function lastArchiveCheck(): Promise<ArchiveCheck | null> {
 
 /** Alle ausgestellten Rechnungen und die Protokoll-Kette prüfen */
 export async function checkArchive(user: SessionUser | null = null): Promise<ArchiveCheck> {
-	// Entwürfe und importierter Altbestand haben kein Archiv
+	// Entwürfe und importierter Altbestand (ohne Prüfcode-Schlüssel) haben kein Archiv
 	const issued = await db
 		.select({ id: invoices.id, number: invoices.number, kind: invoices.kind })
 		.from(invoices)
-		.where(notInArray(invoices.stage, ['entwurf', 'importiert']))
+		.where(and(notInArray(invoices.stage, ['entwurf', 'importiert']), isNotNull(invoices.verifyToken)))
 		.all();
 	const problems: ArchiveCheck['problems'] = [];
 	for (const i of issued) {

@@ -90,7 +90,7 @@ Administration unter `/verwaltung/…`:
 | Angebot für den Kunden (ohne Anmeldung) | `/angebot/<link>` |
 | Prüfseite einer Rechnung, hinter dem QR-Code (ohne Anmeldung) | `/pruefen/<schlüssel>` |
 | Rechnungssignatur (Einstellungen) | `/verwaltung/einstellungen/signatur` |
-| Import und Export (Kunden, Anfragen, Aufträge, Rechnungen) | `/verwaltung/import` |
+| Import und Export (Kunden, Anfragen, Angebote, Aufträge, Rechnungen) | `/verwaltung/import` |
 | Handschrift auf dem Formular | `/tagesberichte/<id>/handschrift`, `/stundenzettel/<id>/handschrift` |
 | Bestand, Buchen, Bewegungen, Bestellliste, Berichte | `/lager/bestand` usw. |
 | Inventur | `/lager/inventur` |
@@ -743,10 +743,10 @@ Dateien bleiben im Archiv, der Stand davor steckt in der „-vor-restore“-Sich
 ## Import und Export
 
 Unter **Verwaltung → Import und Export** (`/verwaltung/import`) gehen Kunden, Anfragen,
-Aufträge und Rechnungen als **Excel (.xlsx) oder CSV** hinaus und herein.
+Angebote, Aufträge und Rechnungen als **Excel (.xlsx) oder CSV** hinaus und herein.
 
 **Exportieren** (Recht „Import und Export → Exportieren“, von Haus aus das Büro – je Bereich
-nur, wer dort alles sieht): alle Einträge; Aufträge und Rechnungen mit **einer Zeile je
+nur, wer dort alles sieht): alle Einträge; Angebote, Aufträge und Rechnungen mit **einer Zeile je
 Position**, die Kopfdaten in jeder Zeile, Rechnungen dazu mit Stufe und Summen. Die
 Spaltenüberschriften sind genau die Felder des Imports – ein Export lässt sich unverändert
 wieder einlesen.
@@ -754,7 +754,7 @@ wieder einlesen.
 **Importieren** (Recht „Importieren“, von Haus aus nur Admin) – gedacht für Daten aus dem
 bisherigen Programm:
 
-1. Art wählen (Kunden, Anfragen, Aufträge, Rechnungen) und die Datei – Excel oder CSV.
+1. Art wählen (Kunden, Anfragen, Angebote, Aufträge, Rechnungen) und die Datei – Excel oder CSV.
    CSV darf Semikolon, Komma oder Tabulator trennen und in UTF-8, UTF-16 oder Windows-1252
    (ältere Programme) gespeichert sein. Die erste Zeile enthält die Spaltenüberschriften.
 2. **Spalten zuordnen:** Die Seite schlägt die Zuordnung nach den Überschriften vor – auch
@@ -765,9 +765,12 @@ bisherigen Programm:
 4. **Importieren** schreibt alles in einer Transaktion – ganz oder gar nicht. Zeilen mit
    Fehlern werden nicht übernommen.
 
-- **Reihenfolge:** zuerst Kunden, dann Anfragen und Aufträge, zuletzt Rechnungen. Rechnungen
-  hängen sich über die Auftragsnummer an ihren Auftrag, Anfragen über den Namen an den Kunden.
-- **Aufträge und Rechnungen** haben je Zeile eine Position; Zeilen mit gleicher Nummer – oder
+- **Reihenfolge:** zuerst Kunden, dann Anfragen, Angebote und Aufträge, zuletzt Rechnungen.
+  Rechnungen hängen sich über die Auftragsnummer an ihren Auftrag, ein Auftrag an das Angebot
+  mit derselben Nummer, Angebote und Anfragen über den Namen an den Kunden.
+- **Angebote:** Stand „beim Kunden“ (auch „ausstehend“, „versendet“), „angenommen“ (auch
+  „abgerechnet“) oder „in Arbeit“; ohne Positionen wird „Netto gesamt“ eine Position.
+- **Angebote, Aufträge und Rechnungen** haben je Zeile eine Position; Zeilen mit gleicher Nummer – oder
   ohne Nummer direkt darunter – gehören zum selben Beleg. „Titel“ in der Positionsart (oder
   eine Zeile nur mit Text) wird zur Zwischenüberschrift. Eine Rechnung ohne Positionen braucht
   „Netto gesamt“ – das wird dann eine Position.
@@ -783,6 +786,9 @@ bisherigen Programm:
   Dokument; das PDF trägt dazu einen Hinweis. Offen/bezahlt lässt sich ändern, korrigiert wird
   per Storno. Schon überfällige, offene melden sich nicht als „überfällig“. Die Archivprüfung
   lässt sie aus; im Protokoll steht, aus welcher Datei sie kamen.
+- **Stornos aus dem bisherigen Programm:** „Storniert = ja“ übernimmt eine Rechnung als
+  storniert; eine Stornorechnung nennt in „Storno zu Rechnung“ die stornierte – beide werden
+  miteinander verknüpft (wie ein Storno im Portal) und zählen nicht bei offenen Beträgen.
 
 ## Benachrichtigungen
 

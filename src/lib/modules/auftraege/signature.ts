@@ -20,6 +20,13 @@ export const INVOICE_STAGE_LABELS: Record<InvoiceStage, { label: string; tone: s
 
 export const isIssued = (stage: string) => stage !== 'entwurf';
 
+/**
+ * Altbestand aus einem anderen Programm – auch wenn er dort storniert war:
+ * nie im Portal ausgestellt, also ohne Prüfcode, Archiv und Signatur. Im
+ * Portal ausgestellte Rechnungen haben immer einen Prüfcode-Schlüssel.
+ */
+export const isLegacy = (i: { stage: string; verifyToken: string | null }) => i.stage === 'importiert' || (i.stage !== 'entwurf' && !i.verifyToken);
+
 export const PADES_LEVEL_LABELS: Record<string, string> = {
 	'B-B': 'PAdES-B-B (Basis)',
 	'B-T': 'PAdES-B-T (mit Zeitstempel)',

@@ -28,6 +28,7 @@ import {
 	spacedNumber
 } from '../offer';
 import type { SummaryColumn, SummaryReport } from '../summary';
+import { isLegacy } from '../signature';
 // Zertifizierung (Bureau Veritas, ISO 9001 und ISO 45001) – als Daten-URL mitgebaut, kein Pfad nötig
 import CERTIFICATE from './zertifikat.png?inline';
 import type { InvoiceDetail } from './invoices';
@@ -561,7 +562,7 @@ export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }
 		verifyBlock(doc, y, issued.verifyUrl, issued.issuedAt);
 	}
 
-	if (invoice.stage === 'importiert') {
+	if (isLegacy(invoice)) {
 		y += 6 * MM;
 		if (y + 12 > FOOTER_TOP - 4 * MM) {
 			doc.addPage();

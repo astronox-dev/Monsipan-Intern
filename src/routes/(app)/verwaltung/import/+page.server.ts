@@ -8,20 +8,20 @@ import { fail } from '@sveltejs/kit';
 import { sql } from 'drizzle-orm';
 import { can } from '$lib/permissions';
 import { db } from '$lib/server/db';
-import { customers, inquiries, invoices, orders } from '$lib/server/db/schema';
+import { customers, inquiries, invoices, offers, orders } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/guard';
 import { readTable, TableError, type TableCell } from '$lib/server/table';
 import { planImport, runImport, toText, type ImportPlan } from '$lib/modules/auftraege/server/transfer';
 import { suggestMapping, TRANSFER, TRANSFER_KINDS, type TransferKind, type TransferMapping } from '$lib/modules/auftraege/transfer';
 import type { Actions, PageServerLoad } from './$types';
 
-const count = async (table: typeof customers | typeof inquiries | typeof orders | typeof invoices) =>
+const count = async (table: typeof customers | typeof inquiries | typeof offers | typeof orders | typeof invoices) =>
 	Number((await db.select({ n: sql<number>`count(*)` }).from(table).get())?.n ?? 0);
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = requirePermission(locals, 'daten.export');
-	const [kunden, anfragen, auftraege, rechnungen] = await Promise.all([count(customers), count(inquiries), count(orders), count(invoices)]);
-	const counts: Record<TransferKind, number> = { kunden, anfragen, auftraege, rechnungen };
+	const [kunden, anfragen, angebote, auftraege, rechnungen] = await Promise.all([count(customers), count(inquiries), count(offers), count(orders), count(invoices)]);
+	const counts: Record<TransferKind, number> = { kunden, anfragen, angebote, auftraege, rechnungen };
 	return {
 		exports: TRANSFER_KINDS.filter((k) => can(user.role, TRANSFER[k].permission)).map((k) => ({ kind: k, label: TRANSFER[k].label, count: counts[k] })),
 		canImport: can(user.role, 'daten.import')

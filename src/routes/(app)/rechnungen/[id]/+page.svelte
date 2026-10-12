@@ -44,7 +44,7 @@
 		REVERSE_CHARGE_NOTE,
 		spacedNumber
 	} from '$lib/modules/auftraege/offer';
-	import { AUDIT_LABELS, CHECK_LABELS, INVOICE_STAGE_LABELS, PADES_LEVEL_LABELS, PROVIDER_LABELS, type CheckResult } from '$lib/modules/auftraege/signature';
+	import { AUDIT_LABELS, CHECK_LABELS, INVOICE_STAGE_LABELS, isLegacy, PADES_LEVEL_LABELS, PROVIDER_LABELS, type CheckResult } from '$lib/modules/auftraege/signature';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -53,6 +53,8 @@
 	const draft = $derived(invoice.stage === 'entwurf');
 	const cancelled = $derived(invoice.stage === 'storniert');
 	const isStorno = $derived(invoice.kind === 'storno');
+	/** Altbestand aus einem anderen Programm (auch storniert) – ohne Archiv und Signatur */
+	const legacy = $derived(isLegacy(invoice));
 	const st = $derived(INVOICE_STATUS_LABELS[invoice.status] ?? INVOICE_STATUS_LABELS.offen);
 	const stage = $derived(INVOICE_STAGE_LABELS[invoice.stage]);
 	const overdue = $derived(invoice.status === 'offen' && !cancelled && !isStorno && invoice.dueDate < data.today);
@@ -260,7 +262,7 @@
 </div>
 
 <!-- Altbestand aus einem anderen Programm -->
-{#if invoice.stage === 'importiert'}
+{#if legacy}
 	<section class="card mt-4 flex flex-wrap items-center gap-3 p-4 lg:p-5">
 		<History size={22} class="shrink-0 text-ink-3" aria-hidden="true" />
 		<p class="min-w-[14rem] flex-1">
@@ -277,7 +279,7 @@
 {/if}
 
 <!-- Digitale Signatur & Sicherheit -->
-{#if !draft && invoice.stage !== 'importiert'}
+{#if !draft && !legacy}
 	<section class="card mt-4 p-4 lg:p-5" aria-labelledby="h-security">
 		<div class="flex flex-wrap items-center justify-between gap-2">
 			<h2 id="h-security" class="flex items-center gap-2 text-lg"><ShieldCheck size={20} aria-hidden="true" />Digitale Signatur & Sicherheit</h2>

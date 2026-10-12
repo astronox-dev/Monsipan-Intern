@@ -11,7 +11,7 @@ vi.mock('$app/environment', () => ({ dev: true, browser: false, building: false,
 
 const { db, client, ensureDatabase } = await import('$lib/server/db');
 const { eq } = await import('drizzle-orm');
-const { customers, invoicePositions, invoices, orderPositions, orders, parties, users } = await import('$lib/server/db/schema');
+const { customers, invoicePositions, invoices, offerPositions, offers, orderPositions, orders, parties, users } = await import('$lib/server/db/schema');
 const { decodeText, parseCsv, readTable, writeTable } = await import('$lib/server/table');
 const { exportTable, planImport, runImport, toBool, toDate, toNumber } = await import('./transfer');
 const { suggestMapping } = await import('../transfer');
@@ -155,6 +155,46 @@ describe('Aufträge mit Positionen', () => {
 	});
 });
 
+describe('Angebote und Stornos', () => {
+	it('legt Angebote mit der Summe als Position an und hängt Aufträge daran', async () => {
+		const rows = table([
+			['Angebotsnummer', 'Angebotsdatum', 'BV', 'Kunde', 'Kunde PLZ', 'Stand', 'Netto gesamt'],
+			['24015', '11.04.2024', 'Busstellplätze Hornstein', 'Strabag AG', '1220', 'Ausstehend', '1780'],
+			['24016', '12.04.2024', 'Parkplatz K3', 'Porr Bau GmbH', '1100', 'Abgerechnet', '6960,50']
+		]);
+		const { result } = await runImport('angebote', rows.slice(1), mapFor('angebote', rows), { update: false }, user, 'angebote.csv');
+		expect(result.created).toBe(2);
+		const pending = await db.select().from(offers).where(eq(offers.number, '24015')).get();
+		const accepted = await db.select().from(offers).where(eq(offers.number, '24016')).get();
+		expect(pending).toMatchObject({ status: 'freigegeben', title: 'Busstellplätze Hornstein' });
+		expect(pending?.customerId).toBe((await db.select().from(customers).where(eq(customers.name, 'Strabag AG')).get())?.id);
+		expect(accepted?.status).toBe('angenommen');
+		expect((await db.select().from(offerPositions).where(eq(offerPositions.offerId, accepted!.id)).all()).map((l) => [l.quantity, l.unitPrice])).toEqual([[1, 6960.5]]);
+
+		const orderRows = table([
+			['Auftragsnummer', 'BV', 'Stand'],
+			['24016', 'Parkplatz K3', 'abgeschlossen']
+		]);
+		await runImport('auftraege', orderRows.slice(1), mapFor('auftraege', orderRows), { update: false }, user, 'auftraege.csv');
+		expect((await db.select().from(orders).where(eq(orders.number, '24016')).get())?.offerId).toBe(accepted!.id);
+	});
+
+	it('importiert stornierte Rechnungen mit ihrer Stornorechnung', async () => {
+		const rows = table([
+			['Rechnungsnummer', 'Rechnungsdatum', 'Kunde', 'Netto gesamt', 'Storniert', 'Storno zu Rechnung'],
+			['S-2', '05.05.2024', 'Strabag AG', '-500', 'nein', 'S-1'],
+			['S-1', '01.05.2024', 'Strabag AG', '500', 'ja', '']
+		]);
+		const { result } = await runImport('rechnungen', rows.slice(1), mapFor('rechnungen', rows), { update: false }, user, 'storno.csv');
+		expect(result.created).toBe(2);
+		const original = await db.select().from(invoices).where(eq(invoices.number, 'S-1')).get();
+		const storno = await db.select().from(invoices).where(eq(invoices.number, 'S-2')).get();
+		expect(original).toMatchObject({ stage: 'storniert', stornoId: storno!.id, cancelReason: 'Im bisherigen Programm storniert' });
+		expect(storno).toMatchObject({ stage: 'importiert', kind: 'storno', cancelsId: original!.id });
+		expect((await verifyInvoice(original!.id, { record: false }))?.result).toBe('storniert');
+	});
+});
+
 describe('Rechnungen als Altbestand', () => {
 	const rows = table([
 		['Rechnungsnummer', 'Rechnungsdatum', 'Fällig', 'Auftragsnummer', 'Kunde', 'USt', 'Bezahlt', 'Netto', 'Pos.-Nr.', 'Positionstext', 'Menge', 'Einheit', 'Einheitspreis'],
@@ -203,7 +243,8 @@ describe('Rechnungen als Altbestand', () => {
 		const back = suggestMapping('rechnungen', exported.header);
 		expect(Object.values(back).every((i) => i >= 0)).toBe(true);
 		const plan = await planImport('rechnungen', exported.rows, back, { update: false });
-		expect(plan.counts).toMatchObject({ neu: 0, fehler: 0, ueberspringen: 2 });
+		const all = (await db.select({ id: invoices.id }).from(invoices).all()).length;
+		expect(plan.counts).toMatchObject({ neu: 0, fehler: 0, ueberspringen: all });
 		const customersOut = await exportTable('kunden');
 		expect(Object.values(suggestMapping('kunden', customersOut.header)).every((i) => i >= 0)).toBe(true);
 	});

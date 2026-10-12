@@ -18,7 +18,7 @@
 
 	let { data, form } = $props();
 
-	const LIST: Record<TransferKind, string> = { kunden: '/kunden', anfragen: '/anfragen', auftraege: '/auftraege', rechnungen: '/rechnungen' };
+	const LIST: Record<TransferKind, string> = { kunden: '/kunden', anfragen: '/anfragen', angebote: '/angebote', auftraege: '/auftraege', rechnungen: '/rechnungen' };
 	const ACTION_LABELS = { neu: 'neu', aktualisieren: 'aktualisieren', ueberspringen: 'schon vorhanden – übersprungen', fehler: 'mit Fehlern – nicht übernommen' } as const;
 
 	let kind = $state<TransferKind>('kunden');
@@ -61,12 +61,12 @@
 
 <div class="mt-1 mb-5">
 	<h1 class="flex items-center gap-2 text-[2rem] leading-tight"><FileSpreadsheet size={26} aria-hidden="true" />Import und Export</h1>
-	<p class="max-w-3xl text-ink-2">Kunden, Anfragen, Aufträge und Rechnungen als Excel (.xlsx) oder CSV – zum Weitergeben, Sichern oder aus einem anderen Programm übernehmen.</p>
+	<p class="max-w-3xl text-ink-2">Kunden, Anfragen, Angebote, Aufträge und Rechnungen als Excel (.xlsx) oder CSV – zum Weitergeben, Sichern oder aus einem anderen Programm übernehmen.</p>
 </div>
 
 <section class="card p-4 lg:p-6" aria-labelledby="h-export">
 	<h2 id="h-export" class="flex items-center gap-2 text-xl"><Download size={20} aria-hidden="true" />Exportieren</h2>
-	<p class="mt-1 text-sm text-ink-2">Alle Einträge, Aufträge und Rechnungen mit einer Zeile je Position. Die Spaltenüberschriften passen genau zum Import.</p>
+	<p class="mt-1 text-sm text-ink-2">Alle Einträge – Angebote, Aufträge und Rechnungen mit einer Zeile je Position. Die Spaltenüberschriften passen genau zum Import.</p>
 	{#if data.exports.length}
 		<ul class="mt-3 divide-y divide-line rounded-xl border border-line">
 			{#each data.exports as e (e.kind)}
@@ -86,8 +86,8 @@
 	<section class="card mt-4 p-4 lg:p-6" aria-labelledby="h-import">
 		<h2 id="h-import" class="flex items-center gap-2 text-xl"><Upload size={20} aria-hidden="true" />Importieren</h2>
 		<p class="mt-1 max-w-3xl text-sm text-ink-2">
-			Aus Excel oder CSV, auch aus anderen Programmen: Die erste Zeile enthält die Spaltenüberschriften, danach je Zeile ein Eintrag – bei Aufträgen und
-			Rechnungen je Zeile eine Position (gleiche Nummer = derselbe Beleg). Reihenfolge: <strong>zuerst Kunden</strong>, dann Anfragen und Aufträge,
+			Aus Excel oder CSV, auch aus anderen Programmen: Die erste Zeile enthält die Spaltenüberschriften, danach je Zeile ein Eintrag – bei Angeboten, Aufträgen und
+			Rechnungen je Zeile eine Position (gleiche Nummer = derselbe Beleg). Reihenfolge: <strong>zuerst Kunden</strong>, dann Anfragen, Angebote und Aufträge,
 			<strong>zuletzt Rechnungen</strong> – so finden Rechnungen ihren Auftrag.
 		</p>
 
