@@ -1222,8 +1222,11 @@ Danach unter **Settings → Secrets and variables → Actions** hinterlegen:
 `ANDROID_KEY_ALIAS` (`lager`) und `ANDROID_KEY_PASSWORD`. Die Datei `lager.jks` gut
 aufbewahren – ohne sie sind keine Updates mehr möglich.
 
-**Icons:** `npm run app:icons` erzeugt die Symbole für Webseite und Android aus einer
-Zeichenvorschrift, ohne Zusatzpakete. `npm run app:sync` überträgt Adresse und
+**Icons:** `npm run app:icons` erzeugt `static/favicon.svg` und die Symbole für Webseite und
+Android aus einer Zeichenvorschrift, ohne Zusatzpakete: das kursive „M“ des Schriftzugs (als
+Umriss aus Barlow Semi Condensed ExtraBold Italic) auf dunkler Kachel mit dem schrägen gelben
+Streifen darunter. Der Schriftzug „MONSIPAN / PORTAL“ selbst steht in
+[`Logo.svelte`](src/lib/components/Logo.svelte). `npm run app:sync` überträgt Adresse und
 Offline-Seite ins Android-Projekt.
 
 ## Scanner einrichten
