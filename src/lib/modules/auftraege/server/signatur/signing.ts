@@ -253,8 +253,13 @@ export async function cancelInvoice(user: SessionUser, id: number, why: string, 
 			.update(invoices)
 			.set({ stage: 'storniert', cancelledAt: new Date(), cancelledBy: user.id, cancelReason: text, stornoId: storno.id, updatedAt: new Date() })
 			.where(and(eq(invoices.id, id), inArray(invoices.stage, ['ausgestellt', 'signiert', 'fehlgeschlagen'])));
+		// Welche Berichte frei werden, steht im Protokoll – wird die Stornorechnung (zum Testen) gelöscht, kommen sie zurück
+		const released = await tx.select({ id: dailyReports.id }).from(dailyReports).where(eq(dailyReports.invoiceId, id)).all();
 		await tx.update(dailyReports).set({ invoiceId: null }).where(eq(dailyReports.invoiceId, id));
-		await audit({ invoiceId: id, invoiceNumber: invoice.number, user, action: 'storniert', detail: { grund: text, stornorechnung: stornoNumber } }, tx);
+		await audit(
+			{ invoiceId: id, invoiceNumber: invoice.number, user, action: 'storniert', detail: { grund: text, stornorechnung: stornoNumber, tagesberichte: released.map((r) => r.id) } },
+			tx
+		);
 	});
 	forgetVerification(invoice.verifyToken);
 	return { ok: true, stornoId: storno.id, stage, warning };

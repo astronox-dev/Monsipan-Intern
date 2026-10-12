@@ -67,6 +67,7 @@
 	const CHECK_TONES = { ok: 'text-ok', danger: 'text-danger', warn: 'text-warn', muted: 'text-ink-3' } as const;
 
 	let deleteOpen = $state(false);
+	let deleteIssuedOpen = $state(false);
 	let issueOpen = $state(false);
 	let cancelOpen = $state(false);
 	let infoOpen = $state(false);
@@ -434,6 +435,57 @@
 		<form method="POST" action="?/delete" class="mt-5 flex justify-end gap-2" use:enhance>
 			<button type="button" class="btn btn-ghost" onclick={() => (deleteOpen = false)}>Abbrechen</button>
 			<button class="btn btn-primary"><Trash size={18} aria-hidden="true" />Löschen</button>
+		</form>
+	</Dialog>
+{/if}
+
+{#if data.canDeleteIssued}
+	<div class="mt-4 flex">
+		<button type="button" class="btn btn-ghost ml-auto text-danger hover:bg-danger-soft" onclick={() => (deleteIssuedOpen = true)}>
+			<Trash size={18} aria-hidden="true" />{isStorno ? 'Stornorechnung löschen' : 'Rechnung löschen'} (Test)
+		</button>
+	</div>
+	<Dialog bind:open={deleteIssuedOpen} title="{label} löschen?">
+		<div class="space-y-2 text-ink-2">
+			<p>
+				<span class="font-medium text-danger">Nur zum Testen.</span> Die ausgestellte {invoiceLabel(invoice.kind)} wird samt Archivdateien und Signatur gelöscht; die Löschung
+				steht mit Begründung im Protokoll. Rechnungen, die an Kunden gegangen sind, sind aufzubewahren – dafür stornieren.
+			</p>
+			{#if isStorno && invoice.cancelsId}
+				<p>
+					Die {invoiceLabel(invoice.cancelsKind ?? 'rechnung')} {spacedNumber(invoice.cancelsNumber ?? '')} gilt danach wieder (nicht mehr storniert), ihre Tagesberichte hängen wieder
+					an ihr.
+				</p>
+			{:else if invoice.stornoId}
+				<p>Die Stornorechnung {spacedNumber(invoice.stornoNumber ?? '')} wird mitgelöscht.</p>
+			{:else if invoice.reports.length}
+				<p>Ihre Tagesberichte sind danach wieder abzurechnen.</p>
+			{/if}
+		</div>
+		<form
+			method="POST"
+			action="?/deleteIssued"
+			class="mt-4 space-y-4"
+			use:enhance={() => {
+				busy = 'deleteIssued';
+				return async ({ result, update }) => {
+					busy = '';
+					if (result.type === 'redirect') {
+						deleteIssuedOpen = false;
+						toast.success('Gelöscht');
+					}
+					await update();
+				};
+			}}
+		>
+			<label class="block">
+				<span class="field-label">Grund</span>
+				<input class="input" name="grund" required minlength="3" maxlength="500" placeholder="z. B. Testrechnung" />
+			</label>
+			<div class="flex justify-end gap-2">
+				<button type="button" class="btn btn-ghost" onclick={() => (deleteIssuedOpen = false)}>Abbrechen</button>
+				<button class="btn btn-primary" disabled={busy === 'deleteIssued'}><Trash size={18} aria-hidden="true" />Endgültig löschen</button>
+			</div>
 		</form>
 	</Dialog>
 {/if}

@@ -22,6 +22,7 @@ const { setFetcher } = await import('./net');
 const { makeCert, tsaReply } = await import('./testkit');
 const { ARCHIVE_DIR, readArchiveFile } = await import('./archive');
 const { inspectPdf } = await import('./verify-pdf');
+const { deleteIssuedInvoice } = await import('./removal');
 
 const user: SessionUser = { id: 0, username: 'test', email: null, firstName: 'Test', lastName: 'Büro', role: 'admin', partyId: null, owner: false, mustChangePassword: false };
 const ORIGIN = 'https://portal.test';
@@ -273,6 +274,55 @@ describe('Storno', () => {
 		expect((await verifyInvoice(id))?.result).toBe('storniert');
 		expect((await cancelInvoice(user, id, 'Nochmal', ORIGIN)).ok).toBe(false);
 		expect((await cancelInvoice(user, result.stornoId, 'Storno vom Storno', ORIGIN)).ok).toBe(false);
+	});
+});
+
+describe('Löschen zum Testen', () => {
+	const triggerCount = async () => Number((await client.execute("select count(*) n from sqlite_master where type = 'trigger'")).rows[0].n);
+
+	it('löscht eine signierte Rechnung samt Archiv und lässt die Sperren stehen', async () => {
+		await saveSignatureSettings({ ...SIGNATURE_DEFAULTS, enabled: true, level: 'B-B' });
+		const { id, number } = await draft();
+		await issueInvoice(user, id, ORIGIN);
+		const files = await db.select().from(invoiceFiles).where(eq(invoiceFiles.invoiceId, id)).all();
+		const before = await triggerCount();
+		expect((await deleteIssuedInvoice(user, id, '')).ok).toBe(false);
+		expect(await deleteIssuedInvoice(user, id, 'Testrechnung')).toEqual({ ok: true, deleted: [number], restoredId: null });
+		expect(await db.select().from(invoices).where(eq(invoices.id, id)).get()).toBeUndefined();
+		expect(await db.select().from(invoiceFiles).where(eq(invoiceFiles.invoiceId, id)).all()).toEqual([]);
+		expect(await db.select().from(invoiceSignatures).where(eq(invoiceSignatures.invoiceId, id)).all()).toEqual([]);
+		for (const f of files) expect(readArchiveFile(f.fileName)).toBeNull();
+		expect(await triggerCount()).toBe(before);
+		const last = await db.select().from(invoiceAudit).where(eq(invoiceAudit.invoiceId, id)).all();
+		expect(last.at(-1)?.action).toBe('geloescht_ausgestellt');
+		expect((await verifyAuditChain()).ok).toBe(true);
+		// Andere ausgestellte bleiben gesperrt
+		const other = await draft();
+		await issueInvoice(user, other.id, ORIGIN);
+		expect(await failure(db.delete(invoices).where(eq(invoices.id, other.id)))).toMatch(/nicht löschen/);
+	});
+
+	it('hebt beim Löschen der Stornorechnung das Storno auf', async () => {
+		await saveSignatureSettings({ ...SIGNATURE_DEFAULTS, enabled: true, level: 'B-B' });
+		const { id } = await draft();
+		await issueInvoice(user, id, ORIGIN);
+		const cancelled = await cancelInvoice(user, id, 'Versehen', ORIGIN);
+		if (!cancelled.ok) throw new Error(cancelled.message);
+		const result = await deleteIssuedInvoice(user, cancelled.stornoId, 'Storno war ein Test');
+		expect(result).toMatchObject({ ok: true, restoredId: id });
+		expect(await db.select().from(invoices).where(eq(invoices.id, id)).get()).toMatchObject({ stage: 'signiert', stornoId: null, cancelledAt: null, cancelReason: null });
+		expect((await verifyInvoice(id))?.result).toBe('gueltig');
+	});
+
+	it('nimmt mit der Rechnung ihre Stornorechnung mit', async () => {
+		await saveSignatureSettings({ ...SIGNATURE_DEFAULTS, enabled: false });
+		const { id } = await draft();
+		await issueInvoice(user, id, ORIGIN);
+		const cancelled = await cancelInvoice(user, id, 'Versehen', ORIGIN);
+		if (!cancelled.ok) throw new Error(cancelled.message);
+		const result = await deleteIssuedInvoice(user, id, 'Alles nur Test');
+		expect(result.ok && result.deleted).toHaveLength(2);
+		expect(await db.select().from(invoices).where(eq(invoices.id, cancelled.stornoId)).get()).toBeUndefined();
 	});
 });
 

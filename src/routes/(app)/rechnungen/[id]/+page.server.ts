@@ -9,6 +9,7 @@ import { isValidIsoDate, today } from '$lib/modules/stunden/week';
 import { notifyInvoice } from '$lib/modules/auftraege/server/notify';
 import { audit, auditTrail } from '$lib/modules/auftraege/server/signatur/audit';
 import { cancelInvoice, issueInvoice, signIssued } from '$lib/modules/auftraege/server/signatur/signing';
+import { deleteIssuedInvoice } from '$lib/modules/auftraege/server/signatur/removal';
 import { verifyInvoice } from '$lib/modules/auftraege/server/signatur/verification';
 import { signatureSettings, verifyBase } from '$lib/modules/auftraege/server/signatur/settings';
 import { QUALIFICATION_LABELS, type Qualification } from '$lib/modules/auftraege/server/signatur/cert';
@@ -43,6 +44,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		canEdit: draft && isOpen && invoice.kind !== 'storno' && can(user.role, 'rechnungen.bearbeiten'),
 		canPay: can(user.role, 'rechnungen.bezahlt') && invoice.kind !== 'storno' && invoice.stage !== 'storniert',
 		canDelete: draft && isOpen && can(user.role, 'rechnungen.loeschen'),
+		canDeleteIssued: !draft && can(user.role, 'rechnungen.loeschen.ausgestellt'),
 		canIssue: issuable,
 		canSign: settings.enabled && can(user.role, 'rechnungen.ausstellen') && ['ausgestellt', 'fehlgeschlagen', 'signierung'].includes(invoice.stage),
 		canCancel: can(user.role, 'rechnungen.stornieren') && invoice.kind !== 'storno' && ['ausgestellt', 'signiert', 'fehlgeschlagen'].includes(invoice.stage),
@@ -128,6 +130,16 @@ export const actions: Actions = {
 		const result = await cancelInvoice(user, invoice.id, reason, url.origin);
 		if (!result.ok) return fail(400, { message: result.message });
 		redirect(303, `/rechnungen/${result.stornoId}`);
+	},
+
+	/** Ausgestellte Rechnung oder Stornorechnung löschen – nur zum Testen */
+	deleteIssued: async ({ params, request, locals }) => {
+		const { user, invoice } = await open(Number(params.id), locals);
+		if (!can(user.role, 'rechnungen.loeschen.ausgestellt')) return fail(403, { message: 'Dafür fehlt dir die Berechtigung.' });
+		const result = await deleteIssuedInvoice(user, invoice.id, String((await request.formData()).get('grund') ?? ''));
+		if (!result.ok) return fail(400, { message: result.message });
+		if (result.restoredId) redirect(303, `/rechnungen/${result.restoredId}`);
+		redirect(303, invoice.orderId && can(user.role, 'auftraege.sehen') ? `/auftraege/${invoice.orderId}` : '/rechnungen');
 	},
 
 	delete: async ({ params, locals }) => {

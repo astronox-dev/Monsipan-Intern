@@ -62,6 +62,8 @@ export const AUDIT_LABELS: Record<string, string> = {
 	erstellt: 'Entwurf angelegt',
 	geaendert: 'Entwurf geändert',
 	geloescht: 'Entwurf gelöscht',
+	geloescht_ausgestellt: 'Ausgestellte Rechnung gelöscht (Test)',
+	storno_aufgehoben: 'Storno aufgehoben – Stornorechnung gelöscht',
 	ausgestellt: 'Endgültig ausgestellt',
 	archiviert: 'Original archiviert',
 	signierung: 'Signierung gestartet',

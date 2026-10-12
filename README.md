@@ -597,6 +597,13 @@ bzw. *Signierung fehlgeschlagen*; danach jederzeit *Storniert*.
   weitere Rechnung zum Auftrag. Die Rechnung bleibt unverändert archiviert und gilt als
   storniert; ihre Tagesberichte sind wieder frei für eine neue (Korrektur-)Rechnung.
   Stornierte Rechnungen und Stornorechnungen zählen nicht bei offenen Beträgen und Mahnungen.
+- **Löschen zum Testen:** Mit dem Recht „Löschen → Alle“ (von Haus aus nur Admin) lassen
+  sich auch ausgestellte Rechnungen und Stornorechnungen löschen – mit Grund, samt
+  Archivdateien und Signatur. Die Sperren werden dafür nur innerhalb der Lösch-Transaktion
+  abgelegt und danach wieder angelegt; die Löschung steht im Protokoll. Mit einer Rechnung geht
+  ihre Stornorechnung mit; wird nur die Stornorechnung gelöscht, gilt die Rechnung wieder
+  (nicht mehr storniert) und ihre Tagesberichte hängen wieder an ihr. Für echte, an Kunden
+  gegangene Rechnungen ist das nicht gedacht – die sind aufzubewahren und werden storniert.
 - **Bisherige Rechnungen** (vor diesem Stand) sind als **Entwurf** übernommen – Inhalt
   unverändert, weiter bearbeitbar und jederzeit ausstellbar. Nichts wurde automatisch
   ausgestellt oder neu erzeugt.
@@ -650,7 +657,7 @@ Echtheit der Herkunft, Unversehrtheit und Lesbarkeit müssen gesichert sein.
 Datenbank stehen Prüfsumme, Zeitpunkt und Verfahren der Signatur sowie eine Prüfsumme der
 Rechnungsdaten – so fällt auch eine Änderung an der Datenbank vorbei auf. Aufbewahrung
 mindestens sieben Jahre ab Ende des Rechnungsjahres (§ 132 BAO), einstellbar bis 50 Jahre;
-ausgestellte Rechnungen werden nie gelöscht. **Jede Nacht** prüft die Wartung alle
+ausgestellte Rechnungen werden nicht gelöscht (außer von Hand zum Testen, siehe oben). **Jede Nacht** prüft die Wartung alle
 ausgestellten Rechnungen (Datei, Prüfsumme, Daten, Signatur) und die **Hash-Kette des
 Protokolls** (jeder Eintrag enthält den Hash des vorigen); Fehler gehen als
 Benachrichtigung „Archivprüfung mit Fehlern“ an Admin und GF.

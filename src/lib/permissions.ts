@@ -135,6 +135,8 @@ export const DEFAULT_PERMISSIONS = {
 	'rechnungen.stornieren': ['admin', 'geschaeftsfuehrer', 'buchhaltung'],
 	'rechnungen.bezahlt': ['admin', 'geschaeftsfuehrer', 'buchhaltung'],
 	'rechnungen.loeschen': ['admin', 'geschaeftsfuehrer'],
+	// Auch ausgestellte und Stornorechnungen – nur zum Testen, Archiv und Signatur gehen mit
+	'rechnungen.loeschen.ausgestellt': ['admin'],
 
 	// Kunden
 	'kunden.sehen': BUERO,
@@ -336,7 +338,12 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 			{ key: 'rechnungen.stornieren', label: 'Stornieren', hint: 'Mit Stornorechnung' },
 			{ key: 'rechnungen.bezahlt', label: 'Bezahlt / wieder offen' }
 		],
-		remove: { all: 'rechnungen.loeschen', hint: 'Nur Entwürfe' }
+		remove: {
+			own: 'rechnungen.loeschen',
+			all: 'rechnungen.loeschen.ausgestellt',
+			ownLabel: 'Nur Entwürfe',
+			hint: 'Alle: auch ausgestellte und Stornorechnungen – nur zum Testen'
+		}
 	},
 	{
 		key: 'kunden',
