@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { companyDomain, guessFromEmail } from './inquiry';
+import { companyDomain, guessFromEmail, readWebsiteInquiry, websiteInquiryText } from './inquiry';
 
 describe('guessFromEmail', () => {
 	it('liest Kopfzeilen aus Outlook', () => {
@@ -62,5 +62,35 @@ describe('companyDomain', () => {
 		expect(companyDomain('max@Strabag.com')).toBe('strabag.com');
 		expect(companyDomain('max@gmail.com')).toBe('');
 		expect(companyDomain('kaputt')).toBe('');
+	});
+});
+
+describe('Kontaktformular der Webseite', () => {
+	const form = { name: ' Max  Muster ', company: 'Gemeinde Schwechat', email: 'max@schwechat.gv.at', phone: '01 234 56', topic: 'Bodenmarkierung', message: 'Guten Tag,\r\nbitte um ein Angebot.' };
+
+	it('prüft und bereinigt die Felder', () => {
+		const w = readWebsiteInquiry(form);
+		expect(w).toEqual({ ...form, name: 'Max Muster', message: 'Guten Tag,\nbitte um ein Angebot.' });
+		expect(readWebsiteInquiry({ ...form, email: 'kaputt' })).toMatch(/E-Mail/);
+		expect(readWebsiteInquiry({ ...form, message: '  ' })).toMatch(/Nachricht/);
+		expect(readWebsiteInquiry({ ...form, name: 42 })).toMatch(/kein Text/);
+		expect(readWebsiteInquiry(null)).toBe('Keine Daten');
+		// Optionales darf fehlen
+		expect(readWebsiteInquiry({ name: 'A', email: 'a@b.at', message: 'x' })).toMatchObject({ company: '', phone: '', topic: '' });
+	});
+
+	it('Betreff aus dem Thema, sonst aus der ersten Zeile', () => {
+		const w = readWebsiteInquiry(form);
+		if (typeof w === 'string') throw new Error(w);
+		const t = websiteInquiryText(w);
+		expect(t.subject).toBe('Bodenmarkierung');
+		expect(t.body).toBe(
+			'Anfrage über das Kontaktformular auf monsipan.at\nName: Max Muster\nFirma: Gemeinde Schwechat\nE-Mail: max@schwechat.gv.at\nTelefon: 01 234 56\nThema: Bodenmarkierung\n\nGuten Tag,\nbitte um ein Angebot.'
+		);
+		const long = 'Wir brauchen für die neue Wohnhausanlage in der Hauptstraße eine komplette Markierung der Tiefgarage mit Stellplatznummern';
+		expect(websiteInquiryText({ ...w, topic: 'Sonstiges', message: `\n${long}` }).subject).toBe(
+			'Wir brauchen für die neue Wohnhausanlage in der Hauptstraße eine komplette …'
+		);
+		expect(websiteInquiryText({ ...w, topic: '', company: '', phone: '' }).body).not.toMatch(/Firma|Telefon|Thema/);
 	});
 });

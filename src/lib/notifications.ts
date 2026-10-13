@@ -34,7 +34,7 @@ export const NOTIFICATION_EVENTS = {
 	'anfrage.neu': {
 		label: 'Neue Anfrage',
 		section: 'Auftragsmanagement',
-		hint: 'Eine E-Mail wurde als Anfrage angelegt',
+		hint: 'Eine E-Mail wurde als Anfrage angelegt oder kam über das Kontaktformular der Webseite',
 		requires: 'anfragen.sehen',
 		defaults: ['geschaeftsfuehrer', 'bauleiter']
 	},

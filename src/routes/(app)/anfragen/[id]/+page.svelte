@@ -38,6 +38,7 @@
 		return { label: 'Neu', tone: 'badge-info' };
 	});
 	const author = $derived([inquiry.creatorFirst, inquiry.creatorLast].filter(Boolean).join(' '));
+	const fromWebsite = $derived(inquiry.source === 'webseite');
 </script>
 
 <svelte:head><title>{pageTitle(inquiry.subject || 'Anfrage')}</title></svelte:head>
@@ -50,7 +51,9 @@
 	<div class="min-w-0">
 		<h1 class="text-[2rem] leading-tight">{inquiry.subject || 'Anfrage ohne Betreff'}</h1>
 		<p class="text-ink-2">
-			Eingang {dateLabel(inquiry.receivedOn)}{inquiry.senderName || inquiry.senderEmail ? ` · von ${inquiry.senderName || inquiry.senderEmail}` : ''}
+			Eingang {dateLabel(inquiry.receivedOn)}{inquiry.senderName || inquiry.senderEmail ? ` · von ${inquiry.senderName || inquiry.senderEmail}` : ''}{inquiry.senderCompany
+				? ` (${inquiry.senderCompany})`
+				: ''}{fromWebsite ? ' · über die Webseite' : ''}
 		</p>
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
@@ -79,7 +82,7 @@
 	}}
 >
 	<section class="card p-4 lg:p-5">
-		<h2 class="flex items-center gap-2 text-lg"><Mail size={18} aria-hidden="true" />E-Mail</h2>
+		<h2 class="flex items-center gap-2 text-lg"><Mail size={18} aria-hidden="true" />{fromWebsite ? 'Nachricht über die Webseite' : 'E-Mail'}</h2>
 		{#if data.canEdit}
 			<textarea class="textarea mt-3 min-h-[24rem] font-mono text-[0.8125rem] leading-relaxed" name="text" maxlength={MAX_INQUIRY_TEXT} value={inquiry.body}></textarea>
 		{:else}
@@ -101,8 +104,8 @@
 						<input class="input" name="name" maxlength="160" value={inquiry.senderName} />
 					</label>
 					<label class="block">
-						<span class="field-label">Eingang</span>
-						<input class="input num" type="date" name="eingang" required value={inquiry.receivedOn} />
+						<span class="field-label">Firma</span>
+						<input class="input" name="firma" maxlength="160" value={inquiry.senderCompany} />
 					</label>
 					<label class="block">
 						<span class="field-label">E-Mail-Adresse</span>
@@ -111,6 +114,10 @@
 					<label class="block">
 						<span class="field-label">Telefon</span>
 						<input class="input" name="telefon" maxlength="60" value={inquiry.senderPhone} />
+					</label>
+					<label class="block">
+						<span class="field-label">Eingang</span>
+						<input class="input num" type="date" name="eingang" required value={inquiry.receivedOn} />
 					</label>
 				</div>
 				{#if inquiry.senderEmail || inquiry.senderPhone}
@@ -153,7 +160,9 @@
 			</div>
 		</fieldset>
 		{#if data.canEdit}<button class="btn btn-secondary mt-4" disabled={busy}>Speichern</button>{/if}
-		<p class="mt-4 text-[0.8125rem] text-ink-3">Angelegt {dateTime(inquiry.createdAt)}{author ? ` von ${author}` : ''}.</p>
+		<p class="mt-4 text-[0.8125rem] text-ink-3">
+			{fromWebsite ? `Über das Kontaktformular der Webseite eingegangen am ${dateTime(inquiry.createdAt)}.` : `Angelegt ${dateTime(inquiry.createdAt)}${author ? ` von ${author}` : ''}.`}
+		</p>
 	</section>
 </form>
 
@@ -241,7 +250,7 @@
 				await update({ reset: false });
 			}}
 		>
-			<CustomerFields customer={{ name: inquiry.senderName, email: inquiry.senderEmail, phone: inquiry.senderPhone, contact: inquiry.senderName }} />
+			<CustomerFields customer={{ name: inquiry.senderCompany || inquiry.senderName, email: inquiry.senderEmail, phone: inquiry.senderPhone, contact: inquiry.senderName }} />
 			{#if form && 'customerMessage' in form && form.customerMessage}<p class="field-error" role="alert">{form.customerMessage}</p>{/if}
 			<div class="flex justify-end gap-2">
 				<button type="button" class="btn btn-ghost" onclick={() => (customerOpen = false)}>Abbrechen</button>

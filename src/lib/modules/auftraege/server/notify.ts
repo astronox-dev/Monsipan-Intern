@@ -15,11 +15,16 @@ const background = (label: string, task: () => Promise<void>) => {
 };
 const join = (...parts: (string | null | undefined | false)[]) => parts.filter(Boolean).join(' · ');
 
-export function notifyInquiry(inquiry: { id: number; subject: string; senderName: string; senderEmail: string }, actorId: number) {
+/** Neue Anfrage – von Hand angelegt (`actorId`) oder über das Kontaktformular der Webseite */
+export function notifyInquiry(
+	inquiry: { id: number; subject: string; senderName: string; senderEmail: string; senderCompany?: string; source?: string },
+	actorId?: number
+) {
+	const what = inquiry.source === 'webseite' ? 'Neue Anfrage über die Webseite' : 'Neue Anfrage';
 	notify({
 		event: 'anfrage.neu',
-		title: inquiry.subject ? `Neue Anfrage: ${inquiry.subject}` : 'Neue Anfrage',
-		body: inquiry.senderName || inquiry.senderEmail,
+		title: inquiry.subject ? `${what}: ${inquiry.subject}` : what,
+		body: join(inquiry.senderName || inquiry.senderEmail, inquiry.senderCompany),
 		url: `/anfragen/${inquiry.id}`,
 		actorId
 	});

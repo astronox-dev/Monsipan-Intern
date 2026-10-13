@@ -215,6 +215,10 @@ export const inquiries = sqliteTable(
 		senderName: text('sender_name').notNull().default(''),
 		senderEmail: text('sender_email').notNull().default(''),
 		senderPhone: text('sender_phone').notNull().default(''),
+		/** Firma oder Gemeinde, wenn der Absender sie angibt (Kontaktformular der Webseite) */
+		senderCompany: text('sender_company').notNull().default(''),
+		/** Woher: leer = von Hand (eingefügte E-Mail), „webseite" = Kontaktformular auf monsipan.at */
+		source: text('source').notNull().default(''),
 		customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
 		/** Wo gearbeitet werden soll – geht ins Angebot */
 		location: text('location').notNull().default(''),

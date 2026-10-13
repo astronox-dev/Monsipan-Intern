@@ -11,9 +11,10 @@ import { backupPath, MAX_UPLOAD_BYTES, restoreFromFile, RestoreError, stageUploa
 import { mailInfo, sendMail, testMail } from '$lib/server/mail';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { letterheadPath, LetterheadError, storeLetterhead } from '$lib/server/letterhead';
+import { disconnectWebsite, newWebsiteKey, websiteLink } from '$lib/modules/auftraege/server/website';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const me = requirePermission(locals, 'einstellungen.sehen');
 	const [settings, counts] = await Promise.all([
 		getSettings(),
@@ -33,6 +34,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		settings,
 		letterhead: !!letterheadPath(settings.letterheadFile),
 		mail: mailInfo(),
+		// Kontaktformular der Webseite: Adresse des Portals und Schlüssel für deren Stack
+		website: { portalUrl: url.origin, link: await websiteLink() },
 		myEmail: me.email,
 		resetCounts: await dataCounts(me.id),
 		resetPhrase: RESET_PHRASE,
@@ -48,6 +51,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
+	/** Kontaktformular der Webseite verbinden bzw. neuen Schlüssel erzeugen (der alte gilt dann nicht mehr) */
+	websiteKey: async ({ locals }) => {
+		requirePermission(locals, 'einstellungen.bearbeiten');
+		await newWebsiteKey();
+		return { saved: 'websiteKey' };
+	},
+	websiteOff: async ({ locals }) => {
+		requirePermission(locals, 'einstellungen.bearbeiten');
+		await disconnectWebsite();
+		return { saved: 'websiteOff' };
+	},
 	/** Vorlagen für Angebote: Einleitung, Schlusstext, Fußzeile */
 	offerTexts: async ({ request, locals }) => {
 		requirePermission(locals, 'einstellungen.bearbeiten');

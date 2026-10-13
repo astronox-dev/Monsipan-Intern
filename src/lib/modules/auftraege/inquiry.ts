@@ -116,3 +116,54 @@ export function companyDomain(email: string): string {
 	const domain = email.split('@')[1]?.trim().toLowerCase() ?? '';
 	return domain && !FREEMAIL.has(domain) ? domain : '';
 }
+
+/* --------------------------------------------- Kontaktformular der Webseite */
+
+/** Was das Kontaktformular auf monsipan.at schickt (kontakt.php im Repo Monsipan-Webseite) */
+export interface WebsiteInquiry {
+	name: string;
+	company: string;
+	email: string;
+	phone: string;
+	topic: string;
+	message: string;
+}
+
+const WEBSITE_LIMITS: Record<keyof WebsiteInquiry, number> = { name: 120, company: 160, email: 160, phone: 60, topic: 80, message: 5000 };
+
+/** Die Daten prüfen – gibt bei einem Fehler den Grund als Text zurück */
+export function readWebsiteInquiry(raw: unknown): WebsiteInquiry | string {
+	if (!raw || typeof raw !== 'object') return 'Keine Daten';
+	const r = raw as Record<string, unknown>;
+	const out = {} as WebsiteInquiry;
+	for (const [key, max] of Object.entries(WEBSITE_LIMITS) as [keyof WebsiteInquiry, number][]) {
+		const v = r[key] ?? '';
+		if (typeof v !== 'string') return `${key} ist kein Text`;
+		const text = v.replace(/\r\n?/g, '\n').replace(/\0/g, '').trim().slice(0, max);
+		// Bis auf die Nachricht ist alles einzeilig
+		out[key] = key === 'message' ? text : clean(text);
+	}
+	if (!out.name) return 'Name fehlt';
+	if (!out.message) return 'Nachricht fehlt';
+	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.email)) return 'E-Mail-Adresse fehlt oder stimmt nicht';
+	return out;
+}
+
+/** Betreff und Text der Anfrage – der Text wie die E-Mail, die das Formular ans Büro schickt */
+export function websiteInquiryText(w: WebsiteInquiry): { subject: string; body: string } {
+	const firstLine = w.message.split('\n').find((l) => l.trim()) ?? '';
+	const short = firstLine.length > 80 ? `${clean(firstLine).slice(0, 80).replace(/\s+\S*$/, '')} …` : clean(firstLine);
+	const subject = w.topic && w.topic !== 'Sonstiges' ? w.topic : short || 'Anfrage über die Webseite';
+	const rows: [string, string][] = [
+		['Name', w.name],
+		['Firma', w.company],
+		['E-Mail', w.email],
+		['Telefon', w.phone],
+		['Thema', w.topic]
+	];
+	const head = rows
+		.filter(([, v]) => v)
+		.map(([k, v]) => `${k}: ${v}`)
+		.join('\n');
+	return { subject, body: `Anfrage über das Kontaktformular auf monsipan.at\n${head}\n\n${w.message}` };
+}

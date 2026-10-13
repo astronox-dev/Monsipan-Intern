@@ -425,6 +425,17 @@ die E-Mail daneben. Ist das Angebot angenommen, ist die Anfrage **erledigt** und
 aus der Liste der offenen. Kommt kein Angebot zustande, legt man sie mit **Als erledigt
 ablegen** ab. Erkannt wird nur im Browser – die E-Mail geht an keinen fremden Dienst.
 
+**Anfragen von der Webseite:** Das Kontaktformular auf monsipan.at (Repo
+[Monsipan-Webseite](https://github.com/mstreicher98/Monsipan-Webseite)) legt jede Anfrage
+zusätzlich zur E-Mail ans Büro selbst hier an – mit Name, Firma, E-Mail, Telefon, Thema (als
+Betreff) und Nachricht, in der Liste mit „Webseite“ markiert; der Kunde wird wie oben über die
+E-Mail-Adresse gesucht, Glocke, Push und Info-Mail laufen über „Neue Anfrage“. Einrichten unter
+**Verwaltung → Einstellungen → Kontaktformular der Webseite**: **Verbindung einrichten** zeigt
+`PORTAL_URL` und `PORTAL_KEY` – beide im Stack der Webseite eintragen und ihn neu laden. Die
+Webseite schickt die Anfrage als JSON an `POST /api/anfragen/webseite` mit dem Schlüssel als
+`Authorization: Bearer …`; **Neuer Schlüssel** macht den alten sofort ungültig, **Trennen** sperrt
+ganz. Bewerbungen gehen nur per E-Mail.
+
 **Kunden** (`/kunden`): Anschrift, UID-Nummer, E-Mail, Ansprechpartner und Telefon – einmal
 anlegen, im Angebot auswählen. Ein neuer Kunde lässt sich auch direkt beim Schreiben eines
 Angebots anlegen. Kunden, die schon in Angeboten stehen, werden ausgeblendet statt gelöscht.

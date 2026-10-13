@@ -12,6 +12,10 @@
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import Globe from '@lucide/svelte/icons/globe';
+	import Copy from '@lucide/svelte/icons/copy';
+	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+	import Unplug from '@lucide/svelte/icons/unplug';
 	import { goto, invalidateAll } from '$app/navigation';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
@@ -80,6 +84,15 @@
 
 	const mb = (b: number) => `${(b / 1024 / 1024).toLocaleString('de-AT', { maximumFractionDigits: 1 })} MB`;
 
+	async function copy(value: string, what: string) {
+		try {
+			await navigator.clipboard.writeText(value);
+			toast.success(`${what} kopiert`);
+		} catch {
+			toast.info('Kopieren ging nicht – bitte im Feld markieren und kopieren.');
+		}
+	}
+
 	const done =
 		(key: string, ok: (d: Record<string, unknown>) => string) =>
 		() => {
@@ -97,7 +110,7 @@
 
 <div class="pt-2 pb-5">
 	<h1 class="text-[2rem] leading-tight">Einstellungen</h1>
-	<p class="text-ink-2">E-Mail-Versand, Vorlagen und Datensicherung.</p>
+	<p class="text-ink-2">E-Mail-Versand, Kontaktformular der Webseite, Vorlagen und Datensicherung.</p>
 	{#if !canEdit}<p class="mt-2 rounded-xl bg-surface-2 px-3 py-2 text-sm text-ink-2">Nur zum Ansehen – ändern darf, wer Einstellungen bearbeiten darf.</p>{/if}
 </div>
 
@@ -122,6 +135,47 @@
 			<input id="test-to" name="to" type="email" class="input flex-1" placeholder="E-Mail-Adresse" value={data.myEmail ?? ''} required />
 			<button class="btn btn-secondary" disabled={busy === 'mail'}>Test senden</button>
 		</form>
+	</section>
+
+	<section class="card p-4 lg:col-span-2 lg:p-6" aria-labelledby="h-website">
+		<h2 id="h-website" class="flex items-center gap-2 text-xl"><Globe size={20} aria-hidden="true" />Kontaktformular der Webseite</h2>
+		<p class="mt-1 text-sm text-ink-2">
+			Anfragen über das Kontaktformular auf monsipan.at landen automatisch unter <a href="/anfragen" class="font-medium text-ink underline underline-offset-2">Anfragen</a> –
+			zusätzlich zur E-Mail ans Büro. Bewerbungen gehen weiter nur per E-Mail.
+		</p>
+		{#if data.website.link}
+			{@const link = data.website.link}
+			<p class="mt-3 flex items-center gap-2 text-ok"><CircleCheck size={18} aria-hidden="true" /><span class="font-medium">Verbunden</span></p>
+			<p class="mt-1 text-sm text-ink-3">{link.lastAt ? `Zuletzt eine Anfrage eingegangen: ${dateTime(new Date(link.lastAt))}` : 'Noch keine Anfrage eingegangen.'}</p>
+			<div class="mt-4 grid max-w-3xl gap-3">
+				{#each [{ name: 'PORTAL_URL', value: data.website.portalUrl }, { name: 'PORTAL_KEY', value: link.key }] as v (v.name)}
+					<div>
+						<label class="field-label" for="web-{v.name}"><code>{v.name}</code></label>
+						<div class="flex gap-2">
+							<input id="web-{v.name}" class="input flex-1 font-mono text-[0.8125rem]" readonly value={v.value} onfocus={(e) => e.currentTarget.select()} />
+							<button type="button" class="btn btn-secondary btn-icon" title="Kopieren" aria-label="{v.name} kopieren" onclick={() => copy(v.value, v.name)}><Copy size={18} /></button>
+						</div>
+					</div>
+				{/each}
+			</div>
+			<p class="mt-3 max-w-3xl text-sm text-ink-2">
+				Diese beiden Werte in Portainer im Stack der Webseite unter „Environment variables" eintragen und den Stack neu laden („Update the stack").
+				Danach eine Testanfrage über die Webseite schicken – sie steht gleich unter Anfragen.
+			</p>
+			<div class="mt-4 flex flex-wrap gap-2">
+				<form method="POST" action="?/websiteKey" use:enhance={done('websiteKey', () => 'Neuer Schlüssel – bitte im Stack der Webseite eintragen')}>
+					<button class="btn btn-secondary" disabled={busy === 'websiteKey'}><RefreshCw size={18} aria-hidden="true" />Neuer Schlüssel</button>
+				</form>
+				<form method="POST" action="?/websiteOff" use:enhance={done('websiteOff', () => 'Webseite getrennt')}>
+					<button class="btn btn-ghost" disabled={busy === 'websiteOff'}><Unplug size={18} aria-hidden="true" />Trennen</button>
+				</form>
+			</div>
+		{:else}
+			<p class="mt-3 flex items-center gap-2 text-ink-2"><CircleAlert size={18} aria-hidden="true" /><span class="font-medium">Nicht verbunden</span></p>
+			<form method="POST" action="?/websiteKey" class="mt-4" use:enhance={done('websiteKey', () => 'Schlüssel erzeugt')}>
+				<button class="btn btn-secondary" disabled={busy === 'websiteKey'}><Globe size={18} aria-hidden="true" />Verbindung einrichten</button>
+			</form>
+		{/if}
 	</section>
 
 	<section class="card p-4 lg:col-span-2 lg:p-6" aria-labelledby="h-offers">

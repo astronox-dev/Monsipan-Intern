@@ -52,7 +52,7 @@
 <div class="flex flex-wrap items-end justify-between gap-3 pt-2 pb-5">
 	<div>
 		<h1 class="flex items-center gap-2 text-[2rem] leading-tight"><Inbox size={26} aria-hidden="true" />Anfragen</h1>
-		<p class="text-ink-2">E-Mail hineinkopieren, daraus das Angebot schreiben – ist es angenommen, ist die Anfrage erledigt.</p>
+		<p class="text-ink-2">E-Mail hineinkopieren oder über das Kontaktformular der Webseite – daraus das Angebot schreiben; ist es angenommen, ist die Anfrage erledigt.</p>
 	</div>
 	{#if data.canCreate}
 		<button class="btn btn-primary" onclick={openNew}><Plus size={18} aria-hidden="true" />Neue Anfrage</button>
@@ -91,10 +91,11 @@
 					<span class="min-w-0 flex-1">
 						<span class="block truncate font-medium">{i.subject || 'Ohne Betreff'}</span>
 						<span class="block truncate text-[0.8125rem] text-ink-3">
-							{[i.customerName ?? i.senderName ?? i.senderEmail, i.location].filter(Boolean).join(' · ') || 'Absender unbekannt'}
+							{[i.customerName || i.senderCompany || i.senderName || i.senderEmail, i.location].filter(Boolean).join(' · ') || 'Absender unbekannt'}
 						</span>
 					</span>
 					{#if i.offerNumber}<span class="num hidden shrink-0 text-sm text-ink-2 sm:block">Angebot {spacedNumber(i.offerNumber)}</span>{/if}
+					{#if i.source === 'webseite'}<span class="badge hidden sm:inline-flex" title="Über das Kontaktformular der Webseite">Webseite</span>{/if}
 					<span class="badge {st.tone}">{st.label}</span>
 					<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
 				</a>

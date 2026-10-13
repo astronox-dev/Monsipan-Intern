@@ -1,5 +1,6 @@
 /**
- * Anfragen: eine hineinkopierte E-Mail mit Absender, Betreff und Ort. Daraus
+ * Anfragen: eine hineinkopierte E-Mail mit Absender, Betreff und Ort – oder
+ * eine Anfrage über das Kontaktformular der Webseite (siehe ./website). Daraus
  * wird ein Angebot – mit Kunde, BV und Ausführungsort aus der Anfrage. Ist das
  * Angebot angenommen (oder die Anfrage von Hand abgelegt), ist sie erledigt und
  * steht nicht mehr bei den offenen.
@@ -33,6 +34,7 @@ export async function listInquiries(filter: InquiryFilter = {}, limit = 200) {
 				like(inquiries.subject, q),
 				like(inquiries.senderName, q),
 				like(inquiries.senderEmail, q),
+				like(inquiries.senderCompany, q),
 				like(inquiries.location, q),
 				like(customers.name, q),
 				like(offers.number, q)
@@ -46,6 +48,8 @@ export async function listInquiries(filter: InquiryFilter = {}, limit = 200) {
 			subject: inquiries.subject,
 			senderName: inquiries.senderName,
 			senderEmail: inquiries.senderEmail,
+			senderCompany: inquiries.senderCompany,
+			source: inquiries.source,
 			location: inquiries.location,
 			customerName: customers.name,
 			closedAt: inquiries.closedAt,
@@ -83,6 +87,7 @@ export interface InquiryInput {
 	senderName: string;
 	senderEmail: string;
 	senderPhone: string;
+	senderCompany: string;
 	customerId: number | null;
 	location: string;
 	note: string;
@@ -103,6 +108,7 @@ export function readInquiry(form: FormData): InquiryInput {
 		senderName: s('name', 160),
 		senderEmail: s('email', 200),
 		senderPhone: s('telefon', 60),
+		senderCompany: s('firma', 160),
 		customerId: Number.isInteger(customer) && customer > 0 ? customer : null,
 		location: s('ort', 300),
 		note: s('notiz', 2000)
@@ -115,10 +121,11 @@ export function inquiryProblem(i: InquiryInput): string | null {
 	return null;
 }
 
-export async function createInquiry(user: SessionUser, data: InquiryInput): Promise<number> {
+/** Neue Anfrage – von Hand (`user`) oder ohne Person über die Webseite (`source`) */
+export async function createInquiry(user: Pick<SessionUser, 'id'> | null, data: InquiryInput, source = ''): Promise<number> {
 	const row = await db
 		.insert(inquiries)
-		.values({ ...data, createdBy: user.id, updatedAt: new Date() })
+		.values({ ...data, source, createdBy: user?.id ?? null, updatedAt: new Date() })
 		.returning({ id: inquiries.id })
 		.get();
 	return row.id;
@@ -142,6 +149,8 @@ export async function inquiryDetail(id: number) {
 			senderName: inquiries.senderName,
 			senderEmail: inquiries.senderEmail,
 			senderPhone: inquiries.senderPhone,
+			senderCompany: inquiries.senderCompany,
+			source: inquiries.source,
 			customerId: inquiries.customerId,
 			customerName: customers.name,
 			customerCity: customers.city,
