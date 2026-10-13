@@ -227,6 +227,9 @@ export const inquiries = sqliteTable(
 		offerId: integer('offer_id').references(() => offers.id, { onDelete: 'set null' }),
 		/** Ohne Angebot erledigt (z. B. abgesagt) – dann ebenfalls nicht mehr bei den offenen */
 		closedAt: integer('closed_at', { mode: 'timestamp_ms' }),
+		/** In Arbeit genommen (noch ohne Angebot) – wann und von wem; mit Angebot zählt dessen Stand */
+		inProgressAt: integer('in_progress_at', { mode: 'timestamp_ms' }),
+		inProgressBy: integer('in_progress_by').references(() => users.id, { onDelete: 'set null' }),
 		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: createdAt(),
 		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })

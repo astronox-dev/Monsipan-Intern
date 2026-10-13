@@ -39,10 +39,14 @@
 		if (i.offerStatus === 'angenommen') return { label: 'Angenommen', tone: 'badge-ok' };
 		if (i.closedAt) return { label: 'Abgelegt', tone: '' };
 		if (i.offerId) return OFFER_STATUS_LABELS[i.offerStatus ?? 'entwurf'] ?? OFFER_STATUS_LABELS.entwurf;
+		// Noch ohne Angebot, aber jemand ist dran – heißt wie ein Angebot im Entwurf
+		if (i.inProgressAt) return OFFER_STATUS_LABELS.entwurf;
 		return { label: 'Neu', tone: 'badge-info' };
 	}
 	const TABS = $derived([
 		{ key: 'offen', label: 'Offen', count: data.counts.open },
+		{ key: 'neu', label: 'Neu', count: data.counts.neu },
+		{ key: 'inarbeit', label: 'In Arbeit', count: data.counts.working },
 		{ key: 'erledigt', label: 'Erledigt', count: data.counts.done }
 	]);
 </script>
@@ -103,7 +107,10 @@
 		{:else}
 			<li class="p-10 text-center">
 				<p class="font-medium">
-					{data.filter.q ? 'Keine Anfrage gefunden' : data.filter.state === 'erledigt' ? 'Noch nichts erledigt' : 'Keine offenen Anfragen'}
+					{data.filter.q
+						? 'Keine Anfrage gefunden'
+						: ({ erledigt: 'Noch nichts erledigt', neu: 'Keine neuen Anfragen', inarbeit: 'Gerade ist keine Anfrage in Arbeit' } as Record<string, string>)[data.filter.state] ??
+							'Keine offenen Anfragen'}
 				</p>
 				{#if data.canCreate && data.filter.state === 'offen' && !data.filter.q}
 					<p class="mt-1 text-sm text-ink-3">Mit „Neue Anfrage" eine E-Mail einfügen.</p>

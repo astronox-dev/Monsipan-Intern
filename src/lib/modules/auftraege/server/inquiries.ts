@@ -4,6 +4,9 @@
  * wird ein Angebot – mit Kunde, BV und Ausführungsort aus der Anfrage. Ist das
  * Angebot angenommen (oder die Anfrage von Hand abgelegt), ist sie erledigt und
  * steht nicht mehr bei den offenen.
+ *
+ * Stand: Neu → In Arbeit (von Hand, noch ohne Angebot – oder das Angebot ist
+ * noch ein Entwurf) → der Stand des Angebots → erledigt.
  */
 import { and, desc, eq, isNotNull, isNull, like, ne, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
@@ -14,19 +17,28 @@ import { companyDomain, MAX_INQUIRY_TEXT } from '../inquiry';
 import { createOffer } from './offers';
 
 const creator = alias(users, 'creator');
+const worker = alias(users, 'worker');
 
 /** Erledigt: Angebot angenommen oder von Hand abgelegt */
 const done = or(isNotNull(inquiries.closedAt), eq(offers.status, 'angenommen'));
 const open = and(isNull(inquiries.closedAt), or(isNull(offers.id), ne(offers.status, 'angenommen')));
+/** Noch niemand dran: kein Angebot, nicht in Arbeit genommen */
+const fresh = and(isNull(inquiries.closedAt), isNull(offers.id), isNull(inquiries.inProgressAt));
+/** In Arbeit: von Hand genommen (noch ohne Angebot) oder das Angebot ist ein Entwurf */
+const working = and(isNull(inquiries.closedAt), or(and(isNull(offers.id), isNotNull(inquiries.inProgressAt)), eq(offers.status, 'entwurf')));
+
+export const INQUIRY_STATES = ['offen', 'neu', 'inarbeit', 'erledigt'] as const;
+export type InquiryState = (typeof INQUIRY_STATES)[number];
+const STATE_WHERE: Record<InquiryState, SQL | undefined> = { offen: open, neu: fresh, inarbeit: working, erledigt: done };
 
 export interface InquiryFilter {
 	q?: string;
-	/** „offen" (Standard) oder „erledigt" */
+	/** „offen" (Standard), „neu", „inarbeit" oder „erledigt" */
 	state?: string;
 }
 
 export async function listInquiries(filter: InquiryFilter = {}, limit = 200) {
-	const where: (SQL | undefined)[] = [filter.state === 'erledigt' ? done : open];
+	const where: (SQL | undefined)[] = [STATE_WHERE[filter.state as InquiryState] ?? open];
 	if (filter.q?.trim()) {
 		const q = `%${filter.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 		where.push(
@@ -53,6 +65,7 @@ export async function listInquiries(filter: InquiryFilter = {}, limit = 200) {
 			location: inquiries.location,
 			customerName: customers.name,
 			closedAt: inquiries.closedAt,
+			inProgressAt: inquiries.inProgressAt,
 			offerId: offers.id,
 			offerNumber: offers.number,
 			offerStatus: offers.status
@@ -66,18 +79,20 @@ export async function listInquiries(filter: InquiryFilter = {}, limit = 200) {
 		.all();
 }
 
-/** Wie viele offen sind – für die Zahl am Reiter */
+/** Wie viele je Stand – für die Zahlen an den Reitern; `fresh` = ohne Angebot (Übersicht) */
 export async function countInquiries() {
 	const row = await db
 		.select({
 			open: sql<number>`sum(case when ${open} then 1 else 0 end)`.mapWith(Number),
+			neu: sql<number>`sum(case when ${fresh} then 1 else 0 end)`.mapWith(Number),
+			working: sql<number>`sum(case when ${working} then 1 else 0 end)`.mapWith(Number),
 			done: sql<number>`sum(case when ${done} then 1 else 0 end)`.mapWith(Number),
 			fresh: sql<number>`sum(case when ${inquiries.closedAt} is null and ${inquiries.offerId} is null then 1 else 0 end)`.mapWith(Number)
 		})
 		.from(inquiries)
 		.leftJoin(offers, eq(offers.id, inquiries.offerId))
 		.get();
-	return { open: row?.open ?? 0, done: row?.done ?? 0, fresh: row?.fresh ?? 0 };
+	return { open: row?.open ?? 0, neu: row?.neu ?? 0, working: row?.working ?? 0, done: row?.done ?? 0, fresh: row?.fresh ?? 0 };
 }
 
 export interface InquiryInput {
@@ -157,6 +172,9 @@ export async function inquiryDetail(id: number) {
 			location: inquiries.location,
 			note: inquiries.note,
 			closedAt: inquiries.closedAt,
+			inProgressAt: inquiries.inProgressAt,
+			workerFirst: worker.firstName,
+			workerLast: worker.lastName,
 			offerId: offers.id,
 			offerNumber: offers.number,
 			offerStatus: offers.status,
@@ -168,6 +186,7 @@ export async function inquiryDetail(id: number) {
 		.leftJoin(customers, eq(customers.id, inquiries.customerId))
 		.leftJoin(offers, eq(offers.id, inquiries.offerId))
 		.leftJoin(creator, eq(creator.id, inquiries.createdBy))
+		.leftJoin(worker, eq(worker.id, inquiries.inProgressBy))
 		.where(eq(inquiries.id, id))
 		.get();
 	return row ?? null;
@@ -186,6 +205,14 @@ export function inquiryForOffer(offerId: number) {
 
 export async function setInquiryCustomer(id: number, customerId: number) {
 	await db.update(inquiries).set({ customerId, updatedAt: new Date() }).where(eq(inquiries.id, id));
+}
+
+/** In Arbeit nehmen (`userId`) bzw. zurück auf neu (`null`) */
+export async function setInquiryInProgress(id: number, userId: number | null) {
+	await db
+		.update(inquiries)
+		.set({ inProgressAt: userId ? new Date() : null, inProgressBy: userId, updatedAt: new Date() })
+		.where(eq(inquiries.id, id));
 }
 
 /** Von Hand ablegen bzw. wieder zu den offenen holen */

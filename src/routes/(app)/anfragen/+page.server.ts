@@ -1,14 +1,15 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
 import { requirePermission } from '$lib/server/guard';
-import { countInquiries, createInquiry, inquiryProblem, listInquiries, matchCustomer, readInquiry } from '$lib/modules/auftraege/server/inquiries';
+import { countInquiries, createInquiry, INQUIRY_STATES, inquiryProblem, listInquiries, matchCustomer, readInquiry } from '$lib/modules/auftraege/server/inquiries';
 import { isValidIsoDate, today } from '$lib/modules/stunden/week';
 import { notifyInquiry } from '$lib/modules/auftraege/server/notify';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = requirePermission(locals, 'anfragen.sehen');
-	const filter = { q: url.searchParams.get('q') ?? '', state: url.searchParams.get('stand') === 'erledigt' ? 'erledigt' : 'offen' };
+	const stand = url.searchParams.get('stand') ?? '';
+	const filter = { q: url.searchParams.get('q') ?? '', state: (INQUIRY_STATES as readonly string[]).includes(stand) ? stand : 'offen' };
 	const [inquiries, counts] = await Promise.all([listInquiries(filter), countInquiries()]);
 	return { inquiries, counts, filter, canCreate: can(user.role, 'anfragen.erstellen'), today: today() };
 };

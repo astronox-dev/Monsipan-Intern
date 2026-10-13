@@ -10,6 +10,7 @@ import {
 	offerFromInquiry,
 	readInquiry,
 	setInquiryCustomer,
+	setInquiryInProgress,
 	updateInquiry
 } from '$lib/modules/auftraege/server/inquiries';
 import { numberTaken, suggestNumbers } from '$lib/modules/auftraege/server/offers';
@@ -83,6 +84,16 @@ export const actions: Actions = {
 			customerId: Number.isInteger(customer) && customer > 0 ? customer : null
 		});
 		redirect(303, `/angebote/${id}`);
+	},
+
+	/** In Arbeit nehmen (an=1) bzw. zurück auf neu – nur, solange es kein Angebot gibt */
+	progress: async ({ params, request, locals }) => {
+		const { user, inquiry } = await open(Number(params.id), locals);
+		if (!can(user.role, 'anfragen.bearbeiten')) return fail(403, { message: 'Dafür fehlt dir die Berechtigung.' });
+		if (inquiry.offerId || inquiry.closedAt) return fail(400, { message: 'Mit Angebot oder abgelegt zählt der Stand von dort.' });
+		const on = (await request.formData()).get('an') === '1';
+		await setInquiryInProgress(inquiry.id, on ? user.id : null);
+		return { inProgress: on };
 	},
 
 	close: async ({ params, locals }) => {

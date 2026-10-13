@@ -425,6 +425,13 @@ die E-Mail daneben. Ist das Angebot angenommen, ist die Anfrage **erledigt** und
 aus der Liste der offenen. Kommt kein Angebot zustande, legt man sie mit **Als erledigt
 ablegen** ab. Erkannt wird nur im Browser – die E-Mail geht an keinen fremden Dienst.
 
+**Stand einer Anfrage:** **Neu** → **In Arbeit** → der Stand ihres Angebots (Ausstehend,
+Änderung gewünscht) → erledigt (Angenommen oder Abgelegt). „In Arbeit“ heißt: Jemand hat sie
+mit **In Arbeit nehmen** übernommen, solange es noch kein Angebot gibt (etwa für Rückfragen
+oder eine Besichtigung; in der Anfrage steht, bei wem und seit wann, **Zurück auf Neu** macht
+es rückgängig) – oder ihr Angebot ist noch ein Entwurf. Die Liste filtert nach **Offen**,
+**Neu**, **In Arbeit** und **Erledigt**.
+
 **Anfragen von der Webseite:** Das Kontaktformular auf monsipan.at (Repo
 [Monsipan-Webseite](https://github.com/mstreicher98/Monsipan-Webseite)) legt jede Anfrage
 zusätzlich zur E-Mail ans Büro selbst hier an – mit Name, Firma, E-Mail, Telefon, Thema (als
