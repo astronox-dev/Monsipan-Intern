@@ -1079,9 +1079,30 @@ testet ein Admin unter **Einstellungen → Test senden**.
   überschrieben; entsteht eine zweite in derselben Sekunde, bekommt sie ein `-2` angehängt.
 - Unter **Einstellungen → Datensicherung** lassen sich Sicherungen sofort erstellen und herunterladen.
 
+**Komplettsicherung:** **Herunterladen** ergibt eine ZIP-Datei mit allem – der Datenbank
+dieser Sicherung und allen Dateien: PDFs an Artikeln und Pläne an Aufträgen
+(`/data/dokumente`), Fotos der Tagesberichte (`/data/fotos`), Krankmeldungen
+(`/data/krankmeldungen`), Briefkopf (`/data/briefkopf`), das Rechnungsarchiv
+(`/data/rechnungen`) und der Signaturschlüssel (`/data/signatur`; liegt er per
+`SIGNATUR_DATEI` woanders, nicht). Dazu `monsipan-sicherung.json` mit Zeitpunkt und
+Anzahl je Ordner. Die nächtlichen Sicherungen selbst bleiben reine Datenbank-Kopien – sonst
+läge jede Datei 14-mal am Server; die ZIP-Datei entsteht beim Herunterladen (unkomprimiert,
+PDFs und Fotos sind es schon, dafür mit Fortschritt im Browser). Das passt zu jeder Sicherung
+in der Liste, weil sich keine Datei je ändert (Name = Prüfsumme bzw. Rechnung im Archiv) und
+gelöschte 90 Tage liegen bleiben. Der Code steht in
+[`src/lib/server/backup-zip.ts`](src/lib/server/backup-zip.ts).
+
 **Wiederherstellen (in der App, nur Admin):** In der Liste der Sicherungen auf das
-Verlaufs-Symbol klicken oder über **Sicherungsdatei hochladen** eine `.db`-Datei von
-außerhalb einspielen (bis 200 MB, deshalb steht `BODY_SIZE_LIMIT` im Container auf 210M).
+Verlaufs-Symbol klicken oder über **Sicherungsdatei hochladen** die ZIP-Datei (oder eine
+ältere `.db`-Datei) von außerhalb einspielen – ohne Größengrenze: Der Browser schickt sie
+in Teilen zu 8 MB an `/api/sicherung` (wie die Pläne am Auftrag), mit Fortschritt; bei
+falschem Passwort bleibt sie für den nächsten Versuch liegen, sonst wird sie danach gelöscht
+(liegengebliebene nach einem Tag). Bei einer ZIP-Datei kommt zuerst die Datenbank daraus
+in die Prüfung, dann werden die fehlenden Dateien ergänzt – vorhandene bleiben unberührt,
+jede wird geprüft (CRC-32 und, wo der Name sie trägt, SHA-256), Beschädigtes oder nicht
+Vorgesehenes bleibt draußen –, dann folgt die Datenbank und zuletzt der Signaturschlüssel
+(ein anderer vorhandener bleibt als `siegel-vor-restore-….pem` daneben). Die Meldung danach
+sagt, wie viele Dateien ergänzt wurden.
 Bestätigt wird mit dem eigenen Passwort. Ablauf: Datei prüfen (SQLite, Schema, Zustand),
 bei Bedarf auf den aktuellen Schemastand migrieren, Sicherung des jetzigen Standes anlegen
 (`-vor-restore` im Namen) und dann den gesamten Inhalt in einer Transaktion ersetzen –
@@ -1100,8 +1121,10 @@ docker compose cp ./lager-2026-09-18-020000.db app:/data/lager.db
 docker compose start app
 ```
 
-Für echte Ausfallsicherheit die Sicherungen zusätzlich außerhalb des Servers ablegen
-(z. B. nächtliches `rsync` des Volumes oder Download über die Oberfläche).
+Für echte Ausfallsicherheit die Sicherungen zusätzlich außerhalb des Servers ablegen –
+am einfachsten die ZIP-Datei regelmäßig herunterladen (oder nächtliches `rsync` des Volumes).
+Auf einem neuen Server reicht dann: Portal starten, als Admin anmelden, die ZIP-Datei unter
+Einstellungen hochladen.
 
 ## Alles zurücksetzen
 
@@ -1192,8 +1215,9 @@ Die Sicherungen der Datenbank bleiben dadurch klein.
 **Sicherungen:** Wird ein PDF entfernt oder alles zurückgesetzt, bleibt die Datei noch
 90 Tage liegen. Eine in dieser Zeit eingespielte Sicherung findet ihre PDFs also wieder.
 Danach räumt die tägliche Wartung unbenutzte Dateien weg. Für den Umzug auf einen anderen
-Server das ganze Volume mitnehmen (Datenbank, `/data/dokumente`, `/data/fotos`, `/data/krankmeldungen`, `/data/briefkopf`, **das Rechnungsarchiv `/data/rechnungen`** **und** `/data/signatur`) – eine
-hochgeladene Sicherung allein enthält die PDFs nicht.
+Server das ganze Volume mitnehmen oder die ZIP-Datei aus Einstellungen → Datensicherung
+herunterladen und dort wieder hochladen – sie enthält Datenbank und alle Dateien. Eine
+reine `.db`-Datei enthält die PDFs nicht.
 
 Die Fotos der Tagesberichte liegen genauso unter `/data/fotos/<sha256>.jpg` (Foto und Vorschau)
 und bleiben nach dem Löschen ebenfalls 90 Tage liegen.

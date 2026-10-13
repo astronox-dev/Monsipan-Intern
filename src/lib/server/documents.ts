@@ -15,6 +15,7 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { MAX_DOCUMENT_BYTES } from '$lib/documents';
 import { DATA_DIR, db } from './db';
 import { orderDocuments, productDocuments, users } from './db/schema';
+import { appendPart, isWriting, partFile } from './parts';
 
 export const DOC_DIR = path.join(DATA_DIR, 'dokumente');
 
@@ -82,42 +83,20 @@ function adopt(temp: string, sha256: string, size: number, head: Buffer) {
 /* ----------------------------------------------------- Uploads in Teilen */
 
 /**
- * Pläne am Auftrag dürfen beliebig groß sein. Damit jede Anfrage trotzdem klein
- * bleibt (Cloudflare und BODY_SIZE_LIMIT begrenzen je Anfrage), schickt der
- * Browser sie in Teilen: Die Teile kommen der Reihe nach in eine .tmp-Datei je
- * Person und Upload; abgebrochene räumt `tidyFolder` nach einem Tag weg. Am Ende
+ * Pläne am Auftrag dürfen beliebig groß sein: Der Browser schickt sie in Teilen
+ * (siehe ./parts), abgebrochene räumt `tidyFolder` nach einem Tag weg. Am Ende
  * wird die Datei geprüft, abgelegt und bekommt einen Beleg – mit dessen
  * Kennung hängt das Formular sie dann an den Auftrag.
  */
-export const UPLOAD_ID = /^[A-Za-z0-9_-]{16,64}$/;
 
-const partFile = (userId: number, id: string) => path.join(DOC_DIR, `teil-${userId}-${id}.tmp`);
-const writing = new Set<string>();
 /** Fertige Uploads, je Person und Kennung */
 const finished = new Map<string, { name: string; sha256: string; size: number; at: number }>();
 const finishedKey = (userId: number, id: string) => `${userId}:${id}`;
 const FINISHED_TTL = 86_400_000;
 
-const sizeOf = (file: string) => (fs.existsSync(file) ? fs.statSync(file).size : 0);
-
-/**
- * Einen Teil anhängen – nur genau dort, wo das schon Angekommene endet. Sonst
- * (Wiederholung nach Abbruch, oder es schreibt gerade noch) bleibt die Datei,
- * wie sie ist, und `received` sagt, ab wo es weitergeht.
- */
-export async function appendUploadPart(userId: number, id: string, offset: number, part: ReadableStream<Uint8Array>) {
-	const file = partFile(userId, id);
-	if (writing.has(file) || offset !== sizeOf(file)) return { ok: false, received: sizeOf(file) };
-	fs.mkdirSync(DOC_DIR, { recursive: true });
-	writing.add(file);
-	try {
-		await pipeline(Readable.fromWeb(part as Parameters<typeof Readable.fromWeb>[0]), fs.createWriteStream(file, { flags: 'a' }));
-	} catch {
-		/* Verbindung abgebrochen – angekommen ist, was in der Datei steht */
-	} finally {
-		writing.delete(file);
-	}
-	return { ok: true, received: sizeOf(file) };
+/** Einen Teil anhängen – siehe `appendPart` */
+export function appendUploadPart(userId: number, id: string, offset: number, part: ReadableStream<Uint8Array>) {
+	return appendPart(partFile(DOC_DIR, userId, id), offset, part);
 }
 
 /** Alle Teile sind da: prüfen und ablegen, ohne Größengrenze */
@@ -125,8 +104,8 @@ export async function finishUpload(userId: number, id: string, name: string) {
 	// Schon fertig (die Antwort ging unterwegs verloren)
 	const done = finished.get(finishedKey(userId, id));
 	if (done) return { sha256: done.sha256, size: done.size };
-	const file = partFile(userId, id);
-	if (writing.has(file)) throw new DocumentError('Die Datei wird noch übertragen.');
+	const file = partFile(DOC_DIR, userId, id);
+	if (isWriting(file)) throw new DocumentError('Die Datei wird noch übertragen.');
 	if (!fs.existsSync(file)) throw new DocumentError('Die Datei ist leer.');
 	try {
 		const { sha256, size, head } = await copyChecked(fs.createReadStream(file), null, null);

@@ -1,13 +1,15 @@
 import fs from 'node:fs';
 import { fail } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
-import { createBackup, listBackups } from '$lib/server/backup';
+import { BACKUP_DIR, createBackup, listBackups } from '$lib/server/backup';
+import { dataFilesSummary } from '$lib/server/backup-zip';
+import { isWriting, partFile, UPLOAD_ID } from '$lib/server/parts';
 import { db, DB_FILE } from '$lib/server/db';
 import { movements, products, users } from '$lib/server/db/schema';
 import { isRateLimited, registerFailure, verifyPassword } from '$lib/server/auth';
 import { requirePermission, str } from '$lib/server/guard';
 import { dataCounts, isResetPhrase, RESET_PHRASE, resetAllData } from '$lib/server/reset';
-import { backupPath, MAX_UPLOAD_BYTES, restoreFromFile, RestoreError, stageUpload } from '$lib/server/restore';
+import { backupPath, restoreFromFile, RestoreError, restoreUpload, stageUpload } from '$lib/server/restore';
 import { mailInfo, sendMail, testMail } from '$lib/server/mail';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { letterheadPath, LetterheadError, storeLetterhead } from '$lib/server/letterhead';
@@ -39,8 +41,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		myEmail: me.email,
 		resetCounts: await dataCounts(me.id),
 		resetPhrase: RESET_PHRASE,
-		maxUploadBytes: MAX_UPLOAD_BYTES,
 		backups: listBackups(),
+		// Was beim Herunterladen außer der Datenbank in die ZIP-Datei kommt
+		files: dataFilesSummary(),
 		stats: {
 			products: Number(counts[0]?.n ?? 0),
 			movements: Number(counts[1]?.n ?? 0),
@@ -117,38 +120,51 @@ export const actions: Actions = {
 		return { backup: name };
 	},
 	/** Alles zurücksetzen – doppelt bestätigt: Bestätigungstext + eigenes Passwort */
-	/** Sicherung einspielen: aus der Liste oder als hochgeladene Datei */
+	/**
+	 * Sicherung einspielen: aus der Liste oder hochgeladen – als ZIP-Datei
+	 * (Komplettsicherung) oder .db. Hochgeladen wird vorher in Teilen über
+	 * /api/sicherung (`upload` = Kennung); ohne JavaScript kommt die Datei selbst.
+	 */
 	restore: async ({ request, locals, getClientAddress }) => {
 		const me = requirePermission(locals, 'einstellungen.bearbeiten');
 		const f = await request.formData();
 		const key = `restore:${getClientAddress()}:${me.id}`;
-		if (isRateLimited(key, 5)) return fail(429, { restore: true, message: 'Zu viele Versuche. Bitte in 15 Minuten erneut versuchen.' });
+		// keepUpload: die hochgeladene Datei bleibt für den nächsten Versuch
+		if (isRateLimited(key, 5)) return fail(429, { restore: true, keepUpload: true, message: 'Zu viele Versuche. Bitte in 15 Minuten erneut versuchen.' });
 		const row = await db.select({ hash: users.passwordHash }).from(users).where(eq(users.id, me.id)).get();
 		if (!row || !(await verifyPassword(row.hash, String(f.get('password') ?? '')))) {
 			registerFailure(key);
-			return fail(400, { restore: true, message: 'Das Passwort stimmt nicht.' });
+			return fail(400, { restore: true, keepUpload: true, message: 'Das Passwort stimmt nicht.' });
 		}
 
 		const upload = f.get('file');
+		const uploadId = str(f.get('upload'), 80);
 		const chosen = str(f.get('backup'), 120);
+		let uploaded: string | null = null;
 		try {
-			let source: string;
-			let label: string;
-			if (upload instanceof File && upload.size > 0) {
-				source = await stageUpload(upload);
-				label = upload.name;
-			} else if (chosen) {
-				source = backupPath(chosen);
-				label = chosen;
-			} else {
-				return fail(400, { restore: true, message: 'Bitte eine Sicherung auswählen oder eine Datei hochladen.' });
+			if (uploadId) {
+				if (!UPLOAD_ID.test(uploadId)) return fail(400, { restore: true, message: 'Unbekannter Upload.' });
+				uploaded = partFile(BACKUP_DIR, me.id, uploadId);
+				if (!fs.existsSync(uploaded) || isWriting(uploaded)) {
+					uploaded = null;
+					return fail(400, { restore: true, message: 'Die Datei ist nicht vollständig angekommen – bitte noch einmal hochladen.' });
+				}
+			} else if (upload instanceof File && upload.size > 0) {
+				uploaded = await stageUpload(upload);
 			}
-			const result = await restoreFromFile(source, `${label} (durch ${me.username})`);
-			return { restoreDone: true, backup: result.backup, contents: result.contents, source: label };
+			const label = uploaded ? str(f.get('name'), 160) || (upload instanceof File ? upload.name : 'hochgeladene Datei') : chosen;
+			let result;
+			if (uploaded) result = await restoreUpload(uploaded, `${label} (durch ${me.username})`);
+			else if (chosen) result = { ...(await restoreFromFile(backupPath(chosen), `${label} (durch ${me.username})`)), files: null };
+			else return fail(400, { restore: true, message: 'Bitte eine Sicherung auswählen oder eine Datei hochladen.' });
+			return { restoreDone: true, backup: result.backup, contents: result.contents, files: result.files, source: label };
 		} catch (err) {
 			if (err instanceof RestoreError) return fail(400, { restore: true, message: err.message });
 			console.error('[restore]', err);
 			return fail(500, { restore: true, message: 'Die Sicherung konnte nicht eingespielt werden. Details stehen im Log.' });
+		} finally {
+			// Die hochgeladene Datei wird nach dem Einspielen nicht mehr gebraucht (bei falschem Passwort bleibt sie für den nächsten Versuch)
+			if (uploaded) fs.rmSync(uploaded, { force: true });
 		}
 	},
 

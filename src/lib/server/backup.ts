@@ -4,6 +4,7 @@ import { client, DATA_DIR } from './db';
 import { purgeExpired } from './auth';
 import { tidyDocuments } from './documents';
 import { purgeOldNotifications } from './notifications';
+import { sweepParts } from './parts';
 import { notifyOverdueInvoices } from '$lib/modules/auftraege/server/invoices';
 import { checkArchive } from '$lib/modules/auftraege/server/signatur/verification';
 import { tidyPhotos } from '$lib/modules/tagesberichte/server/photos';
@@ -135,6 +136,8 @@ export function scheduleMaintenance() {
 			}
 			await purgeExpired();
 			sweepTempFiles();
+			// Hochgeladene Sicherungen, die nie eingespielt wurden
+			sweepParts(BACKUP_DIR);
 			// PDFs und Fotos einmal am Tag: benutzte markieren, lange unbenutzte löschen
 			if (lastTidy !== today) {
 				lastTidy = today;

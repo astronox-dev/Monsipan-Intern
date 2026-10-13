@@ -1,7 +1,8 @@
 import { error, json } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
 import { requireUser } from '$lib/server/guard';
-import { appendUploadPart, DocumentError, finishUpload, UPLOAD_ID } from '$lib/server/documents';
+import { appendUploadPart, DocumentError, finishUpload } from '$lib/server/documents';
+import { UPLOAD_ID } from '$lib/server/parts';
 import type { RequestHandler } from './$types';
 
 /**

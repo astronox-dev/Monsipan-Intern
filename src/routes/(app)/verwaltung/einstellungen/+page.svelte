@@ -23,6 +23,7 @@
 	import { can } from '$lib/permissions';
 	import { isResetPhrase } from '$lib/reset-phrase';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { uploadInParts, UploadError } from '$lib/upload';
 
 	let { data } = $props();
 	/** Ansehen darf, wer Einstellungen sieht – ändern (auch Sicherungen) nur mit „Bearbeiten" */
@@ -34,7 +35,17 @@
 	let restoreSource = $state<{ file: string; label: string; upload: File | null } | null>(null);
 	let restorePassword = $state('');
 	let restoreError = $state('');
-	let restoreResult = $state<{ source: string; backup: string; products: number; movements: number; users: number } | null>(null);
+	let restoreResult = $state<{
+		source: string;
+		backup: string;
+		products: number;
+		movements: number;
+		users: number;
+		files: { added: number; present: number; skipped: number } | null;
+	} | null>(null);
+	/** Hochgeladene Sicherung: Kennung am Server (bleibt bei falschem Passwort) und Fortschritt */
+	let restoreUploadId = $state<string | null>(null);
+	let restoreShare = $state<number | null>(null);
 	let uploadInput = $state<HTMLInputElement | null>(null);
 	let restoreDone = $state(false);
 
@@ -42,16 +53,21 @@
 		restoreSource = source;
 		restorePassword = '';
 		restoreError = '';
+		restoreUploadId = null;
 		restoreOpen = true;
 	}
 
-	function pickUpload(e: Event) {
+	/** ZIP-Datei (Komplettsicherung) oder SQLite-Datenbank – sonst gar nicht erst hochladen */
+	async function pickUpload(e: Event) {
 		const input = e.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
+		input.value = '';
 		if (!file) return;
-		if (file.size > data.maxUploadBytes) {
-			toast.error('Datei zu groß', `Erlaubt sind ${mb(data.maxUploadBytes)}.`);
-			input.value = '';
+		const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+		const zip = head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04;
+		const sqlite = new TextDecoder().decode(head.slice(0, 15)) === 'SQLite format 3';
+		if (!zip && !sqlite) {
+			toast.error('Keine Sicherung', 'Bitte eine ZIP-Datei von hier oder eine .db-Datei wählen.');
 			return;
 		}
 		askRestore({ file: '', label: file.name, upload: file });
@@ -263,7 +279,13 @@
 			<div>
 				<h2 id="h-backup" class="flex items-center gap-2 text-xl"><DatabaseBackup size={20} aria-hidden="true" />Datensicherung</h2>
 				<p class="mt-1 text-sm text-ink-2">
-					Jede Nacht automatisch, die letzten 14 Stände bleiben erhalten. Sicherungen vor einem Zurücksetzen werden getrennt aufbewahrt (die letzten 10). Datenbank derzeit {mb(data.stats.dbSize)}.
+					Jede Nacht automatisch, die letzten 14 Stände bleiben erhalten. Sicherungen vor einem Zurücksetzen werden getrennt aufbewahrt (die letzten 10).
+				</p>
+				<p class="mt-2 text-sm text-ink-2">
+					<span class="font-medium text-ink">Herunterladen</span> ergibt eine ZIP-Datei mit allem: der Datenbank ({mb(data.stats.dbSize)}) und
+					{int(data.files.count)}
+					{data.files.count === 1 ? 'Datei' : 'Dateien'} ({mb(data.files.size)}) – PDFs und Pläne, Fotos, Krankmeldungen, Briefkopf, Rechnungsarchiv und Signaturschlüssel.
+					Für den Ernstfall regelmäßig herunterladen und außerhalb des Servers aufbewahren.
 				</p>
 			</div>
 			<form method="POST" action="?/backup" use:enhance={done('backup', (d) => `Sicherung ${d.backup} erstellt`)}>
@@ -279,7 +301,7 @@
 							<span class="rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">{b.label}</span>
 						{/if}
 					</span>
-					<span class="text-ink-3">{mb(b.size)}</span>
+					<span class="text-ink-3" title="Datenbank {mb(b.size)} und Dateien {mb(data.files.size)}">{mb(b.size + data.files.size)}</span>
 					<button
 						class="btn btn-ghost btn-sm btn-icon"
 						aria-label="Sicherung vom {dateTime(b.createdAt)} wiederherstellen"
@@ -289,7 +311,7 @@
 						<History size={16} />
 					</button>
 					{#if canEdit}
-						<a href="/export/backup/{b.file}" class="btn btn-ghost btn-sm btn-icon" aria-label="Sicherung vom {dateTime(b.createdAt)} herunterladen" download>
+						<a href="/export/backup/{b.file}" class="btn btn-ghost btn-sm btn-icon" aria-label="Sicherung vom {dateTime(b.createdAt)} als ZIP-Datei herunterladen" title="Als ZIP-Datei herunterladen" download>
 							<Download size={16} />
 						</a>
 					{/if}
@@ -300,9 +322,10 @@
 		</ul>
 		<div class="mt-4 rounded-xl border border-dashed border-line-strong p-3">
 			<p class="text-sm text-ink-2">
-				Sicherung von außerhalb einspielen, zum Beispiel nach einem Serverumzug. Der jetzige Stand wird vorher automatisch gesichert.
+				Sicherung von außerhalb einspielen, zum Beispiel nach einem Serverumzug: die ZIP-Datei von hier (oder eine ältere .db-Datei). Der jetzige Stand wird vorher
+				automatisch gesichert.
 			</p>
-			<input bind:this={uploadInput} type="file" accept=".db,application/vnd.sqlite3,application/octet-stream" class="sr-only" onchange={pickUpload} />
+			<input bind:this={uploadInput} type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/octet-stream" class="sr-only" onchange={pickUpload} />
 			<button class="btn btn-secondary btn-sm mt-3" onclick={() => uploadInput?.click()}>
 				<Upload size={16} aria-hidden="true" />Sicherungsdatei hochladen
 			</button>
@@ -427,19 +450,43 @@
 		method="POST"
 		action="?/restore"
 		enctype="multipart/form-data"
-		use:enhance={({ formData }) => {
+		use:enhance={async ({ formData, cancel }) => {
 			busy = 'restore';
 			restoreError = '';
-			if (restoreSource?.upload) formData.set('file', restoreSource.upload);
-			else formData.set('backup', restoreSource?.file ?? '');
+			const file = restoreSource?.upload;
+			if (file) {
+				// Erst in Teilen hochladen (auch sehr große ZIP-Dateien), dann mit der Kennung einspielen
+				if (!restoreUploadId) {
+					try {
+						restoreShare = 0;
+						restoreUploadId = await uploadInParts(file, '/api/sicherung', (bytes) => (restoreShare = bytes / file.size));
+					} catch (err) {
+						restoreError = err instanceof UploadError ? err.message : 'Das Hochladen hat nicht geklappt – bitte noch einmal versuchen.';
+						busy = '';
+						cancel();
+						return;
+					} finally {
+						restoreShare = null;
+					}
+				}
+				formData.set('upload', restoreUploadId);
+				formData.set('name', file.name);
+			} else formData.set('backup', restoreSource?.file ?? '');
 			return async ({ result }) => {
 				busy = '';
 				if (result.type === 'failure') {
 					restoreError = String(result.data?.message ?? 'Einspielen fehlgeschlagen');
+					if (!result.data?.keepUpload) restoreUploadId = null;
 					return;
 				}
+				restoreUploadId = null;
 				if (result.type === 'success') {
-					const d = (result.data ?? {}) as { source?: string; backup?: string; contents?: { products: number; movements: number; users: number } };
+					const d = (result.data ?? {}) as {
+						source?: string;
+						backup?: string;
+						contents?: { products: number; movements: number; users: number };
+						files?: { added: number; present: number; skipped: number } | null;
+					};
 					restoreOpen = false;
 					clearDrafts();
 					restoreDone = true;
@@ -448,7 +495,8 @@
 						backup: d.backup ?? '',
 						products: d.contents?.products ?? 0,
 						movements: d.contents?.movements ?? 0,
-						users: d.contents?.users ?? 0
+						users: d.contents?.users ?? 0,
+						files: d.files ?? null
 					};
 				}
 			};
@@ -457,10 +505,16 @@
 		<p class="text-ink-2">
 			Der gesamte jetzige Stand wird durch
 			<span class="font-medium text-ink">{restoreSource?.label ?? ''}</span>
-			ersetzt: Artikel, Bestand, Bewegungen, Stammdaten und Benutzer.
+			ersetzt: alle Einträge in allen Bereichen, Stammdaten, Einstellungen und Benutzer.
 		</p>
 		<ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-ink-2">
 			<li>Vorher entsteht automatisch eine Sicherung des jetzigen Standes.</li>
+			{#if restoreSource?.upload}
+				<li>
+					Eine ZIP-Datei bringt auch die Dateien mit (PDFs, Pläne, Fotos, Rechnungsarchiv …): Fehlende kommen dazu, vorhandene bleiben unverändert. Eine .db-Datei
+					enthält nur die Datenbank.
+				</li>
+			{/if}
 			<li>Auch die Anmeldungen kommen aus der Sicherung. Wer dadurch abgemeldet wird, meldet sich einfach neu an.</li>
 			<li>Ältere Sicherungen werden beim Einspielen automatisch auf den aktuellen Stand gebracht.</li>
 		</ul>
@@ -474,7 +528,7 @@
 	{#snippet footer()}
 		<button class="btn btn-secondary" onclick={() => (restoreOpen = false)}>Abbrechen</button>
 		<button class="btn btn-danger" form="restore-form" disabled={!restorePassword || busy === 'restore'}>
-			{busy === 'restore' ? 'Wird eingespielt …' : 'Sicherung einspielen'}
+			{restoreShare !== null ? `Wird hochgeladen … ${Math.floor(restoreShare * 100)} %` : busy === 'restore' ? 'Wird eingespielt …' : 'Sicherung einspielen'}
 		</button>
 	{/snippet}
 </Dialog>
@@ -485,6 +539,12 @@
 			<span class="font-medium text-ink">{restoreResult.source}</span> ist jetzt der aktuelle Stand:
 			{int(restoreResult.products)} Artikel, {int(restoreResult.movements)} Bewegungen, {int(restoreResult.users)} Benutzer.
 		</p>
+		{#if restoreResult.files}
+			{@const f = restoreResult.files}
+			<p class="mt-2 text-ink-2">
+				Dateien: {int(f.added)} ergänzt, {int(f.present)} waren schon da{#if f.skipped}, <span class="font-medium text-danger">{int(f.skipped)} beschädigt oder unbekannt – nicht übernommen</span>{/if}.
+			</p>
+		{/if}
 		<p class="mt-2 text-sm text-ink-3">
 			Der Stand von vorher liegt als <span class="num">{restoreResult.backup}</span> in der Liste der Sicherungen. Falls du dabei abgemeldet
 			wurdest, einfach neu anmelden.

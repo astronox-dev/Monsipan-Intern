@@ -1,8 +1,9 @@
 /**
- * Pläne ohne Größengrenze hochladen: Der Browser schickt jede PDF in Teilen an
- * /api/unterlagen. Bricht die Verbindung ab (Baustelle, Funkloch), geht es dort
- * weiter, wo der Server zuletzt stand. Ins Formular kommen danach nur noch die
- * Kennungen der fertigen Uploads.
+ * Große Dateien ohne Größengrenze hochladen: Der Browser schickt sie in Teilen –
+ * Pläne an /api/unterlagen, Sicherungen an /api/sicherung (Gegenstück am Server:
+ * $lib/server/parts). Bricht die Verbindung ab (Baustelle, Funkloch), geht es
+ * dort weiter, wo der Server zuletzt stand. Ins Formular kommen danach nur noch
+ * die Kennungen der Uploads.
  */
 
 /** Je Anfrage – weit unter der Grenze von Cloudflare (100 MB) */
@@ -27,17 +28,15 @@ async function messageOf(res: Response): Promise<string> {
 	return res.status === 401 ? 'Du bist nicht mehr angemeldet.' : `Der Server hat abgelehnt (${res.status}).`;
 }
 
-/** Eine PDF hochladen; gibt die Kennung des fertigen Uploads zurück */
-export async function uploadPdf(file: File, onProgress?: (bytes: number) => void): Promise<string> {
-	// Die Kennung „%PDF-“ steht in den ersten 1024 Bytes – nicht erst nach dem Hochladen merken
-	if (!(await file.slice(0, 1024).text()).includes('%PDF-')) throw new UploadError(`${file.name}: Das ist keine PDF-Datei.`);
+/** Datei in Teilen an `endpoint` schicken; gibt die Kennung des Uploads zurück */
+export async function uploadInParts(file: File, endpoint: string, onProgress?: (bytes: number) => void): Promise<string> {
 	const id = newId();
 	let offset = 0;
 	let retries = 0;
 	while (offset < file.size) {
 		let res: Response | null = null;
 		try {
-			res = await fetch(`/api/unterlagen?id=${id}&ab=${offset}`, {
+			res = await fetch(`${endpoint}?id=${id}&ab=${offset}`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/octet-stream' },
 				body: file.slice(offset, offset + PART_BYTES)
@@ -59,6 +58,14 @@ export async function uploadPdf(file: File, onProgress?: (bytes: number) => void
 			onProgress?.(offset);
 		}
 	}
+	return id;
+}
+
+/** Eine PDF hochladen und am Server prüfen lassen; gibt die Kennung des fertigen Uploads zurück */
+export async function uploadPdf(file: File, onProgress?: (bytes: number) => void): Promise<string> {
+	// Die Kennung „%PDF-“ steht in den ersten 1024 Bytes – nicht erst nach dem Hochladen merken
+	if (!(await file.slice(0, 1024).text()).includes('%PDF-')) throw new UploadError(`${file.name}: Das ist keine PDF-Datei.`);
+	const id = await uploadInParts(file, '/api/unterlagen', onProgress);
 	const done = await fetch(`/api/unterlagen?id=${id}&fertig&name=${encodeURIComponent(file.name)}`, { method: 'POST' });
 	if (!done.ok) throw new UploadError(`${file.name}: ${await messageOf(done)}`);
 	return id;
