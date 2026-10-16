@@ -8,7 +8,8 @@
 	import { enhance } from '$app/forms';
 	import Inbox from '@lucide/svelte/icons/inbox';
 	import Plus from '@lucide/svelte/icons/plus';
-	import Search from '@lucide/svelte/icons/search';
+	import SearchInput from '$lib/components/SearchInput.svelte';
+	import { liveSubmit } from '$lib/live-search';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import { date as dateLabel } from '$lib/format';
@@ -80,8 +81,7 @@
 	</div>
 	<form method="GET" class="flex min-w-[14rem] flex-1 gap-2">
 		<input type="hidden" name="stand" value={data.filter.state} />
-		<input class="input" name="q" value={data.filter.q} placeholder="Betreff, Absender, Kunde, Ort" aria-label="Suche" />
-		<button class="btn btn-secondary btn-icon" aria-label="Suchen"><Search size={18} /></button>
+		<div class="flex-1"><SearchInput value={data.filter.q} placeholder="Betreff, Absender, Kunde, Ort" label="Suche" /></div>
 	</form>
 </div>
 

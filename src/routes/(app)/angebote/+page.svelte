@@ -3,7 +3,8 @@
 	import { enhance } from '$app/forms';
 	import FilePen from '@lucide/svelte/icons/file-pen-line';
 	import Plus from '@lucide/svelte/icons/plus';
-	import Search from '@lucide/svelte/icons/search';
+	import SearchInput from '$lib/components/SearchInput.svelte';
+	import { liveSubmit } from '$lib/live-search';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import HardHat from '@lucide/svelte/icons/hard-hat';
 	import Dialog from '$lib/components/Dialog.svelte';
@@ -51,15 +52,14 @@
 		{#if data.filter.year}<input type="hidden" name="jahr" value={data.filter.year} />{/if}
 		<label class="min-w-[12rem] flex-1">
 			<span class="field-label">Suche</span>
-			<input class="input" name="q" value={data.filter.q} placeholder="Nummer, BV, Kunde, Projektnummer" />
+			<SearchInput value={data.filter.q} placeholder="Nummer, BV, Kunde, Projektnummer" />
 		</label>
 		<label>
 			<span class="field-label">Stand</span>
-			<select class="select" name="status" value={data.filter.status} onchange={(e) => e.currentTarget.form?.requestSubmit()}>
+			<select class="select" name="status" value={data.filter.status} onchange={(e) => liveSubmit(e.currentTarget.form)}>
 				{#each FILTERS as [key, label] (key)}<option value={key}>{label}</option>{/each}
 			</select>
 		</label>
-		<button class="btn btn-secondary"><Search size={18} aria-hidden="true" />Filtern</button>
 		{#if data.filter.q || data.filter.status || data.filter.year}<a href="/angebote" class="btn btn-ghost">Zurücksetzen</a>{/if}
 	</form>
 	<YearTabs years={data.years} current={data.filter.year} />

@@ -453,6 +453,13 @@ Seite). Angebote und Rechnungen sind zusätzlich **nach Jahren** eingeteilt: je 
 Überschrift mit der Anzahl, neueste zuerst, und oben die Jahre zum Auswählen (Angebote nach
 Angebotsdatum, Rechnungen nach Rechnungsdatum).
 
+**Live-Suche:** In Anfragen, Angeboten, Aufträgen, Rechnungen, Tagesberichten und Kunden sucht
+die Liste schon beim Tippen – kurz nach dem letzten Tastendruck, Enter sofort; Filter (Stand,
+Partie, Datum, ausgeblendete) greifen beim Ändern. Fokus und Scrollstand bleiben, die Adresse
+zeigt die Suche (zum Teilen oder als Lesezeichen), und ein neues Ergebnis beginnt auf Seite 1.
+Das Suchfeld ist [`SearchInput`](src/lib/components/SearchInput.svelte), das Abschicken
+[`liveSubmit`](src/lib/live-search.ts).
+
 **Angebote** (`/angebote`) sehen aus wie die bisherigen aus dem Büro: Briefkopf, Anschrift
 links, rechts Angebotsdatum, Kunden-UID, Projektnummer und Angebotsnummer, darunter
 „Angebot Nr. 26 659 / BV: …“, die Einleitung, die Positionen mit **Nr., Bezeichnung, Menge,

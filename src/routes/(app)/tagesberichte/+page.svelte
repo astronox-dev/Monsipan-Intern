@@ -3,7 +3,8 @@
 	import { enhance } from '$app/forms';
 	import NotebookPen from '@lucide/svelte/icons/notebook-pen';
 	import Plus from '@lucide/svelte/icons/plus';
-	import Search from '@lucide/svelte/icons/search';
+	import SearchInput from '$lib/components/SearchInput.svelte';
+	import { liveSubmit } from '$lib/live-search';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import Dialog from '$lib/components/Dialog.svelte';
@@ -71,24 +72,23 @@
 <form method="GET" class="card mb-4 flex flex-wrap items-end gap-3 p-3">
 	<label class="min-w-[12rem] flex-1">
 		<span class="field-label">Suche</span>
-		<input class="input" name="q" value={data.filter.q} placeholder="Nummer, Straße, Baustelle, LV-Position" />
+		<SearchInput value={data.filter.q} placeholder="Nummer, Straße, Baustelle, LV-Position" />
 	</label>
 	<label>
 		<span class="field-label">von</span>
-		<input class="input num" type="date" name="von" value={data.filter.from} />
+		<input class="input num" type="date" name="von" value={data.filter.from} onchange={(e) => liveSubmit(e.currentTarget.form)} />
 	</label>
 	<label>
 		<span class="field-label">bis</span>
-		<input class="input num" type="date" name="bis" value={data.filter.to} />
+		<input class="input num" type="date" name="bis" value={data.filter.to} onchange={(e) => liveSubmit(e.currentTarget.form)} />
 	</label>
 	<label>
 		<span class="field-label">Stand</span>
-		<select class="select" name="stand" value={data.filter.status}>
+		<select class="select" name="stand" value={data.filter.status} onchange={(e) => liveSubmit(e.currentTarget.form)}>
 			<option value="">Alle</option>
 			{#each Object.entries(STATUS) as [key, s] (key)}<option value={key}>{s.label}</option>{/each}
 		</select>
 	</label>
-	<button class="btn btn-secondary"><Search size={18} aria-hidden="true" />Filtern</button>
 	{#if data.filter.q || data.filter.from || data.filter.to || data.filter.status}
 		<a href="/tagesberichte" class="btn btn-ghost">Zurücksetzen</a>
 	{/if}

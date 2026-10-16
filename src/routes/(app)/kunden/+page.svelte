@@ -3,7 +3,8 @@
 	import { enhance } from '$app/forms';
 	import Building from '@lucide/svelte/icons/building';
 	import Plus from '@lucide/svelte/icons/plus';
-	import Search from '@lucide/svelte/icons/search';
+	import SearchInput from '$lib/components/SearchInput.svelte';
+	import { liveSubmit } from '$lib/live-search';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import ListBar from '$lib/components/ListBar.svelte';
@@ -47,7 +48,7 @@
 	<form method="GET" class="card flex flex-wrap items-end gap-3 p-3">
 		<label class="min-w-[12rem] flex-1">
 			<span class="field-label">Suche</span>
-			<input class="input" name="q" value={data.filter.q} placeholder="Name, Ort, Ansprechpartner, UID" />
+			<SearchInput value={data.filter.q} placeholder="Name, Ort, Ansprechpartner, UID" />
 		</label>
 		<label class="flex items-center gap-2 pb-2.5 text-sm">
 			<input
@@ -56,10 +57,9 @@
 				value="1"
 				class="size-5 accent-[var(--c-ink)]"
 				checked={data.filter.all}
-				onchange={(e) => e.currentTarget.form?.requestSubmit()}
+				onchange={(e) => liveSubmit(e.currentTarget.form)}
 			/>Auch ausgeblendete
 		</label>
-		<button class="btn btn-secondary"><Search size={18} aria-hidden="true" />Suchen</button>
 		{#if data.filter.q || data.filter.all}<a href="/kunden" class="btn btn-ghost">Zurücksetzen</a>{/if}
 	</form>
 </ListBar>

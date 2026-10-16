@@ -5,7 +5,8 @@
 	 */
 	import { pageTitle } from '$lib/app';
 	import HardHat from '@lucide/svelte/icons/hard-hat';
-	import Search from '@lucide/svelte/icons/search';
+	import SearchInput from '$lib/components/SearchInput.svelte';
+	import { liveSubmit } from '$lib/live-search';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ReceiptText from '@lucide/svelte/icons/receipt-text';
 	import { dateTime } from '$lib/format';
@@ -64,19 +65,18 @@
 	<input type="hidden" name="status" value={data.filter.status} />
 	<label class="min-w-[12rem] flex-1">
 		<span class="field-label">Suche</span>
-		<input class="input" name="q" value={data.filter.q} placeholder="Nummer, BV, Kunde" />
+		<SearchInput value={data.filter.q} placeholder="Nummer, BV, Kunde" />
 	</label>
 	{#if data.all}
 		<label>
 			<span class="field-label">Partie</span>
-			<select class="select" name="partie" value={data.filter.partyId ? String(data.filter.partyId) : ''}>
+			<select class="select" name="partie" value={data.filter.partyId ? String(data.filter.partyId) : ''} onchange={(e) => liveSubmit(e.currentTarget.form)}>
 				<option value="">Alle Partien</option>
 				<option value="ohne">Nicht zugeteilt</option>
 				{#each data.parties as p (p.id)}<option value={String(p.id)}>{p.name}</option>{/each}
 			</select>
 		</label>
 	{/if}
-	<button class="btn btn-secondary"><Search size={18} aria-hidden="true" />Filtern</button>
 	{#if data.filter.q || data.filter.partyId}<a href="/auftraege?status={data.filter.status}" class="btn btn-ghost">Zurücksetzen</a>{/if}
 </form>
 

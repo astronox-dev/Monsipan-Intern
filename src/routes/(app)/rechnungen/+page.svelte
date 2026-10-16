@@ -10,7 +10,8 @@
 	import YearTabs from '$lib/components/YearTabs.svelte';
 	import { withParams } from '$lib/url';
 	import ReceiptText from '@lucide/svelte/icons/receipt-text';
-	import Search from '@lucide/svelte/icons/search';
+	import SearchInput from '$lib/components/SearchInput.svelte';
+	import { liveSubmit } from '$lib/live-search';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import Pagination from '$lib/components/Pagination.svelte';
@@ -86,8 +87,7 @@
 		<form method="GET" class="flex min-w-[14rem] flex-1 gap-2">
 			<input type="hidden" name="stand" value={data.filter.state} />
 			{#if data.filter.year}<input type="hidden" name="jahr" value={data.filter.year} />{/if}
-			<input class="input" name="q" value={data.filter.q} placeholder="Nummer, Kostenstelle, BV, Kunde, Ort" aria-label="Suche" />
-			<button class="btn btn-secondary btn-icon" aria-label="Suchen"><Search size={18} /></button>
+			<div class="flex-1"><SearchInput value={data.filter.q} placeholder="Nummer, Kostenstelle, BV, Kunde, Ort" label="Suche" /></div>
 		</form>
 	</div>
 	<YearTabs years={data.years} current={data.filter.year} />
