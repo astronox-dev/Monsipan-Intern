@@ -1,25 +1,22 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import Bell from '@lucide/svelte/icons/bell';
 	import Search from '@lucide/svelte/icons/search';
 	import ScanBarcode from '@lucide/svelte/icons/scan-barcode';
 	import Logo from './Logo.svelte';
-	import ProductSearch from '$lib/modules/lager/components/ProductSearch.svelte';
+	import GlobalSearch from './GlobalSearch.svelte';
 	import Dialog from './Dialog.svelte';
-	import type { ProductSummary } from '$lib/modules/lager/types';
+	import { can, type Role } from '$lib/permissions';
 
 	interface Props {
 		/** Ungelesene Benachrichtigungen */
 		unread: number;
 		onscan: () => void;
+		role: Role;
 	}
-	let { unread, onscan }: Props = $props();
+	let { unread, onscan, role }: Props = $props();
 	let searchOpen = $state(false);
-
-	function openProduct(p: ProductSummary) {
-		searchOpen = false;
-		goto(`/lager/artikel/${p.id}`);
-	}
+	/** Wer Artikel sieht, kann im Suchfeld auch mit dem Handscanner suchen */
+	const scanTarget = $derived(can(role, 'lager.artikel.sehen'));
 </script>
 
 <!-- Abstand oben um safe-area-inset-top: in der App liegt die Seite unter der Statusleiste -->
@@ -28,11 +25,11 @@
 		<a href="/" class="rounded-lg lg:hidden" aria-label="Zur Übersicht"><Logo /></a>
 
 		<div class="hidden w-full max-w-md lg:block">
-			<ProductSearch onselect={openProduct} shortcut id="global-search" />
+			<GlobalSearch {role} {scanTarget} shortcut id="global-search" />
 		</div>
 
 		<div class="ml-auto flex items-center gap-1.5">
-			<button class="btn btn-ghost btn-icon lg:hidden" aria-label="Artikel suchen" onclick={() => (searchOpen = true)}>
+			<button class="btn btn-ghost btn-icon lg:hidden" aria-label="Im Portal suchen" onclick={() => (searchOpen = true)}>
 				<Search size={21} />
 			</button>
 			<button class="btn btn-secondary hidden lg:inline-flex" onclick={onscan}>
@@ -58,9 +55,8 @@
 	</div>
 </header>
 
-<Dialog bind:open={searchOpen} title="Artikel suchen">
-	<div class="pb-24">
-		<ProductSearch onselect={openProduct} autofocus id="mobile-search" size="lg" />
-		<p class="field-hint">Name, Artikelnummer, EAN, Materialart oder Farbe</p>
+<Dialog bind:open={searchOpen} title="Suchen">
+	<div class="min-h-[50vh] pb-6">
+		<GlobalSearch {role} {scanTarget} autofocus inline id="mobile-search" size="lg" onnavigate={() => (searchOpen = false)} />
 	</div>
 </Dialog>

@@ -33,12 +33,12 @@ const STATE_WHERE: Record<InquiryState, SQL | undefined> = { offen: open, neu: f
 
 export interface InquiryFilter {
 	q?: string;
-	/** „offen" (Standard), „neu", „inarbeit" oder „erledigt" */
+	/** „offen" (Standard), „neu", „inarbeit", „erledigt" oder „alle" (Suche oben) */
 	state?: string;
 }
 
 export async function listInquiries(filter: InquiryFilter = {}, limit = 200) {
-	const where: (SQL | undefined)[] = [STATE_WHERE[filter.state as InquiryState] ?? open];
+	const where: (SQL | undefined)[] = [filter.state === 'alle' ? undefined : (STATE_WHERE[filter.state as InquiryState] ?? open)];
 	if (filter.q?.trim()) {
 		const q = `%${filter.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 		where.push(

@@ -26,6 +26,16 @@ Dokumentation (Tagesberichte der Woche, Stundenzettel der Woche bzw. der eigene)
 Jeder sieht nur, was er auch öffnen darf – ein Partieführer etwa die Aufträge und Berichte
 seiner Partie, keine Preise. Jeder Punkt führt in die passende, schon gefilterte Liste.
 
+**Suche oben** (Strg K, am Handy die Lupe): durchsucht das ganze Portal – Aufträge, Angebote,
+Rechnungen, Tagesberichte, Anfragen (auch erledigte), Kunden, Artikel, Benutzer und die Seiten
+selbst („Wochenplanung“, „Einstellungen“ …). Je Bereich die ersten fünf Treffer mit Stand, dazu
+**Alle Treffer** in der gefilterten Liste; Pfeiltasten und Enter öffnen. Jeder sieht nur, was er
+auch öffnen darf: Bereiche ohne Recht bleiben ganz draußen, und gesucht wird mit denselben Abfragen
+wie in den Listen – eine Partie findet also nur ihre eigenen Aufträge und Berichte, keine Preise.
+Nummern gehen auch wie angezeigt („26 001“). Wer Artikel sieht, kann ins Feld auch mit dem
+Handscanner scannen. Der Code steht in [`src/lib/server/search.ts`](src/lib/server/search.ts)
+und [`GlobalSearch`](src/lib/components/GlobalSearch.svelte).
+
 Welche Bereiche es gibt und welche davon freigeschaltet sind, steht an einer Stelle:
 [`src/lib/modules.ts`](src/lib/modules.ts). Ein neuer Bereich bekommt dort einen Eintrag,
 seine Seiten unter `src/routes/(app)/<bereich>/` und seinen Code unter
@@ -1416,7 +1426,7 @@ src/
                    Felder in modules/auftraege/transfer.ts, Excel/CSV in server/table.ts)
     (kunde)/       Seiten für Kunden ohne Anmeldung: Tagesbericht unterschreiben, Angebot annehmen,
                    Rechnung prüfen (/pruefen/<schlüssel>)
-    api/           Code-Suche, Artikelsuche, Live-Ereignisse
+    api/           Code-Suche, Artikelsuche, Suche oben (suche), Live-Ereignisse
     export/        CSV-Exporte (Excel-kompatibel) und Backup-Download
 ```
 
