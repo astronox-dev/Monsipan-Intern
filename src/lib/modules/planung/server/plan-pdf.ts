@@ -1,7 +1,8 @@
 /**
  * Wochenplanung als PDF – A4 quer wie der Zettel: oben KW und Zeitraum, je
- * Partie eine Spalte (mit den Leuten), je Tag eine Zeile, in den Feldern
- * Aufträge, Text, Urlaub und Krankenstand. Darunter – nur wer alle Partien
+ * Partie eine Spalte (mit den Leuten der Woche), je Tag eine Zeile, in den
+ * Feldern Aufträge, Text, Urlaub und Krankenstand, dazu wer an dem Tag aus
+ * einer anderen Partie aushilft bzw. woanders ist. Darunter – nur wer alle Partien
  * sieht – die nicht zugeteilten Aufträge und die offenen Notizen. Die Zeilen wachsen mit dem Inhalt; was nicht
  * mehr auf die Seite passt, geht mit wiederholtem Kopf weiter.
  */
@@ -52,6 +53,13 @@ export async function planPdf(week: PlanWeek, weekStart: string, heading: string
 		for (const a of week.absences.filter((a) => a.partyId === partyId && a.from <= day && (a.to ?? '9999-12-31') >= day)) {
 			items.push({ text: `${ABSENCE[a.kind]}: ${a.name}`, size: 6.5, color: COLORS[a.kind], gap: items.length ? 2 : 0 });
 		}
+		// Besetzung nur an diesem Tag: wer hier aushilft, wer woanders ist
+		for (const m of week.dayMoves.filter((m) => m.partyId === partyId && m.date === day)) {
+			items.push({ text: `+ ${m.name} (aus ${m.fromPartyName})`, size: 6.5, color: INK, gap: items.length ? 2 : 0 });
+		}
+		for (const m of week.dayMoves.filter((m) => m.fromPartyId === partyId && m.date === day)) {
+			items.push({ text: `${m.name} → ${m.partyName}`, size: 6.5, color: MUTED, gap: items.length ? 2 : 0 });
+		}
 		return items;
 	};
 
@@ -88,7 +96,9 @@ export async function planPdf(week: PlanWeek, weekStart: string, heading: string
 	const tableHead = (y: number): number => {
 		const heads = parties.map((p) => [
 			{ text: p.name, size: 8, bold: true },
-			...(p.members.length ? [{ text: p.members.map((m) => m.name).join(' · '), size: 6.5, color: MUTED, gap: 1 }] : [])
+			...(p.members.length
+				? [{ text: p.members.map((m) => (m.fromName ? `${m.name} (aus ${m.fromName})` : m.name)).join(' · '), size: 6.5, color: MUTED, gap: 1 }]
+				: [])
 		]);
 		const h = Math.max(18, ...heads.map((items) => measure(items, colW - 2 * PAD))) + 2 * PAD;
 		doc.rect(L, y, R - L, h).fillColor('#eef0f2').fill();

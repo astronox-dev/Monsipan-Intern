@@ -646,6 +646,31 @@ dialog.sheet[open]::backdrop {
 	}
 }
 
+/* Ziehen und Ablegen (src/lib/dnd.ts) */
+.dnd-draggable {
+	touch-action: manipulation;
+	-webkit-touch-callout: none;
+	user-select: none;
+}
+.dnd-ghost {
+	box-shadow: 0 10px 28px -8px rgb(0 0 0 / 0.45);
+	opacity: 0.95;
+	cursor: grabbing;
+}
+.dnd-source {
+	opacity: 0.35;
+}
+.dnd-over {
+	outline: 2px dashed var(--c-ink);
+	outline-offset: -3px;
+	background: color-mix(in srgb, var(--c-brand) 14%, transparent) !important;
+}
+body.dnd-active,
+body.dnd-active * {
+	cursor: grabbing !important;
+	user-select: none;
+}
+
 @media print {
 	@page {
 		size: A4;

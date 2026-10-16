@@ -17,7 +17,7 @@ import { countInvoices, openGrossTotal, ordersToInvoice } from '$lib/modules/auf
 import { reportCounts } from '$lib/modules/tagesberichte/server/reports';
 import { countReleased, maySeeTimesheets, seesOthers, weekOverview, type WeekRow } from '$lib/modules/stunden/server/timesheets';
 import { addDays, isoWeek, mondayOf, today } from '$lib/modules/stunden/week';
-import { todayForParty } from '$lib/modules/planung/server/plan';
+import { partyOnDay, todayForParty } from '$lib/modules/planung/server/plan';
 import { countOpenLeave } from '$lib/modules/planung/server/urlaub';
 import { sickCounts } from '$lib/modules/planung/server/krank';
 import { can, type Permission } from '$lib/permissions';
@@ -138,7 +138,9 @@ async function dokuData(user: SessionUser, monday: string) {
 
 /** Planung: was die eigene Partie heute vorhat, offene Urlaubsanträge, Krankenstände ohne Beleg */
 async function planData(user: SessionUser, day: string) {
-	const today = can(user.role, 'planung.sehen') && user.partyId ? await todayForParty(user.partyId, day) : null;
+	// Wer heute laut Planung bei einer anderen Partie aushilft, sieht deren Tag
+	const party = can(user.role, 'planung.sehen') ? await partyOnDay(user.id, user.partyId, day) : null;
+	const today = party ? await todayForParty(party, day) : null;
 	const [openLeave, sick] = await Promise.all([
 		can(user.role, 'urlaub.genehmigen') ? countOpenLeave() : null,
 		can(user.role, 'krankenstand.alle.sehen') ? sickCounts(day) : null

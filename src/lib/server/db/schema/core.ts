@@ -13,6 +13,8 @@ export const parties = sqliteTable('parties', {
 	kind: text('kind', { enum: ['person', 'gruppe'] }).notNull().default('gruppe'),
 	note: text('note').notNull().default(''),
 	active: integer('active', { mode: 'boolean' }).notNull().default(true),
+	/** Platz als Spalte in der Wochenplanung (per Ziehen); ohne Platz alphabetisch dahinter */
+	planOrder: integer('plan_order'),
 	createdAt: createdAt()
 });
 

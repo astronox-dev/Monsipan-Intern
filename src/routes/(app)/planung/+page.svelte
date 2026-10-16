@@ -5,9 +5,18 @@
 	 * stehen von selbst dabei. Darunter – nur fürs Büro – die Aufträge ohne
 	 * Partie (beim Einplanen werden sie zugeteilt) und die Notizliste.
 	 * Wer nur die eigene Partie sieht, bekommt die Woche als Liste.
+	 *
+	 * Ziehen und Ablegen (wer bearbeiten darf): Spalten am Griff umordnen,
+	 * Einträge auf ein anderes Feld, Leute auf eine andere Spalte (die Woche)
+	 * oder in ein Feld (nur dieser Tag). Ein Klick auf einen Namen teilt ihn
+	 * über den Dialog ein – auch ohne Ziehen, etwa mit der Tastatur.
 	 */
 	import { pageTitle } from '$lib/app';
-	import { enhance } from '$app/forms';
+	import { deserialize, enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import { draggable, dropzone, type DragItem } from '$lib/dnd';
+	import GripVertical from '@lucide/svelte/icons/grip-vertical';
+	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import CalendarDays from '@lucide/svelte/icons/calendar-days';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -42,6 +51,85 @@
 	const cell = (partyId: number, day: string) => data.entries.filter((e) => e.partyId === partyId && e.date === day);
 	const away = (partyId: number, day: string) => data.absences.filter((a) => a.partyId === partyId && a.from <= day && (a.to ?? '9999-12-31') >= day);
 	const label = (e: Entry) => (e.orderId ? e.orderLocation || e.orderTitle || `Auftrag ${spacedNumber(e.orderNumber ?? '')}` : e.text);
+	/** Wer an diesem Tag aus einer anderen Spalte hier aushilft – und wer von hier woanders ist */
+	const guests = (partyId: number, day: string) => data.dayMoves.filter((m) => m.partyId === partyId && m.date === day);
+	const elsewhere = (partyId: number, day: string) => data.dayMoves.filter((m) => m.fromPartyId === partyId && m.date === day);
+	const nameOfParty = (id: number) => data.parties.find((p) => p.id === id)?.name ?? '';
+	const dayName = (day: string) => `${DAY[data.days.indexOf(day)] ?? ''} ${short(day)}`;
+
+	/* ------------------------------------------------ Ziehen und Ablegen */
+	type EntryDrag = { id: number; partyId: number; date: string };
+	type PersonDrag = { userId: number; name: string; weekParty: number; day?: string };
+
+	/** Aktion ohne Formular abschicken, danach neu laden */
+	async function post(action: string, fields: Record<string, string | number | (string | number)[]>, ok?: string) {
+		const body = new FormData();
+		for (const [key, value] of Object.entries(fields)) for (const v of [value].flat()) body.append(key, String(v));
+		const res = await fetch(`?/${action}`, { method: 'POST', body, headers: { 'x-sveltekit-action': 'true' } });
+		const result = deserialize(await res.text());
+		if (result.type === 'failure') toast.error(String(result.data?.message ?? 'Das hat nicht geklappt.'));
+		else if (result.type === 'error') toast.error('Das hat nicht geklappt – bitte noch einmal versuchen.');
+		else if (result.type === 'success' && result.data?.assigned) toast.success('Auftrag ist jetzt dieser Partie zugeteilt', 'Die Partie bekommt dazu eine Benachrichtigung.');
+		else if (ok) toast.success(ok);
+		await invalidateAll();
+	}
+
+	/** Ins Feld: ein Eintrag (vor den Eintrag, auf dem er landet) oder eine Person für diesen Tag */
+	const dropOnCell = (partyId: number, day: string) => (item: DragItem, at: { target: Element }) => {
+		if (item.kind === 'entry') {
+			const e = item.data as EntryDrag;
+			const before = (at.target.closest('[data-entry]') as HTMLElement | null)?.dataset.entry;
+			const beforeId = before ? Number(before) : null;
+			if (beforeId === e.id) return;
+			post('move', { id: e.id, datum: day, partie: partyId, ...(beforeId ? { vor: beforeId } : {}) });
+		} else if (item.kind === 'person') {
+			const m = item.data as PersonDrag;
+			if (m.day === day && m.weekParty === partyId) return;
+			post('crew', { person: m.userId, partie: partyId, tag: day }, `${m.name}: ${dayName(day)} bei ${nameOfParty(partyId)}`);
+		}
+	};
+
+	/** In den Spaltenkopf: eine Person für die ganze Woche – oder eine Spalte an diese Stelle */
+	const dropOnHead = (partyId: number) => (item: DragItem, at: { x: number; zone: Element }) => {
+		if (item.kind === 'person') {
+			const m = item.data as PersonDrag;
+			if (!m.day && m.weekParty === partyId) return;
+			post('crew', { person: m.userId, partie: partyId, woche: data.weekStart }, `${m.name} ist diese Woche bei ${nameOfParty(partyId)}`);
+		} else if (item.kind === 'party') {
+			const moved = (item.data as { id: number }).id;
+			if (moved === partyId) return;
+			const ids = data.parties.map((p) => p.id).filter((id) => id !== moved);
+			const r = at.zone.getBoundingClientRect();
+			const index = ids.indexOf(partyId) + (at.x > r.left + r.width / 2 ? 1 : 0);
+			ids.splice(index, 0, moved);
+			post('order', { partie: ids });
+		}
+	};
+
+	/** Spalte mit der Tastatur verschieben: Pfeil links/rechts am Griff */
+	function columnKey(e: KeyboardEvent, partyId: number) {
+		const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+		if (!step) return;
+		e.preventDefault();
+		const ids = data.parties.map((p) => p.id);
+		const i = ids.indexOf(partyId);
+		const j = i + step;
+		if (j < 0 || j >= ids.length) return;
+		[ids[i], ids[j]] = [ids[j], ids[i]];
+		post('order', { partie: ids });
+	}
+
+	/* ------------------------------------------------ Dialog Person einteilen */
+	let crewOpen = $state(false);
+	let crewPerson = $state<{ userId: number; name: string; weekParty: number; fromName: string | null } | null>(null);
+	let crewWhen = $state('woche');
+	let crewParty = $state('');
+	function openCrew(person: { userId: number; name: string; weekParty: number; fromName: string | null }, when = 'woche', party = person.weekParty) {
+		crewPerson = person;
+		crewWhen = when;
+		crewParty = String(party);
+		crewOpen = true;
+	}
 
 	/* ------------------------------------------------ Dialog Eintrag */
 	let open = $state(false);
@@ -153,7 +241,14 @@
 {#snippet entryChip(e: Entry)}
 	{@const main = label(e)}
 	{#if data.canEdit}
-		<button type="button" class="chip" onclick={() => openEdit(e)} title="Ändern">
+		<button
+			type="button"
+			class="chip"
+			data-entry={e.id}
+			onclick={() => openEdit(e)}
+			title="Ändern – oder auf ein anderes Feld ziehen"
+			use:draggable={{ kind: 'entry', data: { id: e.id, partyId: e.partyId, date: e.date } satisfies EntryDrag }}
+		>
 			<span class="block font-medium">{main}</span>
 			{#if e.orderId}<span class="num block text-[0.6875rem] text-ink-3">{spacedNumber(e.orderNumber ?? '')}{e.text ? ` · ${e.text}` : ''}</span>{/if}
 		</button>
@@ -186,11 +281,18 @@
 {:else if !data.all && data.parties.length === 1}
 	<!-- Eigene Partie: die Woche als Liste -->
 	{@const p = data.parties[0]}
+	{#if p.members.length}
+		<p class="mb-3 text-sm text-ink-2">
+			Diese Woche: {p.members.map((m) => (m.fromName ? `${m.name} (aus ${m.fromName})` : m.name)).join(' · ')}
+		</p>
+	{/if}
 	<ul class="space-y-2">
 		{#each data.days as day, i (day)}
 			{@const items = cell(p.id, day)}
 			{@const off = away(p.id, day)}
 			{@const holiday = holidayName(day)}
+			{@const help = guests(p.id, day)}
+			{@const gone = elsewhere(p.id, day)}
 			<li class="card p-3 {day === data.today ? 'border-ink' : ''} {i >= 5 && !items.length ? 'opacity-70' : ''}">
 				<div class="flex items-baseline gap-2">
 					<span class="font-display text-lg font-semibold">{DAY[i]}</span>
@@ -198,10 +300,12 @@
 					{#if day === data.today}<span class="badge badge-info">Heute</span>{/if}
 					{#if holiday}<span class="text-sm text-danger">{holiday}</span>{/if}
 				</div>
-				{#if items.length || off.length}
+				{#if items.length || off.length || help.length || gone.length}
 					<div class="mt-2 flex flex-wrap gap-1.5">
 						{#each items as e (e.id)}{@render entryChip(e)}{/each}
 						{#each off as a, n (n)}{@render absence(a)}{/each}
+						{#each help as m (m.userId)}<span class="person guest"><ArrowRightLeft size={12} aria-hidden="true" />{m.name} (aus {m.fromPartyName})</span>{/each}
+						{#each gone as m (m.userId)}<span class="person gone">{m.name} bei {m.partyName}</span>{/each}
 					</div>
 				{:else}
 					<p class="mt-1 text-sm text-ink-3">Nichts eingeplant</p>
@@ -210,15 +314,47 @@
 		{/each}
 	</ul>
 {:else}
-	<div class="card relative overflow-x-auto">
+	<div class="card relative overflow-x-auto" data-dnd-scroll>
 		<table class="plan w-full border-collapse text-sm" style="min-width: {6 + data.parties.length * 10}rem">
 			<thead>
 				<tr class="border-b border-line">
 					<th scope="col" class="sticky left-0 z-10 w-24 bg-surface px-3 py-2 text-left align-bottom">KW {kw.week}</th>
 					{#each data.parties as p (p.id)}
-						<th scope="col" class="px-2 py-2 text-left align-bottom">
-							<span class="block font-semibold">{p.name}</span>
-							<span class="block text-[0.6875rem] font-normal text-ink-3">{p.members.map((m) => m.name).join(' · ')}</span>
+						<th scope="col" class="head px-2 py-2 text-left align-bottom" use:dropzone={{ accepts: ['person', 'party'], onDrop: dropOnHead(p.id), disabled: !data.canEdit }}>
+							<span class="flex items-center gap-1">
+								{#if data.canEdit}
+									<button
+										type="button"
+										class="grip -ml-1 grid h-6 w-5 shrink-0 cursor-grab place-items-center rounded text-ink-3 hover:bg-surface-3 hover:text-ink"
+										aria-label="Spalte {p.name} verschieben – ziehen oder Pfeiltasten"
+										title="Spalte verschieben"
+										onkeydown={(e) => columnKey(e, p.id)}
+										use:draggable={{ kind: 'party', data: { id: p.id } }}
+									>
+										<GripVertical size={14} aria-hidden="true" />
+									</button>
+								{/if}
+								<span class="font-semibold">{p.name}</span>
+							</span>
+							{#if p.members.length}
+								<span class="mt-1 flex flex-wrap gap-1 font-normal">
+									{#each p.members as m (m.id)}
+										{#if data.canEdit}
+											<button
+												type="button"
+												class="person {m.fromName ? 'guest' : ''}"
+												title={m.fromName ? `Diese Woche hier, fest: ${m.fromName}` : 'Zu einer anderen Partie ziehen – in die Spalte (Woche) oder ein Feld (Tag)'}
+												onclick={() => openCrew({ userId: m.id, name: m.name, weekParty: p.id, fromName: m.fromName })}
+												use:draggable={{ kind: 'person', data: { userId: m.id, name: m.name, weekParty: p.id } satisfies PersonDrag }}
+											>
+												{#if m.fromName}<ArrowRightLeft size={11} aria-hidden="true" />{/if}{m.name}
+											</button>
+										{:else}
+											<span class="person {m.fromName ? 'guest' : ''}" title={m.fromName ? `Diese Woche hier, fest: ${m.fromName}` : undefined}>{m.name}</span>
+										{/if}
+									{/each}
+								</span>
+							{/if}
 						</th>
 					{/each}
 				</tr>
@@ -235,10 +371,34 @@
 						{#each data.parties as p (p.id)}
 							{@const items = cell(p.id, day)}
 							{@const off = away(p.id, day)}
-							<td class="group px-1.5 py-1.5">
+							{@const help = guests(p.id, day)}
+							{@const gone = elsewhere(p.id, day)}
+							<td class="group px-1.5 py-1.5" use:dropzone={{ accepts: ['entry', 'person'], onDrop: dropOnCell(p.id, day), disabled: !data.canEdit }}>
 								<div class="flex min-h-10 flex-col gap-1">
 									{#each items as e (e.id)}{@render entryChip(e)}{/each}
 									{#if off.length}<div class="flex flex-wrap gap-1">{#each off as a, n (n)}{@render absence(a)}{/each}</div>{/if}
+									{#if help.length || gone.length}
+										<div class="flex flex-wrap gap-1">
+											{#each help as m (m.userId)}
+												{#if data.canEdit}
+													<button
+														type="button"
+														class="person guest"
+														title="{dayName(day)} hier, sonst bei {m.fromPartyName}"
+														onclick={() => openCrew({ userId: m.userId, name: m.name, weekParty: m.fromPartyId, fromName: null }, day, p.id)}
+														use:draggable={{ kind: 'person', data: { userId: m.userId, name: m.name, weekParty: p.id, day } satisfies PersonDrag }}
+													>
+														<ArrowRightLeft size={11} aria-hidden="true" />{m.name}
+													</button>
+												{:else}
+													<span class="person guest" title="{dayName(day)} hier, sonst bei {m.fromPartyName}"><ArrowRightLeft size={11} aria-hidden="true" />{m.name}</span>
+												{/if}
+											{/each}
+											{#each gone as m (m.userId)}
+												<span class="person gone" title="{dayName(day)} bei {m.partyName}">{m.name} → {m.partyName}</span>
+											{/each}
+										</div>
+									{/if}
 									{#if data.canEdit}
 										<button
 											type="button"
@@ -259,6 +419,10 @@
 	</div>
 	<p class="mt-2 text-[0.8125rem] text-ink-3">
 		<TreePalm size={12} class="inline" aria-hidden="true" /> Urlaub (genehmigt) · <Thermometer size={12} class="inline" aria-hidden="true" /> Krankenstand – kommen von selbst aus Urlaub und Krankenstand.
+		{#if data.canEdit}
+			<br />Ziehen: Spalten am <GripVertical size={12} class="inline" aria-hidden="true" /> umordnen · Einträge auf ein anderes Feld · Leute in eine andere Spalte (diese Woche) oder in ein
+			Feld (nur dieser Tag) – die feste Partie im Benutzerkonto bleibt. Am Handy kurz halten, dann ziehen.
+		{/if}
 	</p>
 {/if}
 
@@ -376,6 +540,62 @@
 	</section>
 {/if}
 
+{#if data.canEdit && crewPerson}
+	{@const person = crewPerson}
+	<Dialog bind:open={crewOpen} title="{person.name} einteilen" onclose={() => (crewOpen = false)}>
+		<form
+			method="POST"
+			action="?/crew"
+			class="space-y-3"
+			use:enhance={() => async ({ result, update }) => {
+				if (result.type === 'success') {
+					crewOpen = false;
+					toast.success(crewWhen === 'woche' ? `${person.name} ist diese Woche bei ${nameOfParty(Number(crewParty))}` : `${person.name}: ${dayName(crewWhen)} bei ${nameOfParty(Number(crewParty))}`);
+				}
+				await update();
+			}}
+		>
+			<input type="hidden" name="person" value={person.userId} />
+			{#if crewWhen === 'woche'}<input type="hidden" name="woche" value={data.weekStart} />{:else}<input type="hidden" name="tag" value={crewWhen} />{/if}
+			<label class="block">
+				<span class="field-label">Wann</span>
+				<select class="select" bind:value={crewWhen}>
+					<option value="woche">Die ganze Woche (KW {kw.week})</option>
+					{#each data.days as d, i (d)}<option value={d}>Nur {DAY[i]} {short(d)}</option>{/each}
+				</select>
+			</label>
+			<label class="block">
+				<span class="field-label">Partie</span>
+				<select class="select" name="partie" bind:value={crewParty}>
+					{#each data.parties as p (p.id)}<option value={String(p.id)}>{p.name}</option>{/each}
+				</select>
+			</label>
+			<p class="field-hint">Gilt nur für die Planung – die feste Partie im Benutzerkonto bleibt, nächste Woche gilt wieder sie.</p>
+			{#if form && 'message' in form && form.message}<p class="text-sm text-danger" role="alert">{form.message}</p>{/if}
+			<div class="flex flex-wrap items-center gap-2 pt-1">
+				<button class="btn btn-primary">Einteilen</button>
+				<button type="button" class="btn btn-ghost" onclick={() => (crewOpen = false)}>Abbrechen</button>
+			</div>
+		</form>
+		{#if person.fromName}
+			<form
+				method="POST"
+				action="?/crewReset"
+				class="mt-3 border-t border-line pt-3"
+				use:enhance={() => async ({ update }) => {
+					crewOpen = false;
+					toast.success(`${person.name} ist wieder bei ${person.fromName}`);
+					await update();
+				}}
+			>
+				<input type="hidden" name="person" value={person.userId} />
+				<input type="hidden" name="woche" value={data.weekStart} />
+				<button class="btn btn-ghost btn-sm"><ArrowRightLeft size={15} aria-hidden="true" />Zurück zur festen Partie ({person.fromName})</button>
+			</form>
+		{/if}
+	</Dialog>
+{/if}
+
 {#if data.canEdit}
 	<Dialog bind:open title={editing ? 'Eintrag ändern' : 'Eintragen'} onclose={() => (open = false)}>
 		<form method="POST" action={editing ? '?/update' : '?/add'} class="space-y-3" use:enhance={after(editing ? 'Gespeichert' : '')}>
@@ -466,6 +686,32 @@
 	a.chip:hover {
 		border-color: var(--c-line-strong);
 		background: var(--c-surface-3);
+	}
+	.person {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		border-radius: 999px;
+		padding: 0.0625rem 0.5rem;
+		font-size: 0.6875rem;
+		line-height: 1.4;
+		background: var(--c-surface-2);
+		border: 1px solid var(--c-line);
+		color: var(--c-ink-2);
+	}
+	button.person:hover {
+		border-color: var(--c-line-strong);
+		color: var(--c-ink);
+	}
+	.person.guest {
+		border-style: dashed;
+		color: var(--c-ink);
+	}
+	.person.gone {
+		background: transparent;
+		color: var(--c-ink-3);
+		text-decoration: line-through;
+		text-decoration-color: color-mix(in srgb, currentColor 50%, transparent);
 	}
 	.away {
 		display: inline-flex;

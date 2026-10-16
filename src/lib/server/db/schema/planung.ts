@@ -2,7 +2,7 @@
  * Planung und Abwesenheiten: die Wochenplanung je Partie und Tag, die
  * durchgehende Notizliste dazu, Urlaubsanträge und Krankmeldungen mit Belegen.
  */
-import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { createdAt } from './common';
 import { orders } from './auftraege';
 import { parties, users } from './core';
@@ -29,6 +29,48 @@ export const planEntries = sqliteTable(
 		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
 	},
 	(t) => [index('plan_entries_date_idx').on(t.date), index('plan_entries_party_idx').on(t.partyId, t.date), index('plan_entries_order_idx').on(t.orderId)]
+);
+
+/**
+ * Besetzung in der Wochenplanung, abweichend von der festen Partie im
+ * Benutzerkonto – wie am Zettel: für eine ganze Woche (`planCrewWeeks`) oder nur
+ * an einem Tag (`planCrewDays`, geht vor). Die feste Partie bleibt; nächste
+ * Woche gilt wieder sie.
+ */
+export const planCrewWeeks = sqliteTable(
+	'plan_crew_weeks',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		/** Montag der Woche, „JJJJ-MM-TT" */
+		weekStart: text('week_start').notNull(),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		partyId: integer('party_id')
+			.notNull()
+			.references(() => parties.id, { onDelete: 'cascade' }),
+		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+		createdAt: createdAt()
+	},
+	(t) => [uniqueIndex('plan_crew_weeks_user_idx').on(t.weekStart, t.userId)]
+);
+
+export const planCrewDays = sqliteTable(
+	'plan_crew_days',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		/** „JJJJ-MM-TT" */
+		date: text('date').notNull(),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		partyId: integer('party_id')
+			.notNull()
+			.references(() => parties.id, { onDelete: 'cascade' }),
+		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+		createdAt: createdAt()
+	},
+	(t) => [uniqueIndex('plan_crew_days_user_idx').on(t.date, t.userId)]
 );
 
 /** Notizen zur Planung – eine durchgehende Liste, nur fürs Büro; erledigte bleiben abgehakt stehen */

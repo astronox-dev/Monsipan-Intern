@@ -358,6 +358,24 @@ Eintragen lassen sich **mehrere Tage** auf einmal ankreuzen; ein Eintrag lässt 
 auf einen anderen Tag oder zu einer anderen Partie schieben und löschen. Mit den Pfeilen geht
 es eine Woche vor oder zurück.
 
+**Ziehen und Ablegen** (wer die Planung bearbeiten darf; mit Maus, Finger oder Stift – am Handy
+kurz halten, dann ziehen):
+
+- **Spalten umordnen:** am Griff ⋮⋮ neben dem Namen der Partie ziehen (oder mit den Pfeiltasten).
+  Die Reihenfolge gilt für alle und auch im PDF und Ausdruck; neue Partien stehen alphabetisch
+  dahinter.
+- **Einträge verschieben:** einen Eintrag auf ein anderes Feld ziehen – anderer Tag, andere
+  Partie oder auf einen anderen Eintrag, dann landet er davor. Ein nicht zugeteilter Auftrag
+  geht dabei wie beim Eintragen an die Partie.
+- **Leute einteilen:** einen Namen in den Kopf einer anderen Spalte ziehen – dann ist die
+  Person **die ganze Woche** dort (mit ⇄ markiert, „aus …“) – oder in ein Feld, dann **nur an
+  diesem Tag**: dort steht sie mit ⇄, in ihrer Spalte „Name → Partie“. Ein Klick auf den Namen
+  öffnet dasselbe als Auswahl (Woche oder ein Tag, Partie) samt **Zurück zur festen Partie**.
+  Das gilt nur für die Planung: die feste Partie im Benutzerkonto bleibt, nächste Woche gilt
+  wieder sie. Urlaub und Krankenstand stehen bei der Partie der Woche, „Heute laut Plan“ auf
+  der Übersicht zeigt den Tag der Partie, bei der jemand heute ist, und die Partie sieht in
+  ihrer Liste, wer diese Woche dabei ist und wer an einem Tag aushilft.
+
 **PDF und Drucken:** Die Woche gibt es als PDF (A4 quer, wie der Zettel – die Zeilen wachsen mit
 dem Inhalt, die Notizen stehen darunter) und als Druckansicht. Jeder bekommt dabei genau das,
 was er auf der Seite sieht: die Partie nur ihre Spalte, ohne Notizen.

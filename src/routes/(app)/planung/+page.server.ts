@@ -7,11 +7,15 @@ import {
 	claimOrder,
 	deleteEntry,
 	deleteNote,
+	moveEntry,
 	planOrders,
 	planWeek,
 	readEntry,
+	resetCrew,
 	seesAllPlans,
 	sendWeek,
+	setCrew,
+	setPartyOrder,
 	setNoteDone,
 	updateEntry,
 	updateNote
@@ -73,6 +77,66 @@ export const actions: Actions = {
 		const result = await updateEntry(id(form), input);
 		if (result !== true) return fail(400, result);
 		return { saved: 1, assigned: await assign(user, input) };
+	},
+
+	/** Per Ziehen auf ein anderes Feld – vor einen anderen Eintrag (`vor`) oder ans Ende */
+	move: async ({ request, locals }) => {
+		const user = requirePermission(locals, 'planung.bearbeiten');
+		const form = await request.formData();
+		const date = String(form.get('datum') ?? '');
+		const partyId = Number(form.get('partie'));
+		const before = Number(form.get('vor'));
+		if (!isValidIsoDate(date) || !Number.isInteger(partyId)) return fail(400, { message: 'Tag oder Partie fehlt.' });
+		const result = await moveEntry(id(form), { date, partyId, beforeId: Number.isInteger(before) && before > 0 ? before : null });
+		if ('message' in result) return fail(400, result);
+		return { moved: true, assigned: await assign(user, { orderId: result.orderId, partyId }) };
+	},
+
+	/** Reihenfolge der Spalten – `partie` mehrfach, in der neuen Reihenfolge */
+	order: async ({ request, locals }) => {
+		requirePermission(locals, 'planung.bearbeiten');
+		const ids = (await request.formData())
+			.getAll('partie')
+			.map(Number)
+			.filter((n) => Number.isInteger(n) && n > 0);
+		if (!ids.length) return fail(400, { message: 'Keine Partien.' });
+		await setPartyOrder(ids);
+		return { ordered: true };
+	},
+
+	/**
+	 * Person für diese Woche (`woche`) oder nur einen Tag (`tag`) zu einer
+	 * anderen Partie – die feste Partie im Konto bleibt
+	 */
+	crew: async ({ request, locals }) => {
+		const user = requirePermission(locals, 'planung.bearbeiten');
+		const form = await request.formData();
+		const userId = Number(form.get('person'));
+		const partyId = Number(form.get('partie'));
+		const week = String(form.get('woche') ?? '');
+		const day = String(form.get('tag') ?? '');
+		if (!Number.isInteger(userId) || !Number.isInteger(partyId)) return fail(400, { message: 'Person oder Partie fehlt.' });
+		const problem = isValidIsoDate(day)
+			? await setCrew(user, { userId, partyId, date: day })
+			: isValidIsoDate(week)
+				? await setCrew(user, { userId, partyId, weekStart: mondayOf(week) })
+				: 'Woche oder Tag fehlt.';
+		if (problem) return fail(400, { message: problem });
+		return { crew: true };
+	},
+
+	/** Abweichung aufheben – Woche bzw. Tag */
+	crewReset: async ({ request, locals }) => {
+		requirePermission(locals, 'planung.bearbeiten');
+		const form = await request.formData();
+		const userId = Number(form.get('person'));
+		const week = String(form.get('woche') ?? '');
+		const day = String(form.get('tag') ?? '');
+		if (!Number.isInteger(userId)) return fail(400, { message: 'Person fehlt.' });
+		if (isValidIsoDate(day)) await resetCrew({ userId, date: day });
+		else if (isValidIsoDate(week)) await resetCrew({ userId, weekStart: mondayOf(week) });
+		else return fail(400, { message: 'Woche oder Tag fehlt.' });
+		return { crew: true };
 	},
 
 	remove: async ({ request, locals }) => {

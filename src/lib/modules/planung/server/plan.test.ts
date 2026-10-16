@@ -10,8 +10,8 @@ vi.mock('$app/environment', () => ({ dev: true, browser: false, building: false,
 
 const { db, client, ensureDatabase } = await import('$lib/server/db');
 const { eq } = await import('drizzle-orm');
-const { orders, parties } = await import('$lib/server/db/schema');
-const { claimOrder, unassignedOrders } = await import('./plan');
+const { orders, parties, users } = await import('$lib/server/db/schema');
+const { addEntry, claimOrder, moveEntry, partyOnDay, planWeek, resetCrew, setCrew, setPartyOrder, unassignedOrders } = await import('./plan');
 
 beforeAll(async () => {
 	await ensureDatabase();
@@ -47,5 +47,78 @@ describe('Aufträge ohne Partie', () => {
 		// Schon zugeteilt: bleibt, wo er ist – die andere Partie hilft nur aus
 		expect(await claimOrder(taken.id, b.id)).toBe(false);
 		expect((await db.select({ partyId: orders.partyId }).from(orders).where(eq(orders.id, taken.id)).get())?.partyId).toBe(a.id);
+	});
+});
+
+describe('Besetzung, Verschieben und Spalten', () => {
+	const MON = '2026-10-19';
+	const TUE = '2026-10-20';
+	const admin = { id: 1, role: 'admin', partyId: null } as unknown as Parameters<typeof planWeek>[0];
+
+	it('Leute für die Woche oder einen Tag woanders – die feste Partie bleibt', async () => {
+		const [nord, sued] = await db.insert(parties).values([{ name: 'Nord' }, { name: 'Süd' }]).returning({ id: parties.id });
+		const [max, eva] = await db
+			.insert(users)
+			.values([
+				{ username: 'max', firstName: 'Max', passwordHash: 'x', role: 'arbeiter', partyId: nord.id },
+				{ username: 'eva', firstName: 'Eva', passwordHash: 'x', role: 'arbeiter', partyId: nord.id }
+			])
+			.returning({ id: users.id });
+		const membersOf = async (week: string, partyId: number) => (await planWeek(admin, week)).parties.find((p) => p.id === partyId)!.members;
+
+		// Max die ganze Woche zu Süd, Eva nur am Dienstag
+		expect(await setCrew(admin, { userId: max.id, partyId: sued.id, weekStart: MON })).toBeNull();
+		expect(await setCrew(admin, { userId: eva.id, partyId: sued.id, date: TUE })).toBeNull();
+		expect((await membersOf(MON, nord.id)).map((m) => m.name)).toEqual(['Eva']);
+		expect(await membersOf(MON, sued.id)).toEqual([{ id: max.id, name: 'Max', fromName: 'Nord' }]);
+		const week = await planWeek(admin, MON);
+		expect(week.dayMoves).toEqual([
+			expect.objectContaining({ userId: eva.id, date: TUE, partyId: sued.id, fromPartyId: nord.id, name: 'Eva', partyName: 'Süd', fromPartyName: 'Nord' })
+		]);
+		// Das Konto bleibt unverändert, die nächste Woche auch
+		expect((await db.select({ partyId: users.partyId }).from(users).where(eq(users.id, max.id)).get())?.partyId).toBe(nord.id);
+		expect((await membersOf('2026-10-26', nord.id)).map((m) => m.name)).toEqual(['Eva', 'Max']);
+		// Heute laut Plan: am Dienstag ist Eva bei Süd
+		expect(await partyOnDay(eva.id, nord.id, TUE)).toBe(sued.id);
+		expect(await partyOnDay(max.id, nord.id, TUE)).toBe(sued.id);
+		expect(await partyOnDay(max.id, nord.id, '2026-10-26')).toBe(nord.id);
+
+		// Zurück auf die eigene Partie heißt: die Abweichung ist weg
+		expect(await setCrew(admin, { userId: eva.id, partyId: nord.id, date: TUE })).toBeNull();
+		expect((await planWeek(admin, MON)).dayMoves).toEqual([]);
+		await resetCrew({ userId: max.id, weekStart: MON });
+		expect((await membersOf(MON, nord.id)).map((m) => m.name)).toEqual(['Eva', 'Max']);
+		expect(await setCrew(admin, { userId: max.id, partyId: 99999, weekStart: MON })).toMatch(/Partie/);
+	});
+
+	it('Einträge per Ziehen auf ein anderes Feld, vor einen anderen oder ans Ende', async () => {
+		const [a, b] = await db.insert(parties).values([{ name: 'Feld A' }, { name: 'Feld B' }]).returning({ id: parties.id });
+		const add = async (partyId: number, text: string) => (await addEntry(admin, { date: MON, partyId, orderId: null, text })) as number;
+		const x = await add(a.id, 'X');
+		const y = await add(b.id, 'Y');
+		const z = await add(b.id, 'Z');
+		const cell = async (partyId: number, date: string) =>
+			(await planWeek(admin, MON)).entries.filter((e) => e.partyId === partyId && e.date === date).map((e) => e.text);
+
+		expect(await moveEntry(x, { date: MON, partyId: b.id, beforeId: z })).toEqual({ orderId: null });
+		expect(await cell(b.id, MON)).toEqual(['Y', 'X', 'Z']);
+		expect(await cell(a.id, MON)).toEqual([]);
+		await moveEntry(y, { date: TUE, partyId: b.id, beforeId: null });
+		expect(await cell(b.id, MON)).toEqual(['X', 'Z']);
+		expect(await cell(b.id, TUE)).toEqual(['Y']);
+		// Innerhalb des Feldes ans Ende
+		await moveEntry(x, { date: MON, partyId: b.id, beforeId: null });
+		expect(await cell(b.id, MON)).toEqual(['Z', 'X']);
+		expect(await moveEntry(999999, { date: MON, partyId: b.id, beforeId: null })).toMatchObject({ message: expect.any(String) });
+	});
+
+	it('Spalten in eigener Reihenfolge, der Rest alphabetisch dahinter', async () => {
+		const names = async () => (await planWeek(admin, MON)).parties.map((p) => p.name);
+		const all = await db.select({ id: parties.id, name: parties.name }).from(parties).all();
+		const id = (name: string) => all.find((p) => p.name === name)!.id;
+		await setPartyOrder([id('Süd'), id('Feld B')]);
+		const order = await names();
+		expect(order.slice(0, 2)).toEqual(['Süd', 'Feld B']);
+		expect(order.slice(2)).toEqual([...order.slice(2)].sort((x, y) => x.localeCompare(y)));
 	});
 });
