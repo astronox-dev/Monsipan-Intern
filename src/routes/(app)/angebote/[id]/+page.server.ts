@@ -25,7 +25,9 @@ import { activeParties, createOrderFromOffer, insertOrderDocument, mayDeleteOrde
 import { DocumentError, storeDocument, takeUploads } from '$lib/server/documents';
 import { isValidIsoDate } from '$lib/modules/stunden/week';
 import { parseAmount } from '$lib/modules/auftraege/offer';
-import { notifyOffer, notifyOrderAssigned } from '$lib/modules/auftraege/server/notify';
+import { notifyOffer, notifyOrderAssigned, notifyOrderDocuments } from '$lib/modules/auftraege/server/notify';
+import { addOfferDocuments, deleteOfferDocument, getOfferDocument, listOfferDocuments, setOfferDocumentForCrew } from '$lib/modules/auftraege/server/offer-documents';
+import { titleFromFileName } from '$lib/documents';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -55,6 +57,9 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		canLink,
 		canCreateOrder,
 		parties: canCreateOrder ? await activeParties() : [],
+		// Unterlagen: in jedem Stand, auch wenn schon beauftragt
+		documents: await listOfferDocuments(offer.id),
+		canManageDocuments: can(user.role, 'angebote.bearbeiten'),
 		mailConfigured: isMailConfigured(),
 		// Die E-Mail der Anfrage, aus der das Angebot entstand
 		inquiry: can(user.role, 'anfragen.sehen') ? ((await inquiryForOffer(offer.id)) ?? null) : null,
@@ -223,6 +228,60 @@ export const actions: Actions = {
 	},
 
 	/** Auftrag aus dem angenommenen Angebot – mit derselben Nummer, für eine Partie */
+	/**
+	 * PDFs ans Angebot – in jedem Stand. Der Browser lädt sie vorher in Teilen
+	 * hoch (`uploads`); mit „für die Partie" erscheinen sie auch beim Auftrag.
+	 */
+	docUpload: async ({ params, request, locals }) => {
+		const { user, offer } = await open(Number(params.id), locals);
+		if (!can(user.role, 'angebote.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
+		const form = await request.formData();
+		const forCrew = form.get('partie') === 'on';
+		let files: { name: string; sha256: string; size: number }[];
+		try {
+			files = takeUploads(user.id, form.getAll('uploads').map(String));
+			// Ohne JavaScript kommen die Dateien selbst
+			for (const file of form.getAll('dateien').filter((f): f is File => f instanceof File && f.size > 0)) {
+				files.push({ name: file.name, ...(await storeDocument(file, null)) });
+			}
+		} catch (err) {
+			if (err instanceof DocumentError) return fail(400, { docError: err.message });
+			throw err;
+		}
+		if (!files.length) return fail(400, { docError: 'Bitte eine oder mehrere PDF-Dateien auswählen.' });
+		await addOfferDocuments(offer.id, files, user.id, forCrew);
+		if (forCrew && offer.order) {
+			notifyOrderDocuments(
+				offer.order.id,
+				files.map((f) => titleFromFileName(f.name) || f.name),
+				user.id
+			);
+		}
+		return { added: files.length };
+	},
+
+	/** Für die Partie freigeben bzw. wieder nur fürs Büro */
+	docCrew: async ({ params, request, locals }) => {
+		const { user, offer } = await open(Number(params.id), locals);
+		if (!can(user.role, 'angebote.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
+		const form = await request.formData();
+		const doc = await getOfferDocument(offer.id, Number(form.get('dokument')));
+		if (!doc) return fail(404, { docError: 'Unterlage nicht gefunden.' });
+		const forCrew = form.get('an') === '1';
+		await setOfferDocumentForCrew(offer.id, doc.id, forCrew);
+		if (forCrew && !doc.forCrew && offer.order) notifyOrderDocuments(offer.order.id, [doc.title], user.id);
+		return { forCrew };
+	},
+
+	docDelete: async ({ params, request, locals }) => {
+		const { user, offer } = await open(Number(params.id), locals);
+		if (!can(user.role, 'angebote.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
+		const id = Number((await request.formData()).get('dokument'));
+		if (!Number.isInteger(id)) return fail(400, { docError: 'Unterlage fehlt.' });
+		await deleteOfferDocument(offer.id, id);
+		return { documentRemoved: true };
+	},
+
 	createOrder: async ({ params, request, locals }) => {
 		const { user, offer } = await open(Number(params.id), locals);
 		if (!can(user.role, 'auftraege.erstellen')) return fail(403, { orderMessage: 'Dafür fehlt dir die Berechtigung.' });

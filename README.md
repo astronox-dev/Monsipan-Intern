@@ -525,6 +525,12 @@ nur, wer alle Aufträge sieht – die Partien nicht.
   Größengrenze gibt es für Pläne nicht: Der Browser schickt sie in Teilen zu 8 MB (so passt
   jede Anfrage durch Cloudflare) und macht nach einem Verbindungsabbruch dort weiter, wo er
   stand; die Anzeige zeigt, wie weit er ist.
+- **Unterlagen am Angebot:** PDFs lassen sich auch direkt ans Angebot hängen – in jedem Stand,
+  auch wenn es schon angenommen und beauftragt ist (Recht „Angebote bearbeiten“). Je Datei
+  entscheidet der Knopf **Partie / Nur Büro**: Mit **Partie** erscheint sie auch beim Auftrag
+  (mit „vom Angebot“, im Auftrags-PDF bei den Unterlagen) und die Partie bekommt Bescheid; mit
+  **Nur Büro** bleibt sie beim Angebot – etwa ein Leistungsverzeichnis mit Preisen. Beim
+  Hochladen gilt das Häkchen **für die Partie**; umschalten lässt es sich jederzeit.
 - **Tagesberichte zum Auftrag:** Beim Anlegen oder im Bericht lässt sich ein offener Auftrag
   wählen – die Baustelle wird dann aus dem Ausführungsort übernommen (oder dem BV, wenn keiner
   eingetragen ist). Im Auftrag stehen alle seine Tagesberichte, **Neuer Tagesbericht** legt

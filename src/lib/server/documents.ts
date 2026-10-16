@@ -11,10 +11,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Readable, Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { error } from '@sveltejs/kit';
 import { asc, eq, sql } from 'drizzle-orm';
 import { MAX_DOCUMENT_BYTES } from '$lib/documents';
 import { DATA_DIR, db } from './db';
-import { orderDocuments, productDocuments, users } from './db/schema';
+import { offerDocuments, orderDocuments, productDocuments, users } from './db/schema';
 import { appendPart, isWriting, partFile } from './parts';
 
 export const DOC_DIR = path.join(DATA_DIR, 'dokumente');
@@ -138,6 +139,29 @@ function touch(file: string) {
 	}
 }
 
+/**
+ * PDF ausliefern – zum Anzeigen oder mit ?download zum Speichern. Der Inhalt
+ * ändert sich nie, die Prüfsumme taugt als ETag. Wer es sehen darf, prüft der Aufrufer.
+ */
+export function documentResponse(doc: { sha256: string; fileName: string }, url: URL, request: Request): Response {
+	const file = documentFile(doc.sha256);
+	if (!fs.existsSync(file)) error(410, 'Die Datei zu dieser Unterlage ist nicht mehr vorhanden.');
+	const etag = `"${doc.sha256}"`;
+	const headers: Record<string, string> = { etag, 'cache-control': 'private, max-age=86400' };
+	if (request.headers.get('if-none-match') === etag) return new Response(null, { status: 304, headers });
+
+	const ascii = doc.fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+	const disposition = url.searchParams.has('download') ? 'attachment' : 'inline';
+	return new Response(Readable.toWeb(fs.createReadStream(file)) as ReadableStream, {
+		headers: {
+			...headers,
+			'content-type': 'application/pdf',
+			'content-length': String(fs.statSync(file).size),
+			'content-disposition': `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(doc.fileName)}`
+		}
+	});
+}
+
 /** Dokumente eines Artikels, neueste zuerst innerhalb der Art */
 export function listDocuments(productId: number) {
 	return db
@@ -163,12 +187,13 @@ export function listDocuments(productId: number) {
  * mehr benutzt, werden gelöscht. Abgebrochene Uploads nach einem Tag.
  */
 export async function tidyDocuments(now = new Date()): Promise<{ removed: number }> {
-	// Benutzt sind die PDFs an Artikeln und an Aufträgen
-	const [products, orders] = await Promise.all([
+	// Benutzt sind die PDFs an Artikeln, Aufträgen und Angeboten
+	const [products, orders, offers] = await Promise.all([
 		db.select({ sha: productDocuments.sha256 }).from(productDocuments).all(),
-		db.select({ sha: orderDocuments.sha256 }).from(orderDocuments).all()
+		db.select({ sha: orderDocuments.sha256 }).from(orderDocuments).all(),
+		db.select({ sha: offerDocuments.sha256 }).from(offerDocuments).all()
 	]);
-	return tidyFolder(DOC_DIR, SHA_FILE, new Set([...products, ...orders].map((r) => r.sha)), now);
+	return tidyFolder(DOC_DIR, SHA_FILE, new Set([...products, ...orders, ...offers].map((r) => r.sha)), now);
 }
 
 /**

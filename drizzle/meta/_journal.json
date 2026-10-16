@@ -274,6 +274,13 @@
       "when": 1791897290098,
       "tag": "0038_anfragen_in_arbeit",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1792147375320,
+      "tag": "0039_angebot_unterlagen",
+      "breakpoints": true
     }
   ]
 }

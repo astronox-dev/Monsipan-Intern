@@ -19,6 +19,9 @@
 	import MessageSquare from '@lucide/svelte/icons/message-square-warning';
 	import UserPlus from '@lucide/svelte/icons/user-plus';
 	import Inbox from '@lucide/svelte/icons/inbox';
+	import Upload from '@lucide/svelte/icons/upload';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import { fileSizeLabel } from '$lib/documents';
 	import CustomerLink from '$lib/components/CustomerLink.svelte';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PdfButton from '$lib/components/PdfButton.svelte';
@@ -93,6 +96,11 @@
 	let orderOpen = $state(false);
 	let customerBusy = $state(false);
 	let orderBusy = $state(false);
+	/** Unterlagen: Hochladen in Teilen, mit Fortschritt */
+	let docUploading = $state(false);
+	let docShare = $state(0);
+	let docError = $state('');
+	let removeDoc = $state<{ id: number; title: string } | null>(null);
 	/** Pläne beim Erstellen des Auftrags: Anteil hochgeladen (null = gerade nicht) */
 	let planShare = $state<number | null>(null);
 	let planError = $state('');
@@ -463,6 +471,130 @@
 	{/if}
 </form>
 
+<section class="card mt-4 p-4 lg:p-5" aria-labelledby="h-unterlagen">
+	<div class="flex flex-wrap items-center justify-between gap-2">
+		<div>
+			<h2 id="h-unterlagen" class="text-lg">Unterlagen</h2>
+			<p class="text-sm text-ink-2">
+				PDFs zum Angebot – auch wenn es schon beauftragt ist. Mit <span class="font-medium text-ink">Partie</span> angehakt erscheinen sie auch beim Auftrag; sonst
+				sieht sie nur das Büro.
+			</p>
+		</div>
+		{#if data.canManageDocuments}
+			<form
+				method="POST"
+				action="?/docUpload"
+				enctype="multipart/form-data"
+				class="flex flex-wrap items-center gap-3"
+				use:enhance={async ({ formData, formElement, cancel }) => {
+					docUploading = true;
+					docShare = 0;
+					docError = '';
+					// Große PDFs in Teilen vorab – ins Formular kommen nur noch die Kennungen
+					try {
+						await uploadFormPdfs(formData, 'dateien', (share) => (docShare = share));
+					} catch (err) {
+						docUploading = false;
+						docError = err instanceof UploadError ? err.message : 'Das Hochladen hat nicht geklappt – bitte noch einmal versuchen.';
+						formElement.reset();
+						cancel();
+						return;
+					}
+					return async ({ result, update }) => {
+						docUploading = false;
+						if (result.type === 'success') toast.success(Number(result.data?.added) === 1 ? 'PDF hochgeladen' : `${result.data?.added} PDFs hochgeladen`);
+						await update();
+					};
+				}}
+			>
+				<label class="flex items-center gap-2 text-sm" title="Erscheint auch beim Auftrag – die Partie sieht es">
+					<input type="checkbox" name="partie" class="size-4 accent-current" />
+					für die Partie
+				</label>
+				<label class="upload btn btn-secondary btn-sm {docUploading ? 'pointer-events-none opacity-50' : ''}">
+					<Upload size={16} aria-hidden="true" />{docUploading ? `Wird hochgeladen … ${Math.floor(docShare * 100)} %` : 'PDF hochladen'}
+					<input
+						type="file"
+						name="dateien"
+						accept="application/pdf,.pdf"
+						multiple
+						class="sr-only"
+						onchange={(e) => e.currentTarget.files?.length && e.currentTarget.form?.requestSubmit()}
+					/>
+				</label>
+			</form>
+		{/if}
+	</div>
+	{#if docError}<p class="field-error mt-2" role="alert">{docError}</p>
+	{:else if form && 'docError' in form && form.docError}<p class="field-error mt-2" role="alert">{form.docError}</p>{/if}
+	{#if data.documents.length}
+		<ul class="mt-3 divide-y divide-line rounded-xl border border-line">
+			{#each data.documents as d (d.id)}
+				<li class="flex items-center gap-2">
+					<a href="/angebote/{offer.id}/unterlagen/{d.id}" class="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 hover:bg-surface-2">
+						<FileText size={20} class="shrink-0 text-ink-3" aria-hidden="true" />
+						<span class="min-w-0 flex-1">
+							<span class="block truncate font-medium">{d.title}</span>
+							<span class="block truncate text-[0.8125rem] text-ink-3">{d.fileName} · {fileSizeLabel(d.size)}</span>
+						</span>
+						<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
+					</a>
+					{#if data.canManageDocuments}
+						<form
+							method="POST"
+							action="?/docCrew"
+							use:enhance={() => async ({ result, update }) => {
+								if (result.type === 'success') toast.success(result.data?.forCrew ? 'Erscheint jetzt auch beim Auftrag' : 'Nur noch fürs Büro');
+								await update({ reset: false });
+							}}
+						>
+							<input type="hidden" name="dokument" value={d.id} />
+							<input type="hidden" name="an" value={d.forCrew ? '0' : '1'} />
+							<button
+								class="badge {d.forCrew ? 'badge-info' : ''} cursor-pointer"
+								title={d.forCrew ? 'Erscheint beim Auftrag – klicken für nur Büro' : 'Nur fürs Büro – klicken, damit es die Partie beim Auftrag sieht'}
+							>
+								{d.forCrew ? 'Partie' : 'Nur Büro'}
+							</button>
+						</form>
+						<button
+							type="button"
+							class="mr-2 grid size-9 shrink-0 place-items-center rounded-lg text-ink-3 hover:bg-surface-3 hover:text-danger"
+							aria-label="{d.title} entfernen"
+							onclick={() => (removeDoc = d)}
+						>
+							<X size={16} />
+						</button>
+					{:else}
+						<span class="badge mr-3 {d.forCrew ? 'badge-info' : ''}">{d.forCrew ? 'Partie' : 'Nur Büro'}</span>
+					{/if}
+				</li>
+			{/each}
+		</ul>
+	{:else}
+		<p class="mt-2 text-sm text-ink-3">Noch keine Unterlagen.</p>
+	{/if}
+</section>
+
+<Dialog open={!!removeDoc} onclose={() => (removeDoc = null)} title="Unterlage entfernen?">
+	{#if removeDoc}
+		<p class="text-ink-2">„{removeDoc.title}“ wird vom Angebot entfernt{offer.order ? ' – und erscheint dann auch beim Auftrag nicht mehr' : ''}.</p>
+		<form
+			method="POST"
+			action="?/docDelete"
+			class="mt-5 flex justify-end gap-2"
+			use:enhance={() => async ({ update }) => {
+				removeDoc = null;
+				await update();
+			}}
+		>
+			<input type="hidden" name="dokument" value={removeDoc.id} />
+			<button type="button" class="btn btn-ghost" onclick={() => (removeDoc = null)}>Abbrechen</button>
+			<button class="btn btn-primary">Entfernen</button>
+		</form>
+	{/if}
+</Dialog>
+
 {#snippet tools(i: number, key: number)}
 	{#if data.editable}
 		<div class="flex items-center justify-end gap-0.5">
@@ -670,6 +802,11 @@
 </Dialog>
 
 <style>
+	/* Der Knopf ist ein Label um das Dateifeld – den Fokus zeigt er selbst */
+	.upload:has(input:focus-visible) {
+		outline: 2px solid var(--c-focus);
+		outline-offset: 2px;
+	}
 	/* Textfelder wachsen mit dem Inhalt, wo der Browser das kann */
 	.auto {
 		field-sizing: content;

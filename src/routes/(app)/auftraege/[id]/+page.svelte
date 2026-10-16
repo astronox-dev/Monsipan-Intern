@@ -218,8 +218,21 @@
 	</div>
 	{#if uploadError}<p class="field-error mt-2" role="alert">{uploadError}</p>
 	{:else if form && 'docError' in form && form.docError}<p class="field-error mt-2" role="alert">{form.docError}</p>{/if}
-	{#if order.documents.length}
+	{#if order.documents.length || order.offerDocuments.length}
 		<ul class="mt-3 divide-y divide-line rounded-xl border border-line">
+			<!-- Vom Angebot, was dort „für die Partie" angehakt ist – geändert wird es am Angebot -->
+			{#each order.offerDocuments as d (d.id)}
+				<li class="flex items-center gap-2">
+					<a href="/auftraege/{order.id}/unterlagen/a{d.id}" class="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 hover:bg-surface-2">
+						<FileText size={20} class="shrink-0 text-ink-3" aria-hidden="true" />
+						<span class="min-w-0 flex-1">
+							<span class="block truncate font-medium">{d.title}</span>
+							<span class="block truncate text-[0.8125rem] text-ink-3">{d.fileName} · {fileSizeLabel(d.size)} · vom Angebot</span>
+						</span>
+						<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
+					</a>
+				</li>
+			{/each}
 			{#each order.documents as d (d.id)}
 				<li class="flex items-center gap-2">
 					<a href="/auftraege/{order.id}/unterlagen/{d.id}" class="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 hover:bg-surface-2">

@@ -17,6 +17,7 @@ import { storeDocument } from '$lib/server/documents';
 import { titleFromFileName } from '$lib/documents';
 import { lineNumbers } from '../offer';
 import { syncOfferBilling } from './billing';
+import { crewDocumentsOfOffer, getOfferDocument } from './offer-documents';
 
 const creator = alias(users, 'creator');
 const statusUser = alias(users, 'status_user');
@@ -128,7 +129,13 @@ export async function orderDetail(id: number) {
 		.where(eq(orderPositions.orderId, id))
 		.orderBy(asc(orderPositions.sortOrder), asc(orderPositions.id))
 		.all();
-	return { ...order, lines, documents: await listOrderDocuments(id) };
+	return {
+		...order,
+		lines,
+		documents: await listOrderDocuments(id),
+		// Vom Angebot, was dort „für die Partie" angehakt ist
+		offerDocuments: order.offerId ? await crewDocumentsOfOffer(order.offerId) : []
+	};
 }
 
 export type OrderDetail = NonNullable<Awaited<ReturnType<typeof orderDetail>>>;
@@ -286,6 +293,20 @@ export function getOrderDocument(orderId: number, documentId: number) {
 		.from(orderDocuments)
 		.where(and(eq(orderDocuments.id, documentId), eq(orderDocuments.orderId, orderId)))
 		.get();
+}
+
+/**
+ * Unterlage zum Auftrag nach ihrem Teil in der Adresse: „12" ist eine eigene,
+ * „a12" eine vom Angebot – die nur, wenn sie dort für die Partie angehakt ist.
+ */
+export async function findOrderDocument(order: { id: number; offerId: number | null }, param: string) {
+	const fromOffer = /^a(\d+)$/.exec(param);
+	if (fromOffer) {
+		if (!order.offerId) return undefined;
+		const doc = await getOfferDocument(order.offerId, Number(fromOffer[1]));
+		return doc?.forCrew ? doc : undefined;
+	}
+	return /^\d+$/.test(param) ? getOrderDocument(order.id, Number(param)) : undefined;
 }
 
 /** Die Datei bleibt noch eine Weile für Sicherungen liegen */

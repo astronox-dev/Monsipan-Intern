@@ -199,6 +199,29 @@ export const orderDocuments = sqliteTable(
 );
 
 /**
+ * PDFs am Angebot (Leistungsverzeichnis, Pläne des Kunden …) – in jedem Stand,
+ * auch wenn es schon beauftragt ist. `forCrew`: erscheint auch beim Auftrag, wo
+ * die Partie es sieht; sonst bleibt es beim Büro. Dateien wie die PDFs am Artikel.
+ */
+export const offerDocuments = sqliteTable(
+	'offer_documents',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		offerId: integer('offer_id')
+			.notNull()
+			.references(() => offers.id, { onDelete: 'cascade' }),
+		title: text('title').notNull(),
+		fileName: text('file_name').notNull(),
+		sha256: text('sha256').notNull(),
+		size: integer('size').notNull(),
+		forCrew: integer('for_crew', { mode: 'boolean' }).notNull().default(false),
+		uploadedBy: integer('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
+		createdAt: createdAt()
+	},
+	(t) => [index('offer_documents_offer_idx').on(t.offerId)]
+);
+
+/**
  * Anfragen: eine E-Mail, hineinkopiert, mit Absender und Betreff. Daraus wird
  * ein Angebot; sobald es angenommen ist, ist die Anfrage erledigt und
  * verschwindet aus der Liste der offenen.
