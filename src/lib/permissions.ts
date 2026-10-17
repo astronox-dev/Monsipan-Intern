@@ -324,9 +324,9 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 		section: 'Auftragsmanagement',
 		view: { own: 'auftraege.sehen', all: 'auftraege.alle.sehen', ownLabel: PARTY },
 		create: { key: 'auftraege.erstellen', hint: 'Aus angenommenen Angeboten' },
-		edit: { all: 'auftraege.bearbeiten', hint: 'Partie, Ausführungsort, Hinweis, Unterlagen' },
+		edit: { all: 'auftraege.bearbeiten', hint: 'Partie, Ausführungsort, Hinweis, Unterlagen, Arbeitsauftrag' },
 		status: [
-			{ key: 'auftraege.status', label: 'In Arbeit / abgeschlossen', hint: 'Bei den Aufträgen, die man sieht' },
+			{ key: 'auftraege.status', label: 'In Arbeit / abgeschlossen', hint: 'Bei den Aufträgen, die man sieht – auch den Arbeitsauftrag auf der Baustelle ausfüllen' },
 			{ key: 'auftraege.status.zuruecksetzen', label: 'Zurück auf „Auftrag erstellt"' }
 		],
 		remove: { own: 'auftraege.loeschen.neu', all: 'auftraege.loeschen', ownLabel: 'Nur neue', hint: 'Neu: noch nicht begonnen' }

@@ -18,6 +18,8 @@
 	import X from '@lucide/svelte/icons/x';
 	import Sigma from '@lucide/svelte/icons/sigma';
 	import ReceiptText from '@lucide/svelte/icons/receipt-text';
+	import ClipboardList from '@lucide/svelte/icons/clipboard-list';
+	import Lock from '@lucide/svelte/icons/lock';
 	import { fileSizeLabel } from '$lib/documents';
 	import { uploadFormPdfs, UploadError } from '$lib/upload';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
@@ -151,6 +153,33 @@
 	<section class="card mt-4 border-warn/50 p-4 lg:p-5">
 		<h2 class="text-lg">Hinweis für die Partie</h2>
 		<p class="mt-2 whitespace-pre-line">{order.note}</p>
+	</section>
+{/if}
+
+{#if data.workOrder || data.canManage}
+	<!-- Arbeitsauftrag nach dem Vordruck: das Büro legt ihn an, die Partie füllt ihn auf der Baustelle aus -->
+	<section class="card mt-4 flex flex-wrap items-center gap-3 p-4 lg:p-5">
+		<ClipboardList size={22} class="shrink-0 text-ink-3" aria-hidden="true" />
+		<div class="min-w-[12rem] flex-1">
+			<h2 class="text-lg">Arbeitsauftrag</h2>
+			<p class="text-sm text-ink-2">
+				{#if data.workOrder?.customerSigned}
+					<Lock size={13} class="mr-1 inline align-[-1px]" aria-hidden="true" />Vom Auftraggeber unterschrieben am {dateTime(data.workOrder.customerSigned)}
+				{:else if data.workOrder}
+					Zuletzt geändert {dateTime(data.workOrder.updatedAt)}
+				{:else}
+					Formular für die Baustelle – vorbelegt mit Baustelle, Kontakt und Leistungen aus diesem Auftrag.
+				{/if}
+			</p>
+		</div>
+		{#if data.workOrder}
+			<PdfButton href="/auftraege/{order.id}/arbeitsauftrag/pdf" class="btn btn-secondary btn-sm"><FileText size={16} aria-hidden="true" />PDF</PdfButton>
+			<a href="/auftraege/{order.id}/arbeitsauftrag" class="btn btn-primary btn-sm">Öffnen<ChevronRight size={16} aria-hidden="true" /></a>
+		{:else}
+			<form method="POST" action="?/arbeitsauftrag" use:enhance>
+				<button class="btn btn-primary btn-sm"><Plus size={16} aria-hidden="true" />Arbeitsauftrag erstellen</button>
+			</form>
+		{/if}
 	</section>
 {/if}
 

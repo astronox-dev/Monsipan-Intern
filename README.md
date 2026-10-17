@@ -578,6 +578,28 @@ nur, wer alle Aufträge sieht – die Partien nicht.
   eingetragen ist). Im Auftrag stehen alle seine Tagesberichte, **Neuer Tagesbericht** legt
   gleich einen mit diesem Auftrag an. Im Tagesbericht-PDF steht „Auftrag Nr. …“ unter der
   Baustelle.
+- **Arbeitsauftrag** (`/auftraege/<id>/arbeitsauftrag`): das Formular FO 0814 – je Auftrag
+  einer. **Arbeitsauftrag erstellen** am Auftrag (Büro) legt ihn vorbelegt an: BV, Nummer,
+  Ausführungsort als Baustelle, Ansprechpartner und Telefon, die Positionen als Leistungen
+  (erste Zeile, Menge, Einheit) und – wenn eingeplant – erster und letzter Tag aus der
+  Wochenplanung als Ausführungsdatum und Endtermin. Wer füllt was aus:
+  - **Büro** (Recht „Aufträge bearbeiten“): Kopf, Beilagen/Baustelleninformationen,
+    Evaluierung, die Leistungen (Art der Markierung, RAL, MSK, Ca. Menge mit Einheit aus den
+    Stammdaten), Datum und Unterschrift BL sowie die Rückseite (Schutzausrüstung, besondere
+    Gefahren – je Zeile angehakt und was genau, dazu zwei freie Zeilen).
+  - **Partie** (Recht „In Arbeit / abgeschlossen“, bei ihren Aufträgen): ausgeführte Mengen,
+    Vorarbeiter-Checkliste, Auffälligkeiten mit Regiestunden, „Arbeit fertig am“, die
+    Unterschriften Vorarbeiter und Vertretung, die **Unterweisung der Mitarbeiter** (Name,
+    Datum, Unterschrift der Person am Gerät) und die **Unterschrift des Auftraggebers**.
+    Das Folienverlegeprotokoll (ja/nein) setzen beide.
+
+  Unterschreiben speichert vorher, was im Formular steht. Nach der Unterschrift des
+  Auftraggebers ist der Arbeitsauftrag gesperrt, bis sie wieder entfernt wird. Das **PDF**
+  ist im Aufbau des Vordrucks gezeichnet (Seite 1 Auftrag und Checkliste, Seite 2
+  Besonderheiten und Unterweisung); mehr als 13 Leistungen oder 6 Unterweisungen machen die
+  Zeilen enger bzw. die Tabelle länger. Gespeichert wird der Inhalt als JSON in `work_orders`
+  ([`work-order.ts`](src/lib/modules/auftraege/work-order.ts) prüft ihn und regelt, wer was
+  ändern darf).
 
 Die Liste der Aufträge hat drei Reiter mit der Anzahl je Stand: **Erstellt**, **In Arbeit**
 und **Abgeschlossen** – Suche und Partie gelten für alle drei. Bei den abgeschlossenen steht,

@@ -222,6 +222,27 @@ export const offerDocuments = sqliteTable(
 );
 
 /**
+ * Arbeitsauftrag nach dem Vordruck FO 0814 – je Auftrag höchstens einer. Der
+ * Inhalt (Kopf, Leistungen, Checklisten, Unterschriften …) steht als JSON da,
+ * gelesen und geprüft über readContent in modules/auftraege/work-order.ts.
+ */
+export const workOrders = sqliteTable(
+	'work_orders',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		orderId: integer('order_id')
+			.notNull()
+			.references(() => orders.id, { onDelete: 'cascade' }),
+		content: text('content', { mode: 'json' }).$type<unknown>().notNull(),
+		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+		createdAt: createdAt(),
+		updatedBy: integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+	},
+	(t) => [uniqueIndex('work_orders_order_idx').on(t.orderId)]
+);
+
+/**
  * Anfragen: eine E-Mail, hineinkopiert, mit Absender und Betreff. Daraus wird
  * ein Angebot; sobald es angenommen ist, ist die Anfrage erledigt und
  * verschwindet aus der Liste der offenen.

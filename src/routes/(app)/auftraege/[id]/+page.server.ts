@@ -21,6 +21,7 @@ import { invoiceBlocker, invoicesForOrder, unbilledReports } from '$lib/modules/
 import { reportCount } from '$lib/modules/auftraege/server/summary';
 import { notifyOrderAssigned, notifyOrderDocuments, notifyOrderStatus } from '$lib/modules/auftraege/server/notify';
 import { titleFromFileName } from '$lib/documents';
+import { createWorkOrder, workOrderSummary } from '$lib/modules/auftraege/server/work-orders';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -45,6 +46,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		parties: canManage ? await activeParties() : [],
 		// Tagesberichte zu diesem Auftrag – so weit dieser Benutzer sie sieht
 		reports: await listReports(user, { orderId: order.id }),
+		// Arbeitsauftrag nach dem Vordruck – anlegen darf das Büro
+		workOrder: await workOrderSummary(order.id),
 		canCreateReport: can(user.role, 'tagesberichte.erstellen') && order.status !== 'abgeschlossen',
 		// Mit Rechnung bleibt der Auftrag – sonst fehlt der Rechnung ihr Bezug
 		canDelete: mayDeleteOrder(user, order) && !invoices.length,
@@ -141,6 +144,14 @@ export const actions: Actions = {
 		if (!Number.isInteger(id)) return fail(400, { docError: 'Unterlage fehlt.' });
 		await deleteOrderDocument(order.id, id);
 		return { documentRemoved: true };
+	},
+
+	/** Arbeitsauftrag anlegen – vorbelegt aus dem Auftrag – und gleich öffnen */
+	arbeitsauftrag: async ({ params, locals }) => {
+		const { user, order } = await open(Number(params.id), locals);
+		if (!can(user.role, 'auftraege.bearbeiten')) return fail(403, { message: 'Den Arbeitsauftrag legt das Büro an.' });
+		await createWorkOrder(order, user.id);
+		redirect(303, `/auftraege/${order.id}/arbeitsauftrag`);
 	},
 
 	delete: async ({ params, locals }) => {
