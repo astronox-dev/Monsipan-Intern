@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'suche-'));
@@ -9,7 +10,7 @@ vi.mock('$env/dynamic/private', () => ({ env: { DATA_DIR: TMP, DEMO_DATA: 'false
 vi.mock('$app/environment', () => ({ dev: true, browser: false, building: false, version: 'test' }));
 
 const { db, client, ensureDatabase } = await import('./db');
-const { customers, inquiries, invoices, offers, orders, parties, products, users } = await import('./db/schema');
+const { customers, inquiries, invoices, offers, orders, parties, products, users, workOrders } = await import('./db/schema');
 const { globalSearch } = await import('./search');
 
 type Who = Parameters<typeof globalSearch>[0];
@@ -61,6 +62,10 @@ describe('Suche über das ganze Portal', () => {
 
 	it('die Partie sieht nur ihre Aufträge – keine Angebote, Rechnungen, Kunden oder Benutzer', async () => {
 		const nord = nordId;
+		// Ohne Arbeitsauftrag kennt die Partie den Auftrag noch nicht
+		expect(await keys(person('partiefuehrer', nord))).toEqual(['artikel']);
+		const [mine] = await db.select({ id: orders.id }).from(orders).where(eq(orders.number, '26001'));
+		await db.insert(workOrders).values({ orderId: mine.id, content: {} });
 		const groups = await globalSearch(person('partiefuehrer', nord), 'Kreisverkehr');
 		expect(groups.map((g) => g.key)).toEqual(['auftraege', 'artikel']);
 		expect(groups[0].hits.map((h) => h.title)).toEqual(['26 001 · Kreisverkehr Brunn']);

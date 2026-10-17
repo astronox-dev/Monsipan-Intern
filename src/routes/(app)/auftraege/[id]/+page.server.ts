@@ -13,6 +13,7 @@ import {
 	mayViewOrder,
 	maySetOrderStatus,
 	orderDetail,
+	seesWholeOrder,
 	setOrderStatus,
 	updateOrder
 } from '$lib/modules/auftraege/server/orders';
@@ -21,7 +22,7 @@ import { invoiceBlocker, invoicesForOrder, unbilledReports } from '$lib/modules/
 import { reportCount } from '$lib/modules/auftraege/server/summary';
 import { notifyOrderAssigned, notifyOrderDocuments, notifyOrderStatus } from '$lib/modules/auftraege/server/notify';
 import { titleFromFileName } from '$lib/documents';
-import { createWorkOrder, workOrderSummary } from '$lib/modules/auftraege/server/work-orders';
+import { hasWorkOrder, workOrderSummary } from '$lib/modules/auftraege/server/work-orders';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -34,6 +35,11 @@ async function open(id: number, locals: App.Locals) {
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const { user, order } = await open(Number(params.id), locals);
+	// Die Partie sieht nicht den ganzen Auftrag, nur den Arbeitsauftrag
+	if (!seesWholeOrder(user)) {
+		if (await hasWorkOrder(order.id)) redirect(303, `/auftraege/${order.id}/arbeitsauftrag`);
+		error(404, 'Zu diesem Auftrag gibt es noch keinen Arbeitsauftrag.');
+	}
 	const canManage = can(user.role, 'auftraege.bearbeiten');
 	const seesInvoices = can(user.role, 'rechnungen.sehen');
 	const [invoices, unbilled] = await Promise.all([invoicesForOrder(order.id), unbilledReports(order.id)]);
@@ -144,14 +150,6 @@ export const actions: Actions = {
 		if (!Number.isInteger(id)) return fail(400, { docError: 'Unterlage fehlt.' });
 		await deleteOrderDocument(order.id, id);
 		return { documentRemoved: true };
-	},
-
-	/** Arbeitsauftrag anlegen – vorbelegt aus dem Auftrag – und gleich öffnen */
-	arbeitsauftrag: async ({ params, locals }) => {
-		const { user, order } = await open(Number(params.id), locals);
-		if (!can(user.role, 'auftraege.bearbeiten')) return fail(403, { message: 'Den Arbeitsauftrag legt das Büro an.' });
-		await createWorkOrder(order, user.id);
-		redirect(303, `/auftraege/${order.id}/arbeitsauftrag`);
 	},
 
 	delete: async ({ params, locals }) => {

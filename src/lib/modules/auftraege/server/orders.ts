@@ -5,16 +5,18 @@
  * freiwillig: ein Auftrag kann auch erst später zugeteilt werden, etwa beim
  * Einplanen in der Wochenplanung.
  *
- * Wer nicht alle Aufträge sehen darf, sieht die seiner Partie.
+ * Wer nicht alle Aufträge sehen darf, sieht die seiner Partie – und davon nur
+ * die mit Arbeitsauftrag, und zwar nur diesen (siehe seesWholeOrder).
  */
 import { and, asc, desc, eq, inArray, isNull, like, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { can } from '$lib/permissions';
 import { db } from '$lib/server/db';
-import { customers, offerPositions, offers, orderDocuments, orderPositions, orders, parties, users, type OrderStatus } from '$lib/server/db/schema';
+import { customers, offerPositions, offers, orderDocuments, orderPositions, orders, parties, users, workOrders, type OrderStatus } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
 import { storeDocument } from '$lib/server/documents';
 import { titleFromFileName } from '$lib/documents';
+import { col } from '$lib/server/db/sql';
 import { lineNumbers } from '../offer';
 import { syncOfferBilling } from './billing';
 import { crewDocumentsOfOffer, getOfferDocument } from './offer-documents';
@@ -25,7 +27,12 @@ const statusUser = alias(users, 'status_user');
 function scope(user: SessionUser): SQL | undefined {
 	if (can(user.role, 'auftraege.alle.sehen')) return undefined;
 	// Ohne Recht oder ohne Partie gibt es nichts zu sehen
-	return can(user.role, 'auftraege.sehen') && user.partyId ? eq(orders.partyId, user.partyId) : eq(orders.id, -1);
+	if (!can(user.role, 'auftraege.sehen') || !user.partyId) return eq(orders.id, -1);
+	// Die Partie kennt einen Auftrag erst, wenn es den Arbeitsauftrag gibt
+	return and(
+		eq(orders.partyId, user.partyId),
+		sql`exists (select 1 from ${workOrders} where ${col(workOrders.orderId)} = ${col(orders.id)})`
+	);
 }
 
 export interface OrderFilter {
@@ -331,6 +338,14 @@ export function mayDeleteOrder(user: SessionUser, order: { status: string }): bo
 export function mayViewOrder(user: SessionUser, order: { partyId: number | null }): boolean {
 	if (can(user.role, 'auftraege.alle.sehen')) return true;
 	return can(user.role, 'auftraege.sehen') && !!user.partyId && user.partyId === order.partyId;
+}
+
+/**
+ * Den ganzen Auftrag (Kunde, Positionen, PDF, Summenblatt) sieht, wer alle
+ * Aufträge sieht. Die Partie sieht nur den Arbeitsauftrag dazu.
+ */
+export function seesWholeOrder(user: SessionUser): boolean {
+	return can(user.role, 'auftraege.alle.sehen');
 }
 
 /** In Arbeit / abgeschlossen setzen: bei den Aufträgen, die man sieht */

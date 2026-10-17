@@ -579,27 +579,44 @@ nur, wer alle Aufträge sieht – die Partien nicht.
   gleich einen mit diesem Auftrag an. Im Tagesbericht-PDF steht „Auftrag Nr. …“ unter der
   Baustelle.
 - **Arbeitsauftrag** (`/auftraege/<id>/arbeitsauftrag`): das Formular FO 0814 – je Auftrag
-  einer. **Arbeitsauftrag erstellen** am Auftrag (Büro) legt ihn vorbelegt an: BV, Nummer,
-  Ausführungsort als Baustelle, Ansprechpartner und Telefon, die Positionen als Leistungen
-  (erste Zeile, Menge, Einheit) und – wenn eingeplant – erster und letzter Tag aus der
-  Wochenplanung als Ausführungsdatum und Endtermin. Wer füllt was aus:
-  - **Büro** (Recht „Aufträge bearbeiten“): Kopf, Beilagen/Baustelleninformationen,
-    Evaluierung, die Leistungen (Art der Markierung, RAL, MSK, Ca. Menge mit Einheit aus den
-    Stammdaten), Datum und Unterschrift BL sowie die Rückseite (Schutzausrüstung, besondere
-    Gefahren – je Zeile angehakt und was genau, dazu zwei freie Zeilen).
+  einer. **Arbeitsauftrag erstellen** am Auftrag (Büro) öffnet zuerst das Vorab-Formular
+  (`…/arbeitsauftrag/neu`): Auftrag und Baustelle, Beilagen/Baustelleninformationen,
+  Evaluierung, zu jeder Leistung Art der Markierung, RAL-Farbton und MSK, ob ein
+  Folienverlegeprotokoll nötig ist, und die Rückseite (Schutzausrüstung, besondere Gefahren –
+  je Zeile angehakt und was genau, dazu zwei freie Zeilen). Vorbelegt ist es mit BV,
+  Ausführungsort, Ansprechpartner und Telefon und – wenn eingeplant – erstem und letztem Tag
+  aus der Wochenplanung. Die **Leistungen** sind die Positionen des Auftrags (erste Zeile,
+  Menge, Einheit) und stehen nach dem Erstellen fest – auch für das Büro.
+  - **Die Partie sieht nicht mehr den ganzen Auftrag**, nur den Arbeitsauftrag: Wer nicht alle
+    Aufträge sieht, findet in der Liste, der Suche und der Übersicht nur Aufträge mit
+    Arbeitsauftrag; `/auftraege/<id>` führt direkt zu ihm, Auftrags-PDF, Druck und
+    Summenblatt gibt es für sie nicht. Im Arbeitsauftrag stehen dafür Ausführungsort, Hinweis
+    für die Partie, In Arbeit/Abgeschlossen, die Pläne und Unterlagen und die Tagesberichte.
+    Bescheid bekommt die Partie mit dem Arbeitsauftrag („Arbeitsauftrag für eine Partie“),
+    neue Unterlagen erst, wenn es ihn gibt.
+  - **Büro** (Recht „Aufträge bearbeiten“): danach noch Kopf, Beilagen, Evaluierung, Datum und
+    Unterschrift BL und die Rückseite ändern.
   - **Partie** (Recht „In Arbeit / abgeschlossen“, bei ihren Aufträgen): ausgeführte Mengen,
     Vorarbeiter-Checkliste, Auffälligkeiten mit Regiestunden, „Arbeit fertig am“, die
     Unterschriften Vorarbeiter und Vertretung, die **Unterweisung der Mitarbeiter** (Name,
     Datum, Unterschrift der Person am Gerät) und die **Unterschrift des Auftraggebers**.
-    Das Folienverlegeprotokoll (ja/nein) setzen beide.
+    Das Folienverlegeprotokoll (ja/nein) dürfen beide umstellen.
+  - **3M-Verlegeprotokoll** (`…/arbeitsauftrag/folie`, nur bei Folienverlegeprotokoll „ja“):
+    das Eigenüberwachungs-Protokoll für Markierungsfolien zum Ausfüllen durch die Partie –
+    Straße (Ort, Abschnitt, Fahrbahndecke, Spurbreite, Zustand, Vorarbeiten), Wetter um 8, 11,
+    14 und 18 Uhr, letzter Regen, Folien (zwei Zeilen), Lot-Nummern, Grundierung, Verlegung,
+    Andruck, Streckenfreigabe, Verlege- und Demarkierungsdatum, Bemerkungen, dazu „gesehen /
+    anerkannt“ (Auftraggeber) und „ausgefertigt von“ (Auftragnehmer). Mit der Unterschrift des
+    Auftraggebers ist es gesperrt, bis sie entfernt wird. Das PDF ist dem 3M-Vordruck
+    nachgezeichnet, im Firmenfeld steht das Monsipan-Logo.
 
   Unterschreiben speichert vorher, was im Formular steht. Nach der Unterschrift des
-  Auftraggebers ist der Arbeitsauftrag gesperrt, bis sie wieder entfernt wird. Das **PDF**
-  ist im Aufbau des Vordrucks gezeichnet (Seite 1 Auftrag und Checkliste, Seite 2
-  Besonderheiten und Unterweisung); mehr als 13 Leistungen oder 6 Unterweisungen machen die
-  Zeilen enger bzw. die Tabelle länger. Gespeichert wird der Inhalt als JSON in `work_orders`
-  ([`work-order.ts`](src/lib/modules/auftraege/work-order.ts) prüft ihn und regelt, wer was
-  ändern darf).
+  Auftraggebers ist der Arbeitsauftrag samt Verlegeprotokoll gesperrt, bis sie wieder
+  entfernt wird. Das **PDF** ist im Aufbau des Vordrucks gezeichnet (Seite 1 Auftrag und
+  Checkliste, Seite 2 Besonderheiten und Unterweisung); mehr als 13 Leistungen oder 6
+  Unterweisungen machen die Zeilen enger bzw. die Tabelle länger. Gespeichert wird der Inhalt
+  als JSON in `work_orders` ([`work-order.ts`](src/lib/modules/auftraege/work-order.ts) prüft
+  ihn und regelt, wer was ändern darf).
 
 Die Liste der Aufträge hat drei Reiter mit der Anzahl je Stand: **Erstellt**, **In Arbeit**
 und **Abgeschlossen** – Suche und Partie gelten für alle drei. Bei den abgeschlossenen steht,

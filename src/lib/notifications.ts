@@ -60,9 +60,9 @@ export const NOTIFICATION_EVENTS = {
 		mailAlways: 'Die Info-Mail geht immer auch an die Person, die das Angebot angelegt bzw. freigegeben hat'
 	},
 	'auftrag.zugeordnet': {
-		label: 'Auftrag einer Partie zugeordnet',
+		label: 'Arbeitsauftrag für eine Partie',
 		section: 'Auftragsmanagement',
-		hint: 'Neuer Auftrag oder Wechsel der Partie',
+		hint: 'Neuer Arbeitsauftrag oder Wechsel der Partie',
 		requires: 'auftraege.sehen',
 		all: 'auftraege.alle.sehen',
 		defaults: ['partiefuehrer']

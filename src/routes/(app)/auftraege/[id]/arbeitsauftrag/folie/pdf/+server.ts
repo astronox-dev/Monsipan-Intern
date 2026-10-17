@@ -1,0 +1,15 @@
+import { error } from '@sveltejs/kit';
+import { requireUser } from '$lib/server/guard';
+import { mayViewOrder, orderDetail } from '$lib/modules/auftraege/server/orders';
+import { getWorkOrder } from '$lib/modules/auftraege/server/work-orders';
+import { foilPdf } from '$lib/modules/auftraege/server/foil-pdf';
+import type { RequestHandler } from './$types';
+
+export const GET: RequestHandler = async ({ params, locals }) => {
+	const user = requireUser(locals);
+	const order = await orderDetail(Number(params.id));
+	if (!order || !mayViewOrder(user, order)) error(404, 'Auftrag nicht gefunden');
+	const work = await getWorkOrder(order.id);
+	if (!work || work.content.foilProtocol !== 'ja') error(404, 'Zu diesem Arbeitsauftrag gibt es kein Verlegeprotokoll.');
+	return foilPdf({ number: order.number, foil: work.content.foil });
+};

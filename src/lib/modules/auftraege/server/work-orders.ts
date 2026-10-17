@@ -9,8 +9,12 @@ import { planEntries, users, workOrders } from '$lib/server/db/schema';
 import { can } from '$lib/permissions';
 import type { SessionUser } from '$lib/server/auth';
 import {
+	creationForm,
+	emptyFoil,
 	emptyForm,
 	lineTitle,
+	sanitizeFoil,
+	type FoilSignatureRole,
 	MAX_BRIEFINGS,
 	MAX_WORK_LINES,
 	mergeForm,
@@ -80,13 +84,24 @@ export async function prefill(order: OrderDetail): Promise<WorkOrderContent> {
 		.filter((l) => l.kind === 'position' && l.text.trim())
 		.slice(0, MAX_WORK_LINES)
 		.map((l) => ({ text: lineTitle(l.text), kind: '', ral: '', msk: '', quantity: l.quantity, unit: l.unit, done: null }));
-	return { ...form, signatures: {}, briefings: [] };
+	return { ...form, signatures: {}, briefings: [], foil: { ...emptyFoil(), place: form.site } };
 }
 
-/** Anlegen – gibt es schon einen, bleibt er, wie er ist */
-export async function createWorkOrder(order: OrderDetail, userId: number) {
-	const content = await prefill(order);
-	await db.insert(workOrders).values({ orderId: order.id, content, createdBy: userId }).onConflictDoNothing();
+/**
+ * Anlegen – mit dem, was das Büro vorher ausgefüllt hat (Kopf, Beilagen,
+ * Evaluierung, Angaben zu den Leistungen, Rückseite). Die Leistungen selbst
+ * kommen immer aus dem Auftrag. Gibt es schon einen, bleibt er, wie er ist;
+ * zurück kommt, ob einer neu angelegt wurde.
+ */
+export async function createWorkOrder(order: OrderDetail, userId: number, form?: WorkOrderForm): Promise<boolean> {
+	const prefilled = await prefill(order);
+	const content: WorkOrderContent = form ? { ...prefilled, ...creationForm(prefilled, form), foil: { ...prefilled.foil, place: form.site } } : prefilled;
+	const rows = await db.insert(workOrders).values({ orderId: order.id, content, createdBy: userId }).onConflictDoNothing().returning({ id: workOrders.id });
+	return rows.length > 0;
+}
+
+export async function hasWorkOrder(orderId: number): Promise<boolean> {
+	return !!(await db.select({ id: workOrders.id }).from(workOrders).where(eq(workOrders.orderId, orderId)).get());
 }
 
 /** Inhalt lesen, ändern und zurückschreiben – in einer Transaktion */
@@ -132,6 +147,28 @@ export function removeBriefing(orderId: number, index: number, userId: number) {
 		if (c.signatures.auftraggeber) return LOCKED;
 		if (!c.briefings[index]) return 'Diese Unterweisung gibt es nicht mehr.';
 		return { ...c, briefings: c.briefings.filter((_, i) => i !== index) };
+	});
+}
+
+const FOIL_LOCKED = 'Der Auftraggeber hat das Verlegeprotokoll schon unterschrieben – zum Ändern zuerst seine Unterschrift entfernen.';
+
+/** 3M-Verlegeprotokoll speichern – die Unterschriften bleiben, wie sie sind */
+export function saveFoilProtocol(orderId: number, raw: unknown, userId: number) {
+	return change(orderId, userId, (c) => {
+		if (c.signatures.auftraggeber) return LOCKED;
+		if (c.foil.signatures.auftraggeber) return FOIL_LOCKED;
+		return { ...c, foil: { ...sanitizeFoil(raw), signatures: c.foil.signatures } };
+	});
+}
+
+export function setFoilSignature(orderId: number, role: FoilSignatureRole, signature: WorkSignature | null, userId: number) {
+	return change(orderId, userId, (c) => {
+		if (c.signatures.auftraggeber) return LOCKED;
+		if (c.foil.signatures.auftraggeber && role !== 'auftraggeber') return FOIL_LOCKED;
+		const signatures = { ...c.foil.signatures };
+		if (signature) signatures[role] = signature;
+		else delete signatures[role];
+		return { ...c, foil: { ...c.foil, signatures } };
 	});
 }
 

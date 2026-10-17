@@ -1,8 +1,11 @@
 import { error, fail, redirect } from '@sveltejs/kit';
+import { can } from '$lib/permissions';
 import { requireUser } from '$lib/server/guard';
-import { colorOptions, unitOptions } from '$lib/server/options';
+import { ORDER_STATUS, type OrderStatus } from '$lib/server/db/schema';
 import { isValidSignature } from '$lib/modules/stunden/signature';
-import { mayViewOrder, orderDetail } from '$lib/modules/auftraege/server/orders';
+import { mayViewOrder, maySetOrderStatus, orderDetail, seesWholeOrder, setOrderStatus } from '$lib/modules/auftraege/server/orders';
+import { notifyOrderStatus } from '$lib/modules/auftraege/server/notify';
+import { listReports } from '$lib/modules/tagesberichte/server/reports';
 import {
 	addBriefing,
 	crewNames,
@@ -22,23 +25,37 @@ async function open(id: number, locals: App.Locals) {
 	// Fremde Aufträge gibt es für die Partie nicht – auch nicht als „verboten"
 	if (!order || !mayViewOrder(user, order)) error(404, 'Auftrag nicht gefunden');
 	const work = await getWorkOrder(order.id);
-	if (!work) redirect(303, `/auftraege/${order.id}`);
+	if (!work) {
+		if (!seesWholeOrder(user)) error(404, 'Zu diesem Auftrag gibt es noch keinen Arbeitsauftrag.');
+		redirect(303, `/auftraege/${order.id}`);
+	}
 	return { user, order, work, scope: workScope(user, order) };
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const { user, order, work, scope } = await open(Number(params.id), locals);
-	const editable = scope.office || scope.site;
 	return {
-		order: { id: order.id, number: order.number, title: order.title, partyName: order.partyName, status: order.status },
+		order: {
+			id: order.id,
+			number: order.number,
+			title: order.title,
+			partyName: order.partyName,
+			status: order.status,
+			location: order.location,
+			note: order.note,
+			// Pläne und Unterlagen – auch die vom Angebot, die „für die Partie" sind
+			documents: [...order.offerDocuments.map((d) => ({ ...d, href: `a${d.id}`, fromOffer: true })), ...order.documents.map((d) => ({ ...d, href: String(d.id), fromOffer: false }))]
+		},
 		work,
 		scope,
 		locked: !!work.content.signatures.auftraggeber,
+		/** Den ganzen Auftrag sieht nur das Büro – die Partie arbeitet hier */
+		wholeOrder: seesWholeOrder(user),
+		canStatus: maySetOrderStatus(user, order),
+		reports: can(user.role, 'tagesberichte.sehen') ? await listReports(user, { orderId: order.id }) : [],
+		canCreateReport: can(user.role, 'tagesberichte.erstellen') && order.status !== 'abgeschlossen',
 		me: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username,
-		// Auswahl für Einheit, RAL-Farbton und die Namen bei der Unterweisung
-		units: editable ? await unitOptions() : [],
-		colors: editable ? (await colorOptions()).filter((c) => c.ral).map((c) => ({ ral: c.ral as string, name: c.name })) : [],
-		crew: editable ? await crewNames(order.partyId) : []
+		crew: scope.site ? await crewNames(order.partyId) : []
 	};
 };
 
@@ -53,7 +70,7 @@ async function saveForm(form: FormData, orderId: number, scope: WorkScope, userI
 	return saveWorkOrderForm(orderId, sanitizeForm(raw), scope, userId);
 }
 
-const roleOf = (v: FormDataEntryValue | null) => (SIGNATURE_ROLES as readonly string[]).includes(String(v)) ? (String(v) as SignatureRole) : null;
+const roleOf = (v: FormDataEntryValue | null) => ((SIGNATURE_ROLES as readonly string[]).includes(String(v)) ? (String(v) as SignatureRole) : null);
 
 export const actions: Actions = {
 	save: async ({ params, request, locals }) => {
@@ -62,6 +79,17 @@ export const actions: Actions = {
 		const problem = await saveForm(await request.formData(), order.id, scope, user.id);
 		if (problem) return fail(400, { message: problem });
 		return { saved: true };
+	},
+
+	/** Stand des Auftrags – die Partie setzt ihn hier, das Büro am Auftrag */
+	status: async ({ params, request, locals }) => {
+		const { user, order } = await open(Number(params.id), locals);
+		const status = String((await request.formData()).get('status') ?? '') as OrderStatus;
+		if (!ORDER_STATUS.includes(status) || status === 'erstellt') return fail(400, { message: 'Unbekannter Stand' });
+		if (!maySetOrderStatus(user, order)) return fail(403, { message: 'Den Stand setzt die Partie, der der Auftrag gehört.' });
+		await setOrderStatus(order.id, status, user.id);
+		if (status !== order.status) notifyOrderStatus(order.id, status, user.id);
+		return { status };
 	},
 
 	/** Unterschreiben – was im Formular steht, wird vorher gespeichert */

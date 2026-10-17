@@ -3,32 +3,30 @@
 	import { enhance } from '$app/forms';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import FileText from '@lucide/svelte/icons/file-text';
-	import Plus from '@lucide/svelte/icons/plus';
 	import X from '@lucide/svelte/icons/x';
 	import Trash from '@lucide/svelte/icons/trash';
 	import Lock from '@lucide/svelte/icons/lock';
 	import Signature from '@lucide/svelte/icons/signature';
 	import UserCheck from '@lucide/svelte/icons/user-check';
+	import Hammer from '@lucide/svelte/icons/hammer';
+	import CircleCheck from '@lucide/svelte/icons/circle-check';
+	import MapPin from '@lucide/svelte/icons/map-pin';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import NotebookPen from '@lucide/svelte/icons/notebook-pen';
+	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
+	import Plus from '@lucide/svelte/icons/plus';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import SignaturePad from '$lib/modules/stunden/components/SignaturePad.svelte';
 	import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '$lib/modules/stunden/signature';
 	import { today } from '$lib/modules/stunden/week';
-	import { parseAmount, quantityLabel, spacedNumber } from '$lib/modules/auftraege/offer';
-	import {
-		ATTACHMENTS,
-		CHECKLIST,
-		emptyLine,
-		ISSUES,
-		MAX_BRIEFINGS,
-		MAX_WORK_LINES,
-		maySign,
-		SIGNATURE_LABELS,
-		type SignatureRole,
-		type WorkOrderContent,
-		type WorkSignature
-	} from '$lib/modules/auftraege/work-order';
-	import { canonicalUnit, unitChoices } from '$lib/units';
+	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
+	import WorkOrderHead from '$lib/modules/auftraege/components/WorkOrderHead.svelte';
+	import WorkOrderBack from '$lib/modules/auftraege/components/WorkOrderBack.svelte';
+	import SignatureTile from '$lib/modules/auftraege/components/SignatureTile.svelte';
+	import { fileSizeLabel } from '$lib/documents';
+	import { ORDER_STATUS_LABELS, parseAmount, quantityLabel, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { CHECKLIST, ISSUES, MAX_BRIEFINGS, maySign, SIGNATURE_LABELS, type SignatureRole, type WorkOrderContent } from '$lib/modules/auftraege/work-order';
 	import { date, dateTime } from '$lib/format';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -39,41 +37,16 @@
 	const office = $derived(data.scope.office && !data.locked);
 	const site = $derived(data.scope.site && !data.locked);
 	const editable = $derived(office || site);
+	const st = $derived(ORDER_STATUS_LABELS[data.order.status] ?? ORDER_STATUS_LABELS.erstellt);
 
-	type LineIn = { key: number; text: string; kind: string; ral: string; msk: string; quantity: string; unit: string; done: string };
-	let nextKey = 1;
-
-	/** Das Formular gehört nach dem Öffnen der Seite – Mengen als Text zum Tippen */
+	/** Das Formular gehört nach dem Öffnen der Seite – die ausgeführte Menge als Text zum Tippen */
 	function toState(content: WorkOrderContent) {
-		const { signatures: _s, briefings: _b, lines, ...rest } = structuredClone(content);
-		return {
-			...rest,
-			lines: lines.map(
-				(l): LineIn => ({
-					key: nextKey++,
-					text: l.text,
-					kind: l.kind,
-					ral: l.ral,
-					msk: l.msk,
-					quantity: quantityLabel(l.quantity),
-					unit: canonicalUnit(data.units, l.unit),
-					done: quantityLabel(l.done)
-				})
-			)
-		};
+		const { signatures: _s, briefings: _b, foil: _f, lines, ...rest } = structuredClone(content);
+		return { ...rest, lines: lines.map((l) => ({ ...l, done: quantityLabel(l.done) })) };
 	}
 	// svelte-ignore state_referenced_locally
 	let f = $state(toState(data.work.content));
-
-	const payload = $derived(
-		JSON.stringify({ ...f, lines: f.lines.map(({ key: _k, ...l }) => ({ ...l, quantity: parseAmount(l.quantity), done: parseAmount(l.done) })) })
-	);
-
-	function addLine() {
-		if (f.lines.length >= MAX_WORK_LINES) return;
-		const l = emptyLine();
-		f.lines.push({ key: nextKey++, ...l, quantity: '', done: '' });
-	}
+	const payload = $derived(JSON.stringify({ ...f, lines: f.lines.map((l) => ({ ...l, done: parseAmount(l.done) })) }));
 
 	let busy = $state(false);
 	let deleteOpen = $state(false);
@@ -90,6 +63,15 @@
 		signOpen = true;
 	}
 	let removeRole = $state<SignatureRole | null>(null);
+	const tile = (role: SignatureRole) => ({
+		label: SIGNATURE_LABELS[role],
+		signature: saved.signatures[role],
+		canSign: maySign(role, data.scope) && !data.locked,
+		canRemove: maySign(role, data.scope) && (!data.locked || role === 'auftraggeber'),
+		busy,
+		onsign: () => openSign(role),
+		onremove: () => (removeRole = role)
+	});
 
 	// Unterweisung: Name, Datum, Unterschrift der Person am Gerät
 	let briefOpen = $state(false);
@@ -104,27 +86,40 @@
 	}
 
 	const DONE: Record<string, string> = { sign: 'Unterschrift gespeichert', brief: 'Unterweisung eingetragen', save: 'Gespeichert' };
+	const mapUrl = $derived(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.order.location)}`);
+	const REPORT_STATUS: Record<string, { label: string; tone: string }> = {
+		entwurf: { label: 'In Arbeit', tone: '' },
+		freigegeben: { label: 'Freigegeben', tone: 'badge-info' },
+		geprueft: { label: 'Geprüft', tone: 'badge-warn' },
+		abgeschlossen: { label: 'Abgeschlossen', tone: 'badge-ok' }
+	};
 </script>
 
 <svelte:head><title>{pageTitle(`Arbeitsauftrag ${spacedNumber(data.order.number)}`)}</title></svelte:head>
 
-<a href="/auftraege/{data.order.id}" class="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-ink-2 hover:text-ink">
-	<ArrowLeft size={16} aria-hidden="true" />Auftrag {spacedNumber(data.order.number)}
-</a>
+{#if data.wholeOrder}
+	<a href="/auftraege/{data.order.id}" class="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-ink-2 hover:text-ink">
+		<ArrowLeft size={16} aria-hidden="true" />Auftrag {spacedNumber(data.order.number)}
+	</a>
+{:else}
+	<a href="/auftraege" class="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-ink-2 hover:text-ink">
+		<ArrowLeft size={16} aria-hidden="true" />Aufträge
+	</a>
+{/if}
 
 <div class="mt-3 mb-5 flex flex-wrap items-end justify-between gap-3">
 	<div class="min-w-0">
-		<h1 class="text-[2rem] leading-tight">Arbeitsauftrag</h1>
-		<p class="text-ink-2">
-			Nr. {spacedNumber(data.order.number)} · {data.order.title || 'Ohne BV'}{data.order.partyName ? ` · ${data.order.partyName}` : ''}
-		</p>
+		<h1 class="text-[2rem] leading-tight">Arbeitsauftrag {spacedNumber(data.order.number)}</h1>
+		<p class="text-ink-2">{saved.title || data.order.title || 'Ohne BV'}{data.order.partyName ? ` · ${data.order.partyName}` : ''}</p>
+		{#if data.order.location}
+			<a href={mapUrl} target="_blank" rel="noopener" class="mt-1 inline-flex items-start gap-1.5 font-medium underline-offset-2 hover:underline">
+				<MapPin size={17} class="mt-0.5 shrink-0" aria-hidden="true" />{data.order.location}
+			</a>
+		{/if}
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
-		{#if data.locked}
-			<span class="badge badge-ok"><Lock size={13} aria-hidden="true" />Vom Auftraggeber unterschrieben</span>
-		{:else}
-			<span class="badge">In Arbeit</span>
-		{/if}
+		<span class="badge {st.tone}">{st.label}</span>
+		{#if data.locked}<span class="badge badge-ok"><Lock size={13} aria-hidden="true" />Vom Auftraggeber unterschrieben</span>{/if}
 		<PdfButton href="/auftraege/{data.order.id}/arbeitsauftrag/pdf"><FileText size={18} aria-hidden="true" />PDF</PdfButton>
 	</div>
 </div>
@@ -145,29 +140,39 @@
 	<p class="mb-4 text-sm text-ink-3">Diesen Arbeitsauftrag kannst du nur ansehen.</p>
 {/if}
 
-{#snippet signatureTile(role: SignatureRole, sig: WorkSignature | undefined)}
-	{@const allowed = maySign(role, data.scope)}
-	<div class="rounded-xl border border-line p-3">
-		<p class="text-sm font-medium">{SIGNATURE_LABELS[role]}</p>
-		{#if sig}
-			<svg viewBox="0 0 {SIGNATURE_WIDTH} {SIGNATURE_HEIGHT}" class="mt-2 h-14 w-full max-w-[13rem] rounded-lg bg-white" role="img" aria-label="Unterschrift {sig.name}">
-				<path d={sig.path} fill="none" stroke="#1d2127" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
-			</svg>
-			<div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-				<p class="min-w-0 flex-1 text-sm text-ink-2"><span class="font-medium text-ink">{sig.name}</span> · {dateTime(sig.at)}</p>
-				{#if allowed && (!data.locked || role === 'auftraggeber')}
-					<button type="button" class="btn btn-ghost btn-sm -mr-2" onclick={() => (removeRole = role)}>Entfernen</button>
-				{/if}
-			</div>
-		{:else if allowed && !data.locked}
-			<button type="button" class="btn btn-secondary btn-sm mt-2" disabled={busy} onclick={() => openSign(role)}>
-				<Signature size={16} aria-hidden="true" />Unterschreiben
-			</button>
-		{:else}
-			<p class="mt-1 text-sm text-ink-3">Noch nicht unterschrieben.</p>
+{#if data.canStatus && data.order.status !== 'abgeschlossen'}
+	<!-- Der Stand der Arbeiten – groß, damit es auf der Baustelle mit einem Tipp geht -->
+	<form
+		method="POST"
+		action="?/status"
+		class="card mb-4 flex flex-wrap items-center gap-3 p-4"
+		use:enhance={() => {
+			busy = true;
+			return async ({ result, update }) => {
+				busy = false;
+				if (result.type === 'success') toast.success(result.data?.status === 'abgeschlossen' ? 'Auftrag abgeschlossen' : 'Auftrag ist in Arbeit');
+				await update({ reset: false });
+			};
+		}}
+	>
+		<p class="min-w-[12rem] flex-1 text-ink-2">
+			{data.order.status === 'erstellt' ? 'Sobald ihr anfangt, auf „In Arbeit" setzen.' : 'Fertig? Dann auf „Abgeschlossen" setzen.'}
+		</p>
+		{#if data.order.status === 'erstellt'}
+			<button class="btn btn-primary" name="status" value="in_arbeit" disabled={busy}><Hammer size={18} aria-hidden="true" />In Arbeit</button>
 		{/if}
-	</div>
-{/snippet}
+		<button class="btn {data.order.status === 'in_arbeit' ? 'btn-primary' : 'btn-secondary'}" name="status" value="abgeschlossen" disabled={busy}>
+			<CircleCheck size={18} aria-hidden="true" />Abgeschlossen
+		</button>
+	</form>
+{/if}
+
+{#if data.order.note.trim()}
+	<section class="card mb-4 border-warn/50 p-4 lg:p-5">
+		<h2 class="text-lg">Hinweis für die Partie</h2>
+		<p class="mt-2 whitespace-pre-line">{data.order.note}</p>
+	</section>
+{/if}
 
 <form
 	id="aa"
@@ -199,133 +204,33 @@
 	{/if}
 
 	<div class="space-y-4">
-		<section class="card p-4 lg:p-5">
-			<h2 class="text-lg">Auftrag und Baustelle</h2>
-			<p class="mt-0.5 text-sm text-ink-3">Füllt der Bauleiter aus.</p>
-			<fieldset disabled={!office} class="mt-3 grid gap-3 sm:grid-cols-2">
-				<label class="block sm:col-span-2">
-					<span class="field-label">Auftrag</span>
-					<input class="input" maxlength="200" bind:value={f.title} />
-				</label>
-				<label class="block sm:col-span-2">
-					<span class="field-label">Baustelle</span>
-					<input class="input" maxlength="200" bind:value={f.site} />
-				</label>
-				<label class="block">
-					<span class="field-label">Ausführungsdatum</span>
-					<input class="input" type="date" bind:value={f.startDate} />
-				</label>
-				<label class="block">
-					<span class="field-label">Endtermin</span>
-					<input class="input" type="date" bind:value={f.endDate} />
-				</label>
-				{#each f.contacts as k, i (i)}
-					<label class="block">
-						<span class="field-label">Kontaktperson {i + 1}</span>
-						<input class="input" maxlength="100" bind:value={k.name} />
-					</label>
-					<label class="block">
-						<span class="field-label">Telefon-Nr.</span>
-						<input class="input" type="tel" maxlength="40" bind:value={k.phone} />
-					</label>
-				{/each}
-			</fieldset>
-		</section>
-
-		<section class="card p-4 lg:p-5">
-			<h2 class="text-lg">Beilagen und Evaluierung</h2>
-			<fieldset disabled={!office} class="mt-3 space-y-4">
-				<div>
-					<p class="field-label">Beilagen / Baustelleninformationen</p>
-					<div class="grid gap-2 sm:grid-cols-2">
-						{#each ATTACHMENTS as a (a.key)}
-							<label class="flex items-center gap-2.5">
-								<input type="checkbox" class="size-5 accent-[var(--c-ink)]" bind:checked={f.attachments[a.key]} />{a.label}
-							</label>
-						{/each}
-						<div class="flex items-center gap-2.5">
-							<input type="checkbox" class="size-5 shrink-0 accent-[var(--c-ink)]" bind:checked={f.attachments.other} aria-label="Sonstiges" />
-							<input class="input input-sm" maxlength="80" placeholder="Sonstiges" bind:value={f.attachments.otherText} oninput={() => (f.attachments.other ||= !!f.attachments.otherText.trim())} />
-						</div>
-					</div>
-				</div>
-				<div>
-					<p class="field-label">Evaluierung</p>
-					<div class="flex flex-wrap gap-x-5 gap-y-2">
-						<label class="flex items-center gap-2"><input type="radio" class="accent-[var(--c-ink)]" value="" bind:group={f.evaluation} />Keine Angabe</label>
-						<label class="flex items-center gap-2"><input type="radio" class="accent-[var(--c-ink)]" value="standard" bind:group={f.evaluation} />Standardevaluierung</label>
-						<label class="flex items-center gap-2">
-							<input type="radio" class="accent-[var(--c-danger)]" value="baustelle" bind:group={f.evaluation} />Baustellenspezifische Evaluierung
-							<span class="text-sm text-ink-3">(siehe Rückseite)</span>
-						</label>
-					</div>
-				</div>
-			</fieldset>
-		</section>
+		<WorkOrderHead bind:form={f} disabled={!office} />
 
 		<section class="card overflow-hidden">
-			<div class="flex flex-wrap items-center justify-between gap-2 px-4 pt-4 lg:px-5">
-				<div>
-					<h2 class="text-lg">Beschreibung der Leistung</h2>
-					<p class="mt-0.5 text-sm text-ink-3">Leistungen trägt der Bauleiter ein, die ausgeführte Menge die Partie.</p>
-				</div>
-				{#if office && f.lines.length < MAX_WORK_LINES}
-					<button type="button" class="btn btn-secondary btn-sm" onclick={addLine}><Plus size={16} aria-hidden="true" />Leistung</button>
-				{/if}
+			<div class="px-4 pt-4 lg:px-5">
+				<h2 class="text-lg">Beschreibung der Leistung</h2>
+				<p class="mt-0.5 text-sm text-ink-3">Die Leistungen stehen fest – die Partie trägt die ausgeführte Menge ein.</p>
 			</div>
 			<div class="mt-3 lg:overflow-x-auto">
-				<div class="hidden min-w-[56rem] gap-1.5 border-y border-line px-4 py-2 text-[0.75rem] text-ink-3 lg:grid lg:grid-cols-[minmax(12rem,1fr)_8rem_8rem_5rem_5.5rem_6.5rem_6.5rem_2rem] lg:px-5">
-					<span>Beschreibung der Leistung</span><span>Art der Markierung</span><span>RAL Farbton</span><span>MSK</span>
-					<span class="text-right">Ca. Menge</span><span>Einheit</span><span class="text-right">Ausgeführt</span><span></span>
+				<div class="hidden min-w-[50rem] gap-2 border-y border-line px-4 py-2 text-[0.75rem] text-ink-3 lg:grid lg:grid-cols-[minmax(12rem,1fr)_8rem_8rem_5rem_7rem_8rem] lg:px-5">
+					<span>Leistung</span><span>Art der Markierung</span><span>RAL Farbton</span><span>MSK</span><span class="text-right">Ca. Menge</span>
+					<span class="text-right">Ausgeführt</span>
 				</div>
-				{#each f.lines as l, i (l.key)}
-					<div
-						class="grid grid-cols-2 gap-2 border-b border-line px-4 py-3 last:border-0 lg:min-w-[56rem] lg:grid-cols-[minmax(12rem,1fr)_8rem_8rem_5rem_5.5rem_6.5rem_6.5rem_2rem] lg:items-center lg:gap-1.5 lg:px-5 lg:py-2"
-					>
-						<label class="col-span-2 block lg:col-span-1">
-							<span class="field-label lg:sr-only">Leistung {i + 1}</span>
-							<input class="input input-sm" maxlength="200" disabled={!office} bind:value={l.text} />
+				{#each f.lines as l, i (i)}
+					<div class="grid grid-cols-2 gap-x-3 gap-y-1 border-b border-line px-4 py-3 last:border-0 lg:min-w-[50rem] lg:grid-cols-[minmax(12rem,1fr)_8rem_8rem_5rem_7rem_8rem] lg:items-center lg:gap-2 lg:px-5 lg:py-2">
+						<p class="col-span-2 font-medium lg:col-span-1">{l.text}</p>
+						<p class="text-sm text-ink-2 lg:text-base lg:text-ink"><span class="text-ink-3 lg:hidden">Art:&nbsp;</span>{l.kind || '–'}</p>
+						<p class="text-sm text-ink-2 lg:text-base lg:text-ink"><span class="text-ink-3 lg:hidden">RAL:&nbsp;</span>{l.ral || '–'}</p>
+						<p class="text-sm text-ink-2 lg:text-base lg:text-ink"><span class="text-ink-3 lg:hidden">MSK:&nbsp;</span>{l.msk || '–'}</p>
+						<p class="num text-sm text-ink-2 lg:text-right lg:text-base lg:text-ink"><span class="text-ink-3 lg:hidden">Ca.&nbsp;</span>{quantityLabel(l.quantity)} {l.unit}</p>
+						<label class="col-span-2 mt-1 flex items-center gap-2 lg:col-span-1 lg:mt-0">
+							<span class="field-label mb-0 shrink-0 lg:sr-only">Ausgeführte Menge</span>
+							<input class="input input-sm num min-w-0 flex-1 text-right" inputmode="decimal" maxlength="14" disabled={!site} bind:value={l.done} />
+							<span class="w-8 shrink-0 text-sm text-ink-3">{l.unit}</span>
 						</label>
-						<label class="block">
-							<span class="field-label lg:sr-only">Art der Markierung</span>
-							<input class="input input-sm" maxlength="60" list="aa-arten" disabled={!office} bind:value={l.kind} />
-						</label>
-						<label class="block">
-							<span class="field-label lg:sr-only">RAL Farbton</span>
-							<input class="input input-sm" maxlength="40" list="aa-ral" disabled={!office} bind:value={l.ral} />
-						</label>
-						<label class="block">
-							<span class="field-label lg:sr-only">MSK</span>
-							<input class="input input-sm" maxlength="30" disabled={!office} bind:value={l.msk} />
-						</label>
-						<label class="block">
-							<span class="field-label lg:sr-only">Ca. Menge</span>
-							<input class="input input-sm num text-right" inputmode="decimal" maxlength="14" disabled={!office} bind:value={l.quantity} />
-						</label>
-						<label class="block">
-							<span class="field-label lg:sr-only">Einheit</span>
-							<select class="select input-sm pr-8" disabled={!office} bind:value={l.unit}>
-								<option value="">–</option>
-								{#each unitChoices(data.units, l.unit) as u (u)}<option value={u}>{u}</option>{/each}
-							</select>
-						</label>
-						<label class="block">
-							<span class="field-label lg:sr-only">Ausgeführte Menge</span>
-							<input class="input input-sm num text-right" inputmode="decimal" maxlength="14" placeholder={l.unit} disabled={!site} bind:value={l.done} />
-						</label>
-						{#if office}
-							<button
-								type="button"
-								class="grid size-8 place-items-center self-end rounded-lg text-ink-3 hover:bg-surface-2 hover:text-danger lg:self-center"
-								aria-label="Leistung {i + 1} entfernen"
-								onclick={() => f.lines.splice(i, 1)}
-							>
-								<X size={16} />
-							</button>
-						{/if}
 					</div>
 				{:else}
-					<p class="px-4 pb-4 text-sm text-ink-3 lg:px-5">Noch keine Leistung.</p>
+					<p class="px-4 pb-4 text-sm text-ink-3 lg:px-5">Keine Leistungen.</p>
 				{/each}
 			</div>
 		</section>
@@ -346,10 +251,26 @@
 					<input class="input" type="date" disabled={!office} bind:value={f.signDate} />
 				</label>
 			</div>
+			{#if saved.foilProtocol === 'ja'}
+				<a href="/auftraege/{data.order.id}/arbeitsauftrag/folie" class="mt-4 flex items-center gap-3 rounded-xl border border-line p-3 hover:bg-surface-2">
+					<ClipboardCheck size={20} class="shrink-0 text-ink-3" aria-hidden="true" />
+					<span class="min-w-0 flex-1">
+						<span class="block font-medium">3M-Verlegeprotokoll</span>
+						<span class="block text-sm text-ink-3">
+							{saved.foil.signatures.auftraggeber
+								? `Vom Auftraggeber anerkannt am ${dateTime(saved.foil.signatures.auftraggeber.at)}`
+								: 'Eigenüberwachungs-Protokoll für Markierungsfolien – füllt die Partie aus'}
+						</span>
+					</span>
+					<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
+				</a>
+			{:else if f.foilProtocol === 'ja'}
+				<p class="field-hint mt-3">Nach dem Speichern gibt es hier das 3M-Verlegeprotokoll zum Ausfüllen.</p>
+			{/if}
 			<div class="mt-4 grid gap-3 lg:grid-cols-3">
-				{@render signatureTile('bl', saved.signatures.bl)}
-				{@render signatureTile('vorarbeiter', saved.signatures.vorarbeiter)}
-				{@render signatureTile('vertretung', saved.signatures.vertretung)}
+				<SignatureTile {...tile('bl')} />
+				<SignatureTile {...tile('vorarbeiter')} />
+				<SignatureTile {...tile('vertretung')} />
 			</div>
 		</section>
 
@@ -400,7 +321,7 @@
 					<input class="input" type="date" disabled={!site} bind:value={f.finishedOn} />
 				</label>
 				<div>
-					{@render signatureTile('auftraggeber', saved.signatures.auftraggeber)}
+					<SignatureTile {...tile('auftraggeber')} />
 					{#if !data.locked && maySign('auftraggeber', data.scope)}
 						<p class="field-hint mt-1">Nach der Unterschrift des Auftraggebers lässt sich der Arbeitsauftrag nicht mehr ändern.</p>
 					{/if}
@@ -408,36 +329,7 @@
 			</div>
 		</section>
 
-		<section class="card p-4 lg:p-5">
-			<h2 class="text-lg">Besonderheiten der Baustelle</h2>
-			<p class="mt-0.5 text-sm text-ink-3">Rückseite – füllt der Bauleiter aus.</p>
-			<fieldset disabled={!office} class="mt-3 grid gap-5 lg:grid-cols-2">
-				{#each [{ title: 'Persönliche Schutzausrüstung', list: f.ppe }, { title: 'Besondere Gefahren', list: f.hazards }] as group (group.title)}
-					<div>
-						<p class="field-label">{group.title}</p>
-						<div class="space-y-2">
-							{#each group.list as item, i (i)}
-								<div class="grid grid-cols-[1.25rem_minmax(7rem,auto)_1fr] items-center gap-2.5">
-									<input type="checkbox" class="size-5 accent-[var(--c-ink)]" bind:checked={item.checked} aria-label={item.label || 'Weitere Zeile'} />
-									{#if i < group.list.length - 2}
-										<span>{item.label}:</span>
-									{:else}
-										<input class="input input-sm" maxlength="60" placeholder="Weitere" bind:value={item.label} aria-label="Bezeichnung" />
-									{/if}
-									<input
-										class="input input-sm"
-										maxlength="120"
-										bind:value={item.detail}
-										oninput={() => (item.checked ||= !!item.detail.trim())}
-										aria-label="{item.label || 'Weitere'}: was genau"
-									/>
-								</div>
-							{/each}
-						</div>
-					</div>
-				{/each}
-			</fieldset>
-		</section>
+		<WorkOrderBack bind:form={f} disabled={!office} />
 	</div>
 
 	{#if editable}
@@ -487,6 +379,57 @@
 	{/if}
 </section>
 
+{#if data.order.documents.length}
+	<section class="card mt-4 p-4 lg:p-5">
+		<h2 class="text-lg">Pläne und Unterlagen</h2>
+		<ul class="mt-3 divide-y divide-line rounded-xl border border-line">
+			{#each data.order.documents as d (d.href)}
+				<li>
+					<a href="/auftraege/{data.order.id}/unterlagen/{d.href}" class="flex items-center gap-3 px-3 py-2.5 hover:bg-surface-2">
+						<FileText size={20} class="shrink-0 text-ink-3" aria-hidden="true" />
+						<span class="min-w-0 flex-1">
+							<span class="block truncate font-medium">{d.title}</span>
+							<span class="block truncate text-[0.8125rem] text-ink-3">{d.fileName} · {fileSizeLabel(d.size)}</span>
+						</span>
+						<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
+					</a>
+				</li>
+			{/each}
+		</ul>
+	</section>
+{/if}
+
+{#if data.reports.length || data.canCreateReport}
+	<section class="card mt-4 p-4 lg:p-5">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<h2 class="flex items-center gap-2 text-lg"><NotebookPen size={18} aria-hidden="true" />Tagesberichte</h2>
+			{#if data.canCreateReport}
+				<a href="/tagesberichte?auftrag={data.order.id}" class="btn btn-secondary btn-sm"><Plus size={16} aria-hidden="true" />Neuer Tagesbericht</a>
+			{/if}
+		</div>
+		{#if data.reports.length}
+			<ul class="mt-3 divide-y divide-line rounded-xl border border-line">
+				{#each data.reports as r (r.id)}
+					{@const rs = REPORT_STATUS[r.status] ?? REPORT_STATUS.entwurf}
+					<li>
+						<a href="/tagesberichte/{r.id}" class="flex items-center gap-3 px-3 py-2.5 hover:bg-surface-2">
+							<span class="num w-14 shrink-0 font-semibold">{r.number || '–'}</span>
+							<span class="min-w-0 flex-1">
+								<span class="block truncate">{reportDateLabel(r.date, r.dateTo)}</span>
+								<span class="block truncate text-[0.8125rem] text-ink-3">{[r.site, r.partyName, r.dailyOutput].filter(Boolean).join(' · ')}</span>
+							</span>
+							<span class="badge {rs.tone}">{rs.label}</span>
+							<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
+						</a>
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<p class="mt-2 text-sm text-ink-3">Noch kein Tagesbericht zu diesem Auftrag.</p>
+		{/if}
+	</section>
+{/if}
+
 {#if data.scope.office}
 	<div class="mt-4 flex justify-end">
 		<button type="button" class="btn btn-ghost text-danger hover:bg-danger-soft" onclick={() => (deleteOpen = true)}>
@@ -494,11 +437,6 @@
 		</button>
 	</div>
 {/if}
-
-<datalist id="aa-ral">{#each data.colors as c (`${c.ral} ${c.name}`)}<option value={c.ral}>{c.name}</option>{/each}</datalist>
-<datalist id="aa-arten">
-	{#each ['Farbe', 'Kaltplastik', 'Heißplastik', 'Folie', 'Agglomerat'] as a (a)}<option value={a}></option>{/each}
-</datalist>
 
 <Dialog bind:open={signOpen} title={SIGNATURE_LABELS[signRole]}>
 	<p class="text-ink-2">
@@ -568,7 +506,10 @@
 </Dialog>
 
 <Dialog bind:open={deleteOpen} title="Arbeitsauftrag löschen?">
-	<p class="text-ink-2">Der Arbeitsauftrag wird samt Unterschriften und Unterweisungen gelöscht. Der Auftrag selbst bleibt.</p>
+	<p class="text-ink-2">
+		Der Arbeitsauftrag wird samt Unterschriften, Unterweisungen und Verlegeprotokoll gelöscht. Der Auftrag selbst bleibt – die Partie sieht ihn
+		dann nicht mehr.
+	</p>
 	<form method="POST" action="?/delete" class="mt-5 flex justify-end gap-2" use:enhance>
 		<button type="button" class="btn btn-ghost" onclick={() => (deleteOpen = false)}>Abbrechen</button>
 		<button class="btn btn-primary">Löschen</button>

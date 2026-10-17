@@ -1,10 +1,12 @@
 /**
  * Arbeitsauftrag nach dem Vordruck FO 0814 – je Auftrag einer. Das Büro
- * (Bauleiter) füllt Kopf, Beilagen, Evaluierung, Leistungen und die Rückseite
- * aus, die Partie auf der Baustelle ausgeführte Mengen, Checkliste,
- * Auffälligkeiten und die Unterweisung. Gespeichert wird der ganze Inhalt als
- * JSON am Auftrag; Unterschriften und Unterweisungen kommen nur über eigene
- * Aktionen hinein, nie mit dem Formular.
+ * (Bauleiter) füllt vor dem Erstellen Kopf, Beilagen, Evaluierung, die Angaben
+ * zu den Leistungen und die Rückseite aus; danach stehen die Leistungen fest.
+ * Die Partie trägt auf der Baustelle ausgeführte Mengen, Checkliste,
+ * Auffälligkeiten, die Unterweisung und – wenn verlangt – das
+ * 3M-Verlegeprotokoll ein. Gespeichert wird der ganze Inhalt als JSON am
+ * Auftrag; Unterschriften und Unterweisungen kommen nur über eigene Aktionen
+ * hinein, nie mit dem Formular.
  */
 import { isValidSignature } from '$lib/modules/stunden/signature';
 import { isValidIsoDate } from '$lib/modules/stunden/week';
@@ -118,6 +120,87 @@ export interface WorkOrderForm {
 export interface WorkOrderContent extends WorkOrderForm {
 	signatures: Partial<Record<SignatureRole, WorkSignature>>;
 	briefings: WorkBriefing[];
+	/** 3M-Eigenüberwachungsprotokoll – nur bei Folienverlegeprotokoll „ja" */
+	foil: FoilProtocol;
+}
+
+/* ------------------------------------------------ 3M-Verlegeprotokoll */
+
+/** Messzeiten für das Wetter (2.1) */
+export const FOIL_TIMES = ['08.00 Uhr', '11.00 Uhr', '14.00 Uhr', '18.00 Uhr'];
+
+export const FOIL_CONDITION = [
+	{ key: 'glatt', label: 'glatt' },
+	{ key: 'rauh', label: 'rauh' },
+	{ key: 'rissig', label: 'rissig' }
+] as const;
+export const FOIL_PREP = [
+	{ key: 'fraesen', label: 'fräsen' },
+	{ key: 'kehren', label: 'kehren' },
+	{ key: 'staubfrei', label: 'staubfrei reinigen' }
+] as const;
+export const FOIL_PRIMED = [
+	{ key: 'spray', label: 'Sprühgerät' },
+	{ key: 'roller', label: 'Rolle' }
+] as const;
+export const FOIL_LAYING = [
+	{ key: 'manual', label: 'manuell' },
+	{ key: 'mta2', label: '3M MTA II' }
+] as const;
+export const FOIL_PRESSING = [
+	{ key: 'rtc3', label: '3M RTC 3' },
+	{ key: 'rtc300', label: '3M RTC 300' }
+] as const;
+
+/** Spalten der Folien (3.1) – zwei Zeilen wie auf dem Vordruck */
+export const FOIL_FILM_COLUMNS = [
+	{ key: 'type', label: 'Folientyp' },
+	{ key: 'width', label: 'Breite in cm' },
+	{ key: 'length', label: 'Gesamtlänge in m' },
+	{ key: 'primer', label: 'Grundierung' },
+	{ key: 'dryTime', label: 'Trockenzeit in min.' },
+	{ key: 'lineType', label: 'Linienart' }
+] as const;
+export const FOIL_FILM_ROWS = 2;
+
+type Choice<K extends string> = Record<K, boolean> & { other: boolean; otherText: string };
+type FilmKey = (typeof FOIL_FILM_COLUMNS)[number]['key'];
+
+export const FOIL_SIGNATURE_ROLES = ['auftraggeber', 'auftragnehmer'] as const;
+export type FoilSignatureRole = (typeof FOIL_SIGNATURE_ROLES)[number];
+export const FOIL_SIGNATURE_LABELS: Record<FoilSignatureRole, string> = {
+	auftraggeber: 'Gesehen / anerkannt – Auftraggeber',
+	auftragnehmer: 'Ausgefertigt von – Auftragnehmer'
+};
+
+export interface FoilProtocol {
+	/** 1.1 – 1.4 */
+	place: string;
+	section: string;
+	surface: string;
+	laneWidth: string;
+	condition: Choice<(typeof FOIL_CONDITION)[number]['key']>;
+	prep: Choice<(typeof FOIL_PREP)[number]['key']>;
+	/** 2.1 je Messzeit: Luft, Boden, Luftfeuchtigkeit */
+	weather: { air: string[]; ground: string[]; humidity: string[] };
+	/** 2.2 letzter Regen vor … Tagen / … Stunden */
+	rainDays: string;
+	rainHours: string;
+	films: Record<FilmKey, string>[];
+	lotFilm: string;
+	lotPrimer: string;
+	lotDs01e: string;
+	primed: Choice<(typeof FOIL_PRIMED)[number]['key']>;
+	laying: Choice<(typeof FOIL_LAYING)[number]['key']>;
+	pressing: Choice<(typeof FOIL_PRESSING)[number]['key']>;
+	/** 3.6 Streckenfreigabe: gleicher Tag oder nach … Tagen */
+	release: '' | 'gleich' | 'nach';
+	releaseDays: string;
+	/** 3.7 und 3.8 */
+	layingDate: string;
+	removalDate: string;
+	remarks: string;
+	signatures: Partial<Record<FoilSignatureRole, WorkSignature>>;
 }
 
 /** Wer was ändern darf: das Büro (Bauleiter) und die Partie auf der Baustelle */
@@ -161,6 +244,36 @@ export function emptyForm(): WorkOrderForm {
 		finishedOn: '',
 		ppe: checks(PPE_LABELS),
 		hazards: checks(HAZARD_LABELS)
+	};
+}
+
+const choice = <K extends string>(keys: readonly { key: K }[]): Choice<K> =>
+	({ ...Object.fromEntries(keys.map(({ key }) => [key, false])), other: false, otherText: '' }) as Choice<K>;
+
+export function emptyFoil(): FoilProtocol {
+	return {
+		place: '',
+		section: '',
+		surface: '',
+		laneWidth: '',
+		condition: choice(FOIL_CONDITION),
+		prep: choice(FOIL_PREP),
+		weather: { air: FOIL_TIMES.map(() => ''), ground: FOIL_TIMES.map(() => ''), humidity: FOIL_TIMES.map(() => '') },
+		rainDays: '',
+		rainHours: '',
+		films: Array.from({ length: FOIL_FILM_ROWS }, () => ({ type: '', width: '', length: '', primer: '', dryTime: '', lineType: '' })),
+		lotFilm: '',
+		lotPrimer: '',
+		lotDs01e: '',
+		primed: choice(FOIL_PRIMED),
+		laying: choice(FOIL_LAYING),
+		pressing: choice(FOIL_PRESSING),
+		release: '',
+		releaseDays: '',
+		layingDate: '',
+		removalDate: '',
+		remarks: '',
+		signatures: {}
 	};
 }
 
@@ -242,6 +355,45 @@ export function sanitizeForm(raw: unknown): WorkOrderForm {
 	};
 }
 
+function readChoice<K extends string>(raw: unknown, keys: readonly { key: K }[]): Choice<K> {
+	const r = obj(raw);
+	return { ...Object.fromEntries(keys.map(({ key }) => [key, bool(r[key])])), other: bool(r.other), otherText: str(r.otherText, 60) } as Choice<K>;
+}
+
+/** Verlegeprotokoll in Form bringen – Unterschriften kommen nie aus dem Formular */
+export function sanitizeFoil(raw: unknown): Omit<FoilProtocol, 'signatures'> {
+	const r = obj(raw);
+	const w = obj(r.weather);
+	const times = (v: unknown) => FOIL_TIMES.map((_, i) => str((Array.isArray(v) ? v : [])[i], 12));
+	const films = Array.isArray(r.films) ? r.films : [];
+	return {
+		place: str(r.place, 160),
+		section: str(r.section, 120),
+		surface: str(r.surface, 120),
+		laneWidth: str(r.laneWidth, 60),
+		condition: readChoice(r.condition, FOIL_CONDITION),
+		prep: readChoice(r.prep, FOIL_PREP),
+		weather: { air: times(w.air), ground: times(w.ground), humidity: times(w.humidity) },
+		rainDays: str(r.rainDays, 12),
+		rainHours: str(r.rainHours, 12),
+		films: Array.from({ length: FOIL_FILM_ROWS }, (_, i) => {
+			const x = obj(films[i]);
+			return Object.fromEntries(FOIL_FILM_COLUMNS.map(({ key }) => [key, str(x[key], 40)])) as Record<FilmKey, string>;
+		}),
+		lotFilm: str(r.lotFilm, 40),
+		lotPrimer: str(r.lotPrimer, 40),
+		lotDs01e: str(r.lotDs01e, 40),
+		primed: readChoice(r.primed, FOIL_PRIMED),
+		laying: readChoice(r.laying, FOIL_LAYING),
+		pressing: readChoice(r.pressing, FOIL_PRESSING),
+		release: r.release === 'gleich' || r.release === 'nach' ? r.release : '',
+		releaseDays: str(r.releaseDays, 12),
+		layingDate: day(r.layingDate),
+		removalDate: day(r.removalDate),
+		remarks: str(r.remarks, 300)
+	};
+}
+
 function readSignature(raw: unknown): WorkSignature | undefined {
 	const s = obj(raw);
 	if (!isValidSignature(s.path as string) || typeof s.at !== 'number') return undefined;
@@ -264,15 +416,22 @@ export function readContent(raw: unknown): WorkOrderContent {
 		})
 		.filter((b) => b.name)
 		.slice(0, MAX_BRIEFINGS);
-	return { ...sanitizeForm(r), signatures, briefings };
+	const foilRaw = obj(r.foil);
+	const foilSig = obj(foilRaw.signatures);
+	const foilSignatures: FoilProtocol['signatures'] = {};
+	for (const role of FOIL_SIGNATURE_ROLES) {
+		const s = readSignature(foilSig[role]);
+		if (s) foilSignatures[role] = s;
+	}
+	return { ...sanitizeForm(r), signatures, briefings, foil: { ...sanitizeFoil(foilRaw), signatures: foilSignatures } };
 }
 
 /**
  * Was jemand speichert, kommt nur dort an, wo er ändern darf: das Büro den
- * Kopf, Beilagen, Evaluierung, die Leistungen (außer der ausgeführten Menge)
- * und die Rückseite; die Partie die ausgeführten Mengen, Checkliste,
- * Auffälligkeiten und „Arbeit fertig am". Das Folienverlegeprotokoll dürfen
- * beide setzen.
+ * Kopf, Beilagen, Evaluierung und die Rückseite; die Partie die ausgeführten
+ * Mengen, Checkliste, Auffälligkeiten und „Arbeit fertig am". Das
+ * Folienverlegeprotokoll dürfen beide setzen. Die Leistungen selbst stehen
+ * seit dem Erstellen fest.
  */
 export function mergeForm(old: WorkOrderForm, incoming: WorkOrderForm, scope: WorkScope): WorkOrderForm {
 	const next: WorkOrderForm = structuredClone(old);
@@ -287,18 +446,40 @@ export function mergeForm(old: WorkOrderForm, incoming: WorkOrderForm, scope: Wo
 		next.signDate = incoming.signDate;
 		next.ppe = incoming.ppe;
 		next.hazards = incoming.hazards;
-		// Leistungen kommen vom Büro – die ausgeführte Menge nur, wenn es auch die Baustelle ist
-		next.lines = incoming.lines.map((l, i) => ({ ...l, done: scope.site ? l.done : (old.lines[i]?.done ?? null) }));
-	} else if (scope.site) {
-		next.lines = old.lines.map((l, i) => ({ ...l, done: incoming.lines[i]?.done ?? l.done }));
 	}
 	if (scope.site) {
+		next.lines = old.lines.map((l, i) => ({ ...l, done: incoming.lines[i] ? incoming.lines[i].done : l.done }));
 		next.checklist = incoming.checklist;
 		next.issues = incoming.issues;
 		next.finishedOn = incoming.finishedOn;
 	}
 	if (scope.office || scope.site) next.foilProtocol = incoming.foilProtocol;
 	return next;
+}
+
+/**
+ * Beim Erstellen: Kopf, Beilagen, Evaluierung, Folienverlegeprotokoll und
+ * Rückseite aus dem Formular; die Leistungen bleiben die des Auftrags, nur Art
+ * der Markierung, RAL und MSK kommen dazu.
+ */
+export function creationForm(prefilled: WorkOrderForm, incoming: WorkOrderForm): WorkOrderForm {
+	return {
+		...prefilled,
+		title: incoming.title,
+		site: incoming.site,
+		startDate: incoming.startDate,
+		endDate: incoming.endDate,
+		contacts: incoming.contacts,
+		attachments: incoming.attachments,
+		evaluation: incoming.evaluation,
+		foilProtocol: incoming.foilProtocol,
+		ppe: incoming.ppe,
+		hazards: incoming.hazards,
+		lines: prefilled.lines.map((l, i) => {
+			const x = incoming.lines[i];
+			return x ? { ...l, kind: x.kind, ral: x.ral, msk: x.msk } : l;
+		})
+	};
 }
 
 /** Wer welche Unterschrift setzen darf: BL das Büro, alle anderen die Baustelle */

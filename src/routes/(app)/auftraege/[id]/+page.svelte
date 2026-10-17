@@ -168,7 +168,7 @@
 				{:else if data.workOrder}
 					Zuletzt geändert {dateTime(data.workOrder.updatedAt)}
 				{:else}
-					Formular für die Baustelle – vorbelegt mit Baustelle, Kontakt und Leistungen aus diesem Auftrag.
+					Formular für die Baustelle. Die Partie sieht den Auftrag erst, wenn es ihn gibt – und dann nur den Arbeitsauftrag.
 				{/if}
 			</p>
 		</div>
@@ -176,9 +176,7 @@
 			<PdfButton href="/auftraege/{order.id}/arbeitsauftrag/pdf" class="btn btn-secondary btn-sm"><FileText size={16} aria-hidden="true" />PDF</PdfButton>
 			<a href="/auftraege/{order.id}/arbeitsauftrag" class="btn btn-primary btn-sm">Öffnen<ChevronRight size={16} aria-hidden="true" /></a>
 		{:else}
-			<form method="POST" action="?/arbeitsauftrag" use:enhance>
-				<button class="btn btn-primary btn-sm"><Plus size={16} aria-hidden="true" />Arbeitsauftrag erstellen</button>
-			</form>
+			<a href="/auftraege/{order.id}/arbeitsauftrag/neu" class="btn btn-primary btn-sm"><Plus size={16} aria-hidden="true" />Arbeitsauftrag erstellen</a>
 		{/if}
 	</section>
 {/if}

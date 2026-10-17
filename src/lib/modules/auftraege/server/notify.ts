@@ -8,6 +8,7 @@ import { date as dateLabel } from '$lib/format';
 import { invoiceLabel, invoiceNo, invoiceTotals, money, spacedNumber } from '../offer';
 import { offerDetail } from './offers';
 import { orderDetail } from './orders';
+import { hasWorkOrder } from './work-orders';
 import { invoiceDetail } from './invoices';
 
 const background = (label: string, task: () => Promise<void>) => {
@@ -72,10 +73,11 @@ export function notifyOffer(
 export function notifyOrderAssigned(orderId: number, actorId: number) {
 	background('auftrag.zugeordnet', async () => {
 		const order = await orderDetail(orderId);
-		if (!order?.partyId) return;
+		// Ohne Arbeitsauftrag sieht die Partie den Auftrag noch nicht – Bescheid kommt mit dem Arbeitsauftrag
+		if (!order?.partyId || !(await hasWorkOrder(order.id))) return;
 		notify({
 			event: 'auftrag.zugeordnet',
-			title: `Auftrag ${spacedNumber(order.number)} für ${order.partyName ?? 'die Partie'}`,
+			title: `Arbeitsauftrag ${spacedNumber(order.number)} für ${order.partyName ?? 'die Partie'}`,
 			body: join(order.title, order.location),
 			url: `/auftraege/${order.id}`,
 			partyId: order.partyId,
@@ -106,7 +108,7 @@ export function notifyOrderDocuments(orderId: number, titles: string[], actorId:
 	if (!titles.length) return;
 	background('auftrag.unterlagen', async () => {
 		const order = await orderDetail(orderId);
-		if (!order) return;
+		if (!order || !(await hasWorkOrder(order.id))) return;
 		notify({
 			event: 'auftrag.unterlagen',
 			title: `${titles.length === 1 ? 'Neue Unterlage' : `${titles.length} neue Unterlagen`} zu Auftrag ${spacedNumber(order.number)}`,
