@@ -16,6 +16,7 @@
 	import X from '@lucide/svelte/icons/x';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import SignaturePad from '$lib/modules/stunden/components/SignaturePad.svelte';
+	import TimeField from '$lib/modules/stunden/components/TimeField.svelte';
 	import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '$lib/modules/stunden/signature';
 	import { dateTime, fullName } from '$lib/format';
 	import {
@@ -323,24 +324,25 @@
 							<span class="field-label lg:sr-only">Arbeitszeit</span>
 							{#each row.times as t, j (j)}
 								<div class="flex items-center gap-1.5">
-									<input
+									<!-- Antippen öffnet das Zeitrad; tippen geht weiter -->
+									<TimeField
 										class="input input-sm num min-w-0 flex-1 text-center lg:w-[4.3rem] lg:flex-none"
 										name="beginn.{row.date}"
-										inputmode="numeric"
+										label="{day} Beginn{row.times.length > 1 ? ` ${j + 1}` : ''}"
 										placeholder={j === 0 ? '06:30' : ''}
+										suggestion={j > 0 ? row.times[j - 1].to : ''}
 										value={t.from}
-										oninput={(e) => setTime(i, j, 'from', e.currentTarget.value)}
-										aria-label="{day} Beginn {j + 1}"
+										onchange={(v) => setTime(i, j, 'from', v)}
 									/>
 									<span class="text-ink-3" aria-hidden="true">–</span>
-									<input
+									<TimeField
 										class="input input-sm num min-w-0 flex-1 text-center lg:w-[4.3rem] lg:flex-none"
 										name="ende.{row.date}"
-										inputmode="numeric"
+										label="{day} Ende{row.times.length > 1 ? ` ${j + 1}` : ''}"
 										placeholder={j === 0 ? '17:00' : ''}
+										suggestion={j > 0 ? t.from : ''}
 										value={t.to}
-										oninput={(e) => setTime(i, j, 'to', e.currentTarget.value)}
-										aria-label="{day} Ende {j + 1}"
+										onchange={(v) => setTime(i, j, 'to', v)}
 									/>
 									{#if data.editable}
 										<button

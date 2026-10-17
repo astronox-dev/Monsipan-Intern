@@ -207,8 +207,12 @@ kommt eine dazu, mit × fällt eine weg (z. B. 07:00 – 13:00 und 18:00 – 04:
 sind einfach die Lücken dazwischen. Endet eine Zeit vor ihrem Beginn, geht sie über
 Mitternacht. Die Summe trägt die Seite als Norm-Stunden ein. Überstunden und die anderen
 Stundenarten trägt man selbst ein; wer die Norm-Stunden von Hand ändert, behält seinen
-Wert. Uhrzeiten dürfen auch als `0630` oder `6.30` getippt werden, Stunden als `8,5` oder
-`8:30`. Ausdruck und PDF schreiben alle Zeiten in die Zeile „Zeit von/bis“; bei vielen
+Wert. Ein Klick ins Zeitfeld öffnet ein **Zeitrad** (Stunden, Minuten in 10er-Schritten;
+Mausrad, Pfeiltasten, am Handy wischen als Leiste von unten ohne Tastatur), leere Felder
+zeigen einen Vorschlag (06:30, 17:00 oder das Ende der Zeit davor), den **Fertig** übernimmt
+([`TimeField`](src/lib/modules/stunden/components/TimeField.svelte)). Tippen geht weiter:
+Uhrzeiten auch als `0630` oder `6.30`, krumme Minuten wie `07:45` bleiben stehen; Stunden als
+`8,5` oder `8:30`. Ausdruck und PDF schreiben alle Zeiten in die Zeile „Zeit von/bis“; bei vielen
 wird die Schrift kleiner. Eine Kostenstelle mit „/“ steht dort in zwei Zeilen: alles nach
 dem ersten „/“ darunter (`24117/Halle 3` → `24117/` und `Halle 3`).
 
