@@ -614,7 +614,10 @@ nur, wer alle Aufträge sieht – die Partien nicht.
   Auftraggebers ist der Arbeitsauftrag samt Verlegeprotokoll gesperrt, bis sie wieder
   entfernt wird. Das **PDF** ist im Aufbau des Vordrucks gezeichnet (Seite 1 Auftrag und
   Checkliste, Seite 2 Besonderheiten und Unterweisung); mehr als 13 Leistungen oder 6
-  Unterweisungen machen die Zeilen enger bzw. die Tabelle länger. Gespeichert wird der Inhalt
+  Unterweisungen machen die Zeilen enger bzw. die Tabelle länger. Gibt es ein
+  3M-Verlegeprotokoll (Folienverlegeprotokoll „ja“), hängt es als dritte Seite an. **Drucken**
+  (am Arbeitsauftrag und am Auftrag) zeichnet genau dieses PDF Seite für Seite – der Ausdruck
+  sieht also aus wie das PDF, auch in der Android-App. Gespeichert wird der Inhalt
   als JSON in `work_orders` ([`work-order.ts`](src/lib/modules/auftraege/work-order.ts) prüft
   ihn und regelt, wer was ändern darf).
 

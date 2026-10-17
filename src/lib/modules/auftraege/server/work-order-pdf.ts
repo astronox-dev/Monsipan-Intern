@@ -3,11 +3,13 @@
  * mit Kopf, Beilagen, Evaluierung, Leistungen, Unterschriften und der
  * Vorarbeiter-Checkliste, Seite 2 mit den Besonderheiten der Baustelle und der
  * Unterweisung. Maße sind vom Vordruck abgenommen; wo eine Unterschrift
- * hineinkommt, sind die Zeilen etwas höher als auf Papier.
+ * hineinkommt, sind die Zeilen etwas höher als auf Papier. Gibt es ein
+ * 3M-Verlegeprotokoll (Folienverlegeprotokoll „ja"), hängt es als dritte Seite an.
  */
 import { bufferResponse, drawLogo, startPdf } from '$lib/server/pdf';
 import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '$lib/modules/stunden/signature';
 import { quantityLabel, spacedNumber } from '../offer';
+import { drawFoil } from './foil-pdf';
 import { ATTACHMENTS, CHECKLIST, ISSUES, type WorkCheck, type WorkOrderContent, type WorkSignature } from '../work-order';
 
 const INK = '#1d2127';
@@ -31,9 +33,19 @@ export interface WorkOrderPdfInput {
 	content: WorkOrderContent;
 }
 
-export async function workOrderPdf({ number, content: c }: WorkOrderPdfInput): Promise<Response> {
+export async function workOrderPdf(input: WorkOrderPdfInput): Promise<Response> {
 	// Kleiner Rand: pdfkit bricht sonst Text nahe am unteren Rand auf eine neue Seite um
-	const { doc, finish } = startPdf({ title: `Arbeitsauftrag ${spacedNumber(number)}`, margin: 8 });
+	const { doc, finish } = startPdf({ title: `Arbeitsauftrag ${spacedNumber(input.number)}`, margin: 8 });
+	drawWorkOrder(doc, input);
+	if (input.content.foilProtocol === 'ja') {
+		doc.addPage({ size: 'A4', margin: 8 });
+		drawFoil(doc, { number: input.number, foil: input.content.foil });
+	}
+	return bufferResponse(`arbeitsauftrag-${input.number}.pdf`, await finish());
+}
+
+/** Die beiden Seiten des Vordrucks – ab der aktuellen (leeren) Seite */
+export function drawWorkOrder(doc: PDFKit.PDFDocument, { number, content: c }: WorkOrderPdfInput) {
 
 	const line = (x1: number, y1: number, x2: number, y2: number, w = 0.6, color = GRID) =>
 		doc.moveTo(x1, y1).lineTo(x2, y2).lineWidth(w).strokeColor(color).stroke();
@@ -334,7 +346,4 @@ export async function workOrderPdf({ number, content: c }: WorkOrderPdfInput): P
 		}
 	});
 	box(L, uTop, R - L, uBottom - uTop, GREEN, 1);
-
-	const buffer = await finish();
-	return bufferResponse(`arbeitsauftrag-${number}.pdf`, buffer);
 }

@@ -32,8 +32,20 @@ const VALUE = 198.5;
 const dateLabel = (iso: string) => (iso ? iso.split('-').reverse().join('.') : '');
 const dayOf = (ms: number) => new Intl.DateTimeFormat('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Vienna' }).format(ms);
 
-export async function foilPdf({ number, foil: f }: { number: string; foil: FoilProtocol }): Promise<Response> {
-	const { doc, finish } = startPdf({ title: `3M-Verlegeprotokoll ${spacedNumber(number)}`, margin: 8 });
+export interface FoilPdfInput {
+	number: string;
+	foil: FoilProtocol;
+}
+
+/** Eigenes PDF nur mit dem Protokoll */
+export async function foilPdf(input: FoilPdfInput): Promise<Response> {
+	const { doc, finish } = startPdf({ title: `3M-Verlegeprotokoll ${spacedNumber(input.number)}`, margin: 8 });
+	drawFoil(doc, input);
+	return bufferResponse(`3m-verlegeprotokoll-${input.number}.pdf`, await finish());
+}
+
+/** Das Protokoll auf die aktuelle (leere) Seite – auch hinter dem Arbeitsauftrag */
+export function drawFoil(doc: PDFKit.PDFDocument, { foil: f }: FoilPdfInput) {
 
 	const line = (x1: number, x2: number, y: number, w = 0.5) => doc.moveTo(x1, y).lineTo(x2, y).lineWidth(w).strokeColor(INK).stroke();
 	const text = (s: string, x: number, b: number, o: { size?: number; bold?: boolean; color?: string; width?: number; align?: 'left' | 'right' | 'center' } = {}) => {
@@ -246,7 +258,4 @@ export async function foilPdf({ number, foil: f }: { number: string; foil: FoilP
 	text('1. Kopie (rot): 3M Neuss', 247.3, 743, { size: 7 });
 	text('2. Kopie (gelb): Auftragnehmer', R - 150, 743, { size: 7, width: 150, align: 'right' });
 	text('© 3M 12/2008', L, 766.5, { size: 6 });
-
-	const buffer = await finish();
-	return bufferResponse(`3m-verlegeprotokoll-${number}.pdf`, buffer);
 }

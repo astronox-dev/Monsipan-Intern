@@ -174,6 +174,7 @@
 		</div>
 		{#if data.workOrder}
 			<PdfButton href="/auftraege/{order.id}/arbeitsauftrag/pdf" class="btn btn-secondary btn-sm"><FileText size={16} aria-hidden="true" />PDF</PdfButton>
+			<a href="/auftraege/{order.id}/arbeitsauftrag/druck" class="btn btn-secondary btn-sm"><Printer size={16} aria-hidden="true" />Drucken</a>
 			<a href="/auftraege/{order.id}/arbeitsauftrag" class="btn btn-primary btn-sm">Öffnen<ChevronRight size={16} aria-hidden="true" /></a>
 		{:else}
 			<a href="/auftraege/{order.id}/arbeitsauftrag/neu" class="btn btn-primary btn-sm"><Plus size={16} aria-hidden="true" />Arbeitsauftrag erstellen</a>

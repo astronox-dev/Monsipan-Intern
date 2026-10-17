@@ -15,6 +15,7 @@
 	import NotebookPen from '@lucide/svelte/icons/notebook-pen';
 	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 	import Plus from '@lucide/svelte/icons/plus';
+	import Printer from '@lucide/svelte/icons/printer';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import SignaturePad from '$lib/modules/stunden/components/SignaturePad.svelte';
@@ -121,6 +122,7 @@
 		<span class="badge {st.tone}">{st.label}</span>
 		{#if data.locked}<span class="badge badge-ok"><Lock size={13} aria-hidden="true" />Vom Auftraggeber unterschrieben</span>{/if}
 		<PdfButton href="/auftraege/{data.order.id}/arbeitsauftrag/pdf"><FileText size={18} aria-hidden="true" />PDF</PdfButton>
+		<a href="/auftraege/{data.order.id}/arbeitsauftrag/druck" class="btn btn-secondary"><Printer size={18} aria-hidden="true" />Drucken</a>
 	</div>
 </div>
 
@@ -259,7 +261,7 @@
 						<span class="block text-sm text-ink-3">
 							{saved.foil.signatures.auftraggeber
 								? `Vom Auftraggeber anerkannt am ${dateTime(saved.foil.signatures.auftraggeber.at)}`
-								: 'Eigenüberwachungs-Protokoll für Markierungsfolien – füllt die Partie aus'}
+								: 'Eigenüberwachungs-Protokoll für Markierungsfolien – füllt die Partie aus'} · im PDF und Ausdruck hinter dem Arbeitsauftrag
 						</span>
 					</span>
 					<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />

@@ -226,14 +226,16 @@ describe('Arbeitsauftrag am Auftrag', () => {
 		expect(Object.keys(foil.signatures).sort()).toEqual(['auftraggeber', 'auftragnehmer']);
 	});
 
-	it('die PDFs: Arbeitsauftrag zwei Seiten, Verlegeprotokoll eine', async () => {
+	it('die PDFs: Arbeitsauftrag zwei Seiten, mit Verlegeprotokoll dahinter drei; das Protokoll allein eine', async () => {
 		await addBriefing(orderId, { date: '2026-10-19', name: 'Anna Kokić', signature: SIG, at: 1 }, 1);
 		await setWorkOrderSignature(orderId, 'bl', { path: SIG, name: 'Bruno Leiter', at: Date.now() }, 1);
 		const { content } = (await getWorkOrder(orderId))!;
 		const pages = async (res: Response) => Buffer.from(await res.arrayBuffer()).toString('latin1').match(/\/Type \/Page\b/g)?.length;
 		const work = await workOrderPdf({ number: '26001', content });
 		expect(work.headers.get('content-type')).toBe('application/pdf');
-		expect(await pages(work)).toBe(2);
+		expect(content.foilProtocol).toBe('ja');
+		expect(await pages(work)).toBe(3);
+		expect(await pages(await workOrderPdf({ number: '26001', content: { ...content, foilProtocol: 'nein' } }))).toBe(2);
 		expect(await pages(await foilPdf({ number: '26001', foil: content.foil }))).toBe(1);
 	});
 });
