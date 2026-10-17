@@ -270,7 +270,6 @@ export interface DayInput {
 export interface HeadInput {
 	allowanceDays: string;
 	allowanceAmount: string;
-	vaz: string;
 	vazPercent: string;
 	note: string;
 }
@@ -287,7 +286,6 @@ export async function saveSheet(id: number, head: HeadInput, days: DayInput[]) {
 			.set({
 				allowanceDays: num(head.allowanceDays),
 				allowanceAmount: num(head.allowanceAmount),
-				vaz: String(head.vaz ?? '').slice(0, 60),
 				vazPercent: num(head.vazPercent),
 				note: String(head.note ?? '').slice(0, 2000),
 				updatedAt: new Date()

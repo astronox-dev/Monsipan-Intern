@@ -95,8 +95,6 @@
 	// svelte-ignore state_referenced_locally
 	let allowanceAmount = $state(hoursLabel(data.sheet.allowanceAmount));
 	// svelte-ignore state_referenced_locally
-	let vaz = $state(data.sheet.vaz);
-	// svelte-ignore state_referenced_locally
 	let vazPercent = $state(hoursLabel(data.sheet.vazPercent));
 	// svelte-ignore state_referenced_locally
 	let note = $state(data.sheet.note);
@@ -423,16 +421,14 @@
 
 			<section class="card space-y-3 p-4 lg:p-5">
 				<h2 class="text-lg">VAZ</h2>
-				<div class="grid grid-cols-2 gap-3">
-					<label class="block">
-						<span class="field-label">VAZ</span>
-						<input class="input" name="vaz" maxlength="60" bind:value={vaz} />
-					</label>
-					<label class="block">
-						<span class="field-label">Prozent</span>
-						<input class="input num" name="vazProzent" inputmode="decimal" bind:value={vazPercent} />
-					</label>
-				</div>
+				<!-- Nur der Prozentsatz – ein früher eingetragener Text bleibt im Ausdruck stehen -->
+				<label class="block">
+					<span class="field-label">Prozent</span>
+					<span class="relative block">
+						<input class="input num pr-9" name="vazProzent" inputmode="decimal" bind:value={vazPercent} />
+						<span class="pointer-events-none absolute inset-y-0 right-3 grid place-items-center text-ink-3" aria-hidden="true">%</span>
+					</span>
+				</label>
 			</section>
 
 			<section class="card p-4 lg:p-5">

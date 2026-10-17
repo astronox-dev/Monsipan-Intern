@@ -1,6 +1,6 @@
 import { asc, eq } from 'drizzle-orm';
 import { db } from './db';
-import { categories, colors, locations, parties } from './db/schema';
+import { categories, colors, locations, parties, units } from './db/schema';
 
 /** Auswahllisten für Formulare und Filter */
 export async function locationOptions(onlyActive = true) {
@@ -23,4 +23,10 @@ export async function colorOptions() {
 export async function partyOptions(onlyActive = true) {
 	const q = db.select({ id: parties.id, name: parties.name, kind: parties.kind }).from(parties);
 	return (onlyActive ? q.where(eq(parties.active, true)) : q).orderBy(asc(parties.name)).all();
+}
+
+/** Einheiten aus den Stammdaten, in ihrer Reihenfolge */
+export async function unitOptions(): Promise<string[]> {
+	const rows = await db.select({ name: units.name }).from(units).orderBy(asc(units.sortOrder), asc(units.name)).all();
+	return rows.map((r) => r.name);
 }

@@ -1,14 +1,26 @@
 import { fail } from '@sveltejs/kit';
 import { and, asc, eq, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { categories, colors, locations, movements, parties, products, stock, users } from '$lib/server/db/schema';
+import {
+	categories,
+	colors,
+	dailyReportPositions,
+	locations,
+	movements,
+	offerPositions,
+	parties,
+	products,
+	stock,
+	units,
+	users
+} from '$lib/server/db/schema';
 import { col } from '$lib/server/db/sql';
 import { intOrNull, requirePermission, str } from '$lib/server/guard';
 import { refreshAllSearchTexts } from '$lib/modules/lager/server/products';
 import { findRal } from '$lib/ral';
 import type { Actions, PageServerLoad } from './$types';
 
-const ENTITIES = ['orte', 'partien', 'materialarten', 'farben'] as const;
+const ENTITIES = ['orte', 'partien', 'materialarten', 'farben', 'einheiten'] as const;
 type Entity = (typeof ENTITIES)[number];
 
 export const load: PageServerLoad = async ({ locals, url, depends }) => {
@@ -16,7 +28,7 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 	requirePermission(locals, 'stammdaten.sehen');
 	const tab = (ENTITIES as readonly string[]).includes(url.searchParams.get('tab') ?? '') ? (url.searchParams.get('tab') as Entity) : 'orte';
 
-	const [locs, partyRows, cats, cols] = await Promise.all([
+	const [locs, partyRows, cats, cols, unitRows] = await Promise.all([
 		db
 			.select({
 				id: locations.id,
@@ -65,9 +77,21 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 			})
 			.from(colors)
 			.orderBy(asc(colors.sortOrder), asc(colors.name))
+			.all(),
+		db
+			.select({
+				id: units.id,
+				name: units.name,
+				sortOrder: units.sortOrder,
+				// Wie oft sie schon verwendet wird – Groß-/Kleinschreibung egal
+				offers: sql<number>`(select count(*) from ${offerPositions} where ${col(offerPositions.unit)} = ${col(units.name)} collate nocase)`.mapWith(Number),
+				reports: sql<number>`(select count(*) from ${dailyReportPositions} where ${col(dailyReportPositions.unit)} = ${col(units.name)} collate nocase)`.mapWith(Number)
+			})
+			.from(units)
+			.orderBy(asc(units.sortOrder), asc(units.name))
 			.all()
 	]);
-	return { tab, locations: locs, parties: partyRows, categories: cats, colors: cols };
+	return { tab, locations: locs, parties: partyRows, categories: cats, colors: cols, units: unitRows };
 };
 
 function isUniqueError(err: unknown) {
@@ -86,7 +110,7 @@ async function partyMembers(partyId: number): Promise<string | null> {
 	return `Dieser Partie sind noch Benutzer zugeordnet (${names}). Bitte sie zuerst unter Benutzer einer anderen Partie zuordnen.`;
 }
 
-async function nextSort(table: typeof locations | typeof categories | typeof colors) {
+async function nextSort(table: typeof locations | typeof categories | typeof colors | typeof units) {
 	const row = await db.select({ m: sql<number>`coalesce(max(${table.sortOrder}), -1)` }).from(table).get();
 	return Number(row?.m ?? -1) + 1;
 }
@@ -132,6 +156,15 @@ export const actions: Actions = {
 					if (id) await db.update(colors).set({ name, ral, hex }).where(eq(colors.id, id));
 					else await db.insert(colors).values({ name, ral, hex, sortOrder: await nextSort(colors) });
 					if (id) await refreshAllSearchTexts();
+					break;
+				}
+				case 'einheiten': {
+					// Positionen speichern höchstens 20 Zeichen; „lfm“ und „LFM“ sind dieselbe Einheit
+					const unit = str(f.get('name'), 20);
+					const same = await db.select({ id: units.id }).from(units).where(sql`lower(${units.name}) = lower(${unit})`).all();
+					if (same.some((u) => u.id !== id)) return fail(400, { entity, message: `„${unit}“ gibt es schon.` });
+					if (id) await db.update(units).set({ name: unit }).where(eq(units.id, id));
+					else await db.insert(units).values({ name: unit, sortOrder: await nextSort(units) });
 					break;
 				}
 				default:
@@ -207,6 +240,10 @@ export const actions: Actions = {
 				await db.delete(colors).where(eq(colors.id, id));
 				await refreshAllSearchTexts();
 				break;
+			case 'einheiten':
+				// Bestehende Positionen behalten ihren Text
+				await db.delete(units).where(eq(units.id, id));
+				break;
 		}
 		return { deleted: id };
 	},
@@ -217,7 +254,8 @@ export const actions: Actions = {
 		const entity = String(f.get('entity')) as Entity;
 		const id = intOrNull(f.get('id'));
 		const dir = f.get('dir') === 'up' ? -1 : 1;
-		const table = entity === 'orte' ? locations : entity === 'materialarten' ? categories : entity === 'farben' ? colors : null;
+		const table =
+			entity === 'orte' ? locations : entity === 'materialarten' ? categories : entity === 'farben' ? colors : entity === 'einheiten' ? units : null;
 		if (!table || !id) return fail(400, { message: 'Nicht sortierbar' });
 		const list = await db.select({ id: table.id }).from(table).orderBy(asc(table.sortOrder), asc(table.name)).all();
 		const i = list.findIndex((r) => r.id === id);

@@ -31,6 +31,7 @@
 	import { spacedNumber } from '$lib/modules/auftraege/offer';
 	import HardHat from '@lucide/svelte/icons/hard-hat';
 	import ListIcon from '@lucide/svelte/icons/list';
+	import { canonicalUnit, unitChoices } from '$lib/units';
 
 	let { data, form } = $props();
 	const report = $derived(data.report);
@@ -63,7 +64,7 @@
 	// Der Bericht wird nur beim Öffnen übernommen – danach gehört der Stand dem Formular
 	// svelte-ignore state_referenced_locally
 	let positions = $state<Position[]>(
-		data.report.positions.map((p) => ({ key: nextKey++, lbPos: p.lbPos, unit: p.unit, total: quantityLabel(p.totalQuantity) }))
+		data.report.positions.map((p) => ({ key: nextKey++, lbPos: p.lbPos, unit: canonicalUnit(data.units, p.unit), total: quantityLabel(p.totalQuantity) }))
 	);
 	/** Bezeichnung der Zeilen: die Positionen des gewählten Auftrags – im Notfall auch frei */
 	const choices = $derived(head.orderId ? (data.orderLines[Number(head.orderId)] ?? []) : []);
@@ -435,14 +436,10 @@
 									bind:value={p.lbPos}
 									aria-label="LB-Position Spalte {i + 1}"
 								/>
-								<input
-									class="input input-sm mt-1 text-center"
-									name="pos.einheit"
-									placeholder="Einheit"
-									maxlength="20"
-									bind:value={p.unit}
-									aria-label="Einheit Spalte {i + 1}"
-								/>
+								<select class="select input-sm mt-1 pr-8 text-center font-semibold" name="pos.einheit" bind:value={p.unit} aria-label="Einheit Spalte {i + 1}">
+									<option value="">Einheit</option>
+									{#each unitChoices(data.units, p.unit) as u (u)}<option value={u}>{u}</option>{/each}
+								</select>
 							</th>
 						{/each}
 						<th scope="col" class="w-10"><span class="sr-only">Zeile entfernen</span></th>

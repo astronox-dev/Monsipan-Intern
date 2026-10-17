@@ -18,6 +18,16 @@ export const parties = sqliteTable('parties', {
 	createdAt: createdAt()
 });
 
+/**
+ * Einheiten zur Auswahl in Angeboten, Rechnungen und Tagesberichten – gepflegt
+ * unter Stammdaten. Die Positionen speichern den Text, nicht die Kennung.
+ */
+export const units = sqliteTable('units', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	name: text('name').notNull().unique(),
+	sortOrder: integer('sort_order').notNull().default(0)
+});
+
 export const users = sqliteTable('users', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	username: text('username').notNull().unique(),

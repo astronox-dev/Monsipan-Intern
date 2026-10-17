@@ -28,6 +28,7 @@ import { parseAmount } from '$lib/modules/auftraege/offer';
 import { notifyOffer, notifyOrderAssigned, notifyOrderDocuments } from '$lib/modules/auftraege/server/notify';
 import { addOfferDocuments, deleteOfferDocument, getOfferDocument, listOfferDocuments, setOfferDocumentForCrew } from '$lib/modules/auftraege/server/offer-documents';
 import { titleFromFileName } from '$lib/documents';
+import { unitOptions } from '$lib/server/options';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -46,6 +47,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		offer,
 		editable,
 		customers: editable ? await listCustomers() : [],
+		// Einheiten zur Auswahl – aus den Stammdaten
+		units: editable ? await unitOptions() : [],
 		canAddCustomer: editable && can(user.role, 'kunden.erstellen'),
 		canRelease: offer.status === 'entwurf' && can(user.role, 'angebote.freigeben'),
 		canWithdraw: (offer.status === 'freigegeben' || offer.status === 'aenderung') && can(user.role, 'angebote.bearbeiten'),

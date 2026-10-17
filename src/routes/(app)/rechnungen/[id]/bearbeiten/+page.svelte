@@ -31,5 +31,5 @@
 		};
 	}}
 >
-	<InvoiceEditor head={data.head} lines={data.lines} paymentDays={data.paymentDays} {busy} submitLabel="Speichern" message={form?.message ?? ''} />
+	<InvoiceEditor head={data.head} lines={data.lines} paymentDays={data.paymentDays} units={data.units} {busy} submitLabel="Speichern" message={form?.message ?? ''} />
 </form>

@@ -3,6 +3,7 @@ import { requirePermission } from '$lib/server/guard';
 import { mayViewOrder } from '$lib/modules/auftraege/server/orders';
 import { createInvoice, draftLines, invoiceDraft, readInvoice, readMapping, readReports } from '$lib/modules/auftraege/server/invoices';
 import { notifyInvoice } from '$lib/modules/auftraege/server/notify';
+import { unitOptions } from '$lib/server/options';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Auftrag laden und prüfen: sichtbar und (noch) etwas abzurechnen */
@@ -27,6 +28,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		order: draft.order,
 		head: draft.head,
 		paymentDays: draft.paymentDays,
+		units: await unitOptions(),
 		previous: draft.previous,
 		mapping: { columns: draft.columns, priced: draft.lines, initial: draft.mapping },
 		selection: {

@@ -34,7 +34,6 @@
 		MAX_OFFER_LINES,
 		money,
 		OFFER_STATUS_LABELS,
-		OFFER_UNITS,
 		offerState,
 		offerTotals,
 		parseAmount,
@@ -43,6 +42,7 @@
 	import { date as dateLabel, dateTime } from '$lib/format';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { uploadFormPdfs, UploadError } from '$lib/upload';
+	import { canonicalUnit, unitChoices } from '$lib/units';
 
 	let { data, form } = $props();
 	const offer = $derived(data.offer);
@@ -76,7 +76,7 @@
 			kind: l.kind,
 			text: l.text,
 			quantity: l.quantity == null ? '' : String(l.quantity).replace('.', ','),
-			unit: l.unit,
+			unit: canonicalUnit(data.units, l.unit),
 			price: amountInput(l.unitPrice)
 		}))
 	);
@@ -389,7 +389,10 @@
 									</label>
 									<label class="block">
 										<span class="field-label md:sr-only">Einheit</span>
-										<input class="input" name="z.{i}.einheit" maxlength="20" list="einheiten" bind:value={l.unit} />
+										<select class="select" name="z.{i}.einheit" bind:value={l.unit}>
+											<option value="">–</option>
+											{#each unitChoices(data.units, l.unit) as u (u)}<option value={u}>{u}</option>{/each}
+										</select>
 									</label>
 									<label class="block">
 										<span class="field-label md:sr-only">EP in €</span>
@@ -408,7 +411,6 @@
 					<li class="py-3 text-sm text-ink-3">Noch keine Position.</li>
 				{/each}
 			</ul>
-			<datalist id="einheiten">{#each OFFER_UNITS as u (u)}<option value={u}></option>{/each}</datalist>
 			{#if data.editable}
 				<div class="mt-3 flex flex-wrap gap-2">
 					<button type="button" class="btn btn-secondary btn-sm" onclick={() => addLine('position')} disabled={lines.length >= MAX_OFFER_LINES}>

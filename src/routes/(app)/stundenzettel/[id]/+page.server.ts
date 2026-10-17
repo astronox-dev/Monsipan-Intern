@@ -82,7 +82,6 @@ function readHead(form: FormData) {
 	return {
 		allowanceDays: String(form.get('ausloeseTage') ?? ''),
 		allowanceAmount: String(form.get('ausloeseBetrag') ?? ''),
-		vaz: String(form.get('vaz') ?? ''),
 		vazPercent: String(form.get('vazProzent') ?? ''),
 		note: String(form.get('notiz') ?? '')
 	};

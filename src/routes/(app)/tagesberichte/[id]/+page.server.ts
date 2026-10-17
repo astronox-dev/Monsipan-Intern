@@ -28,6 +28,7 @@ import { linkableOrders, orderLineChoices } from '$lib/modules/auftraege/server/
 import { notifyReport } from '$lib/modules/tagesberichte/server/notify';
 import type { SessionUser } from '$lib/server/auth';
 import { listPhotos } from '$lib/modules/tagesberichte/server/photos';
+import { unitOptions } from '$lib/server/options';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -60,6 +61,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		canPhotos: working,
 		// Die Artikelauswahl braucht nur, wer auch eintragen darf
 		products: editable ? await materialProducts() : [],
+		// Einheiten der LB-Spalten – aus den Stammdaten
+		units: editable ? await unitOptions() : [],
 		editable,
 		canDelete: report.status === 'entwurf' && editable && can(user.role, 'tagesberichte.loeschen'),
 		canRelease: report.status === 'entwurf' && working && can(user.role, 'tagesberichte.freigeben'),

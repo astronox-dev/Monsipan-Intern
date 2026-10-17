@@ -56,7 +56,7 @@
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import { addDays, isValidIsoDate } from '$lib/modules/stunden/week';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
-	import { amountInput, INVOICE_KIND_LABELS, invoiceTotals, lineTotal, money, OFFER_UNITS, parseAmount, quantityLabel, REVERSE_CHARGE_NOTE } from '../offer';
+	import { amountInput, INVOICE_KIND_LABELS, invoiceTotals, lineTotal, money, parseAmount, quantityLabel, REVERSE_CHARGE_NOTE } from '../offer';
 	import {
 		columnLabel,
 		invoiceLines,
@@ -75,6 +75,8 @@
 		head: EditorHead;
 		lines: EditorLine[];
 		paymentDays: number;
+		/** Vorschläge für die Einheit – aus den Stammdaten; frei eintippen geht weiter */
+		units?: string[];
 		/** Nur bei einer neuen Rechnung: Spalten aus den Tagesberichten und die Angebotspositionen */
 		mapping?: { columns: SummaryColumn[]; priced: PricedLine[]; initial: Mapping } | null;
 		/** Nur bei einer neuen Rechnung: die Berichte zur Wahl und was es zum Auftrag schon gibt */
@@ -83,7 +85,7 @@
 		submitLabel: string;
 		message?: string;
 	}
-	let { head: initialHead, lines: initialLines, paymentDays, mapping = null, selection = null, busy = false, submitLabel, message = '' }: Props = $props();
+	let { head: initialHead, lines: initialLines, paymentDays, units = [], mapping = null, selection = null, busy = false, submitLabel, message = '' }: Props = $props();
 
 	type Line = {
 		key: number;
@@ -468,7 +470,7 @@
 			</li>
 		{/each}
 	</ul>
-	<datalist id="rechnung-einheiten">{#each OFFER_UNITS as u (u)}<option value={u}></option>{/each}</datalist>
+	<datalist id="rechnung-einheiten">{#each units as u (u)}<option value={u}></option>{/each}</datalist>
 	<button type="button" class="btn btn-secondary btn-sm mt-3" onclick={addLine}><Plus size={16} aria-hidden="true" />Position</button>
 
 	<dl class="num mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 border-t border-line pt-3">

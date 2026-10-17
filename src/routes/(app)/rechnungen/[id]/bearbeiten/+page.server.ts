@@ -3,6 +3,7 @@ import { requirePermission } from '$lib/server/guard';
 import { getSettings } from '$lib/server/settings';
 import { invoiceDetail, readInvoice, saveInvoice } from '$lib/modules/auftraege/server/invoices';
 import { audit } from '$lib/modules/auftraege/server/signatur/audit';
+import { unitOptions } from '$lib/server/options';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Nur offene Entwürfe lassen sich ändern – ausgestellte sind gesperrt */
@@ -44,7 +45,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			reverseCharge: invoice.reverseCharge
 		},
 		lines: invoice.lines,
-		paymentDays: settings.invoicePaymentDays
+		paymentDays: settings.invoicePaymentDays,
+		units: await unitOptions()
 	};
 };
 

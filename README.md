@@ -195,7 +195,7 @@ bisherigen Einstellungen übernommen (Migration `0028_rechte_einheitlich`).
 Eine Woche je Mitarbeiter, aufgebaut wie der Lohnzettel auf Papier: Montag bis Sonntag mit
 Kostenstelle, Baustelle/Tätigkeit, Arbeitszeit und den Stundenarten Norm, Überstunden 50 %
 und 100 %, Urlaub, Feiertag, Regen und Efzg (Entgeltfortzahlung). Dazu Auslöse (Tage und
-Betrag) und VAZ mit Prozentsatz. Die Summen je Spalte und die Gesamtstunden rechnet die
+Betrag) und die VAZ in Prozent. Die Summen je Spalte und die Gesamtstunden rechnet die
 Seite mit, während getippt wird.
 
 **Wochenübersicht:** nach Partien gegliedert – die eigene Partie zuerst, „Ohne Partie“
@@ -276,7 +276,8 @@ Ein Bericht je Tag und Baustelle, wie der Block im Auto: Nummer, Datum, Bundesst
 Baustelle und Kostenstelle im Kopf, darunter beliebig viele LB-Positionen mit Einheit
 (**LB-Pos. hinzufügen**) und beliebig viele Zeilen „Ortsbezeichnungen und Markierungsarten"
 mit den Mengen je Position. Die Einheitssumme je Spalte wird mitgerechnet, die Gesamtmenge
-wird von Hand eingetragen. Dazu Tagesleistung und LV-Position Nr.
+wird von Hand eingetragen. Dazu Tagesleistung und LV-Position Nr. Die Einheit einer Spalte
+wird aus der Liste unter **Stammdaten → Einheiten** gewählt.
 
 **Material:** Je Zeile wird ein Artikel aus dem Lager gewählt – Material (die Farbe, ohne
 Farbe die Materialart) und Kenn-Nr. (der Artikelname) füllen sich selbst aus, einzutragen
@@ -497,7 +498,9 @@ links, rechts Angebotsdatum, Kunden-UID, Projektnummer und Angebotsnummer, darun
 „Angebot Nr. 26 659 / BV: …“, die Einleitung, die Positionen mit **Nr., Bezeichnung, Menge,
 Einheit, Einheitspreis (EP) und Gesamtpreis (GP)**, darunter Gesamt Netto, Umsatzsteuer
 (20 %, je Angebot änderbar) und Gesamtbetrag, der Schlusstext und unten Anschrift,
-Bankverbindung und Kontakt.
+Bankverbindung und Kontakt. Die Einheit wählt man aus der Liste unter
+**Stammdaten → Einheiten**; in Rechnungen stehen dieselben Einheiten als Vorschlag, dort
+bleibt sie frei eintippbar.
 
 - Der **Ausführungsort** (wo gearbeitet wird) steht im PDF unter der Überschrift und geht in
   den Auftrag über.
@@ -1382,6 +1385,14 @@ zu …“; mit **Trotzdem speichern** wird die Nummer doppelt vergeben. Beim Sca
 die App dann alle Artikel mit dieser Nummer zur Auswahl – auch beim Buchen – statt
 stillschweigend den falschen zu nehmen. Auf der Artikelseite steht unter dem Code, zu
 welchen anderen Artikeln er ebenfalls gehört.
+
+**Einheiten:** Unter **Stammdaten → Einheiten** steht die Auswahl für Angebote und
+Tagesberichte (und die Vorschläge in Rechnungen) – anlegen, umbenennen, sortieren, löschen;
+„lfm“ und „LFM“ gelten als dieselbe. Die Positionen speichern den Text: Umbenennen oder
+Löschen ändert keine bestehenden Dokumente, eine dort stehende Einheit bleibt beim Bearbeiten
+in der Auswahl, auch wenn sie nicht (mehr) in der Liste ist. Beim ersten Start füllt sich
+die Liste mit den bisherigen Vorschlägen und allem, was in Angeboten, Aufträgen, Rechnungen
+und Tagesberichten schon steht.
 
 **Farben und RAL:** Unter **Stammdaten → Farben** wird eine Farbe über ihre RAL-Nummer
 oder den RAL-Namen gewählt (alle 215 RAL-Classic-Farben, z. B. `6024` oder „Verkehrsgrün“);

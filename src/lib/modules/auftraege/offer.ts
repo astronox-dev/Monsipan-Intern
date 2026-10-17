@@ -32,9 +32,6 @@ export const invoiceLabel = (kind: string) => INVOICE_KIND_LABELS[kind] ?? 'Rech
 /** Steht auf der Rechnung, wenn die Steuerschuld auf den Kunden übergeht */
 export const REVERSE_CHARGE_NOTE = 'Übergang der Steuerschuld auf den Leistungsempfänger gemäß § 19 Abs. 1a UStG (Bauleistungen).';
 
-/** Übliche Einheiten als Vorschlag – frei eintragbar bleibt es trotzdem */
-export const OFFER_UNITS = ['Pauschal', 'lfd. m', 'm²', 'Stk', 'h', 'kg', 'l'];
-
 /** Obergrenze, damit ein Angebot nicht ins Uferlose wächst */
 export const MAX_OFFER_LINES = 200;
 

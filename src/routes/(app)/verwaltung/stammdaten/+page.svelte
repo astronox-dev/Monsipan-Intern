@@ -12,6 +12,7 @@
 	import UsersRound from '@lucide/svelte/icons/users-round';
 	import Tag from '@lucide/svelte/icons/tag';
 	import Palette from '@lucide/svelte/icons/palette';
+	import Ruler from '@lucide/svelte/icons/ruler';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import RalPicker from '$lib/modules/lager/components/RalPicker.svelte';
 	import { findRal } from '$lib/ral';
@@ -30,7 +31,8 @@
 		{ value: 'orte', label: 'Lagerorte', icon: Warehouse },
 		{ value: 'partien', label: 'Partien', icon: UsersRound },
 		{ value: 'materialarten', label: 'Materialarten', icon: Tag },
-		{ value: 'farben', label: 'Farben', icon: Palette }
+		{ value: 'farben', label: 'Farben', icon: Palette },
+		{ value: 'einheiten', label: 'Einheiten', icon: Ruler }
 	] as const;
 
 	type Editing = {
@@ -49,7 +51,15 @@
 
 	const tab = $derived(data.tab);
 	const noun = $derived(
-		tab === 'orte' ? 'Lagerort' : tab === 'partien' ? 'Partie' : tab === 'materialarten' ? 'Materialart' : 'Farbe'
+		tab === 'orte'
+			? 'Lagerort'
+			: tab === 'partien'
+				? 'Partie'
+				: tab === 'materialarten'
+					? 'Materialart'
+					: tab === 'farben'
+						? 'Farbe'
+						: 'Einheit'
 	);
 
 	function edit(e: Editing) {
@@ -106,7 +116,8 @@
 			{#if tab === 'orte'}Lagerorte mit Ware lassen sich erst deaktivieren, wenn sie leer sind.
 			{:else if tab === 'partien'}Beim Ausbuchen wird ausgewählt, an welche Partie das Material geht. Ohne Partie wird auf die buchende Person gebucht.
 			{:else if tab === 'materialarten'}Gruppiert Artikel für Filter und Berichte.
-			{:else}Farbmuster erscheinen als Streifen am Artikel.{/if}
+			{:else if tab === 'farben'}Farbmuster erscheinen als Streifen am Artikel.
+			{:else}Auswahl für die Einheit in Angeboten, Rechnungen und Tagesberichten. Umbenennen und Löschen ändert bestehende Dokumente nicht.{/if}
 		</p>
 		{#if canCreate}
 			<button
@@ -226,7 +237,7 @@
 					{/if}
 				</li>
 			{/each}
-		{:else}
+		{:else if tab === 'farben'}
 			{#each data.colors as c, i (c.id)}
 				<li class="flex items-center gap-3 px-4 py-3 lg:px-6" animate:flip={{ duration: 220 }}>
 					{#if canEdit}{@render order(c.id, i === 0, i === data.colors.length - 1)}{/if}
@@ -250,6 +261,36 @@
 					{/if}
 				</li>
 			{/each}
+		{:else}
+			{#each data.units as u, i (u.id)}
+				{@const used = [u.offers && `${u.offers} Angebotspositionen`, u.reports && `${u.reports} Spalten in Tagesberichten`].filter(Boolean).join(', ')}
+				<li class="flex items-center gap-3 px-4 py-3 lg:px-6" animate:flip={{ duration: 220 }}>
+					{#if canEdit}{@render order(u.id, i === 0, i === data.units.length - 1)}{/if}
+					<div class="min-w-0 flex-1">
+						<p class="font-medium">{u.name}</p>
+						<p class="text-sm text-ink-3">{used || 'Noch nicht verwendet'}</p>
+					</div>
+					{#if canEdit}<button class="btn btn-ghost btn-sm btn-icon" aria-label="{u.name} bearbeiten" onclick={() => edit({ id: u.id, name: u.name })}><Pencil size={16} /></button>{/if}
+					{#if canDelete}
+					<button
+						class="btn btn-ghost btn-sm btn-icon hover:text-danger"
+						aria-label="{u.name} löschen"
+						onclick={() => {
+							confirm = {
+								id: u.id,
+								name: u.name,
+								detail: used
+									? `Steht danach nicht mehr zur Auswahl. Wo sie schon verwendet wird (${used}), bleibt sie stehen.`
+									: 'Wird endgültig entfernt.'
+							};
+							confirmOpen = true;
+						}}><Trash size={16} /></button
+					>
+					{/if}
+				</li>
+			{:else}
+				<li class="px-6 py-12 text-center text-ink-3">Noch keine Einheiten. Lege die Einheiten an, aus denen in Angeboten und Tagesberichten gewählt wird.</li>
+			{/each}
 		{/if}
 	</ul>
 </section>
@@ -261,7 +302,15 @@
 			{#if editing.id}<input type="hidden" name="id" value={editing.id} />{/if}
 			<div>
 				<label for="md-name" class="field-label">Name *</label>
-				<input id="md-name" name="name" class="input" required maxlength="80" bind:value={editing.name} />
+				<input
+					id="md-name"
+					name="name"
+					class="input"
+					required
+					maxlength={tab === 'einheiten' ? 20 : 80}
+					placeholder={tab === 'einheiten' ? 'z. B. lfm' : null}
+					bind:value={editing.name}
+				/>
 			</div>
 			{#if tab === 'orte'}
 				<div>

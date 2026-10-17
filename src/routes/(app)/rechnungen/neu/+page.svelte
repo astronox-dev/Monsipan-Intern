@@ -63,6 +63,7 @@
 		head={data.head}
 		lines={data.lines}
 		paymentDays={data.paymentDays}
+		units={data.units}
 		mapping={data.mapping}
 		selection={data.selection}
 		{busy}
