@@ -93,17 +93,12 @@
 	let acceptOpen = $state(false);
 	let deleteOpen = $state(false);
 	let customerOpen = $state(false);
-	let orderOpen = $state(false);
 	let customerBusy = $state(false);
-	let orderBusy = $state(false);
 	/** Unterlagen: Hochladen in Teilen, mit Fortschritt */
 	let docUploading = $state(false);
 	let docShare = $state(0);
 	let docError = $state('');
 	let removeDoc = $state<{ id: number; title: string } | null>(null);
-	/** Pläne beim Erstellen des Auftrags: Anteil hochgeladen (null = gerade nicht) */
-	let planShare = $state<number | null>(null);
-	let planError = $state('');
 	let listBox = $state<HTMLElement>();
 
 	/** Kunde gewählt: seine Anschrift kommt ins Angebot (danach hier noch änderbar) */
@@ -245,7 +240,7 @@
 			{#if offer.order}
 				<a href="/auftraege/{offer.order.id}" class="btn btn-secondary mt-3"><HardHat size={18} aria-hidden="true" />Zum Auftrag {spacedNumber(offer.number)}</a>
 			{:else if data.canCreateOrder}
-				<button type="button" class="btn btn-primary mt-3" onclick={() => (orderOpen = true)}><HardHat size={18} aria-hidden="true" />Auftrag erstellen</button>
+				<a href="/angebote/{offer.id}/auftrag" class="btn btn-primary mt-3"><HardHat size={18} aria-hidden="true" />Auftrag erstellen</a>
 			{:else}
 				<p class="mt-2 text-sm text-ink-3">Noch kein Auftrag erstellt.</p>
 			{/if}
@@ -748,60 +743,6 @@
 	</form>
 </Dialog>
 
-<Dialog bind:open={orderOpen} title="Auftrag erstellen">
-	<form
-		method="POST"
-		action="?/createOrder"
-		enctype="multipart/form-data"
-		class="space-y-4"
-		use:enhance={async ({ formData, cancel }) => {
-			orderBusy = true;
-			planError = '';
-			// Pläne in Teilen vorab – ohne Größengrenze; ist eine kein PDF, entsteht kein Auftrag
-			try {
-				planShare = 0;
-				await uploadFormPdfs(formData, 'plaene', (share) => (planShare = share));
-			} catch (err) {
-				planError = err instanceof UploadError ? err.message : 'Das Hochladen hat nicht geklappt – bitte noch einmal versuchen.';
-				orderBusy = false;
-				cancel();
-				return;
-			} finally {
-				planShare = null;
-			}
-			return async ({ update }) => {
-				orderBusy = false;
-				await update({ reset: false });
-			};
-		}}
-	>
-		<p class="text-ink-2">
-			Der Auftrag bekommt die Nummer {spacedNumber(offer.number)}, die Anschrift und alle Positionen – ohne Preise. Die Partie sieht ihn danach unter
-			Aufträge und setzt ihn auf „in Arbeit" und „abgeschlossen". Ohne Partie bleibt er „nicht zugeteilt" und steht in der Wochenplanung zum Einplanen.
-		</p>
-		<label class="block">
-			<span class="field-label">Partie</span>
-			<select class="select" name="partie">
-				<option value="">Noch keine – später zuteilen</option>
-				{#each data.parties as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-			</select>
-		</label>
-		<label class="block">
-			<span class="field-label">Hinweis für die Partie</span>
-			<textarea class="textarea" name="hinweis" rows="3" maxlength="2000" placeholder="z. B. Zufahrt über Tor 3, Ansprechpartner vor Ort …"></textarea>
-		</label>
-		<label class="block">
-			<span class="field-label">Pläne und Unterlagen <span class="font-normal text-ink-3">(PDF, freiwillig – auch später im Auftrag)</span></span>
-			<input class="input py-2" type="file" name="plaene" accept="application/pdf,.pdf" multiple />
-		</label>
-		{#if planError}<p class="field-error" role="alert">{planError}</p>
-		{:else if form && 'orderMessage' in form && form.orderMessage}<p class="field-error" role="alert">{form.orderMessage}</p>{/if}
-		<div class="flex justify-end gap-2 pt-1">
-			<button type="button" class="btn btn-ghost" onclick={() => (orderOpen = false)}>Abbrechen</button>
-			<button class="btn btn-primary" disabled={orderBusy}><HardHat size={18} aria-hidden="true" />{planShare !== null ? `Pläne hochladen … ${Math.floor(planShare * 100)} %` : orderBusy ? 'Wird erstellt …' : 'Auftrag erstellen'}</button>
-		</div>
-	</form>
-</Dialog>
 
 <style>
 	/* Der Knopf ist ein Label um das Dateifeld – den Fokus zeigt er selbst */

@@ -491,3 +491,80 @@ export function maySign(role: SignatureRole, scope: WorkScope): boolean {
 export function lineTitle(text: string): string {
 	return (text.split('\n').find((l) => l.trim()) ?? '').trim().slice(0, 200);
 }
+
+/* ------------------------------------------------ Vorbelegen */
+
+/** Arten der Markierung – die Auswahl im Formular und was im Positionstext erkannt wird */
+export const MARKING_KINDS = ['Farbe', 'Kaltplastik', 'Heißplastik', 'Spritzplastik', 'Folie', 'Agglomerat'];
+
+/** RAL-Verkehrsfarben zu den Farbwörtern im Text */
+const COLOR_WORDS: [RegExp, string][] = [
+	[/(?<!\p{L})wei(?:ß|ss)(?:e|er|es|en|em)?(?!\p{L})/iu, '9016'],
+	[/(?<!\p{L})gelb(?:e|er|es|en|em)?(?!\p{L})/iu, '1023'],
+	[/(?<!\p{L})rot(?:e|er|es|en|em)?(?!\p{L})/iu, '3020'],
+	[/(?<!\p{L})blau(?:e|er|es|en|em)?(?!\p{L})/iu, '5017'],
+	[/(?<!\p{L})grün(?:e|er|es|en|em)?(?!\p{L})/iu, '6024'],
+	[/(?<!\p{L})orange(?!\p{L})/iu, '2009'],
+	[/(?<!\p{L})schwarz(?:e|er|es|en|em)?(?!\p{L})/iu, '9017']
+];
+
+/**
+ * Art der Markierung, RAL-Farbton und MSK aus dem Text einer Position
+ * erraten – „Leitlinie 15 cm weiß, Kaltplastik, MSK D refl." wird zu
+ * Kaltplastik / 9016 / D refl. Was nicht drinsteht, bleibt leer.
+ */
+export function guessLine(text: string): { kind: string; ral: string; msk: string } {
+	const t = text.replace(/\s+/g, ' ');
+	const lower = t.toLowerCase();
+	// Die Werkstoffe zuerst – „Markierungsfarbe Kaltplastik" ist Kaltplastik
+	const kind =
+		MARKING_KINDS.filter((k) => k !== 'Farbe').find((k) => lower.includes(k.toLowerCase())) ??
+		(lower.includes('heissplastik') ? 'Heißplastik' : /farbe|(?<!\p{L})lack/iu.test(t) ? 'Farbe' : '');
+	const ralNr = /RAL\s*(\d{4})/i.exec(t)?.[1];
+	const ral = ralNr ?? COLOR_WORDS.find(([re]) => re.test(t))?.[1] ?? '';
+	const m = /MSK\s*([A-Z])(?:\s*(?:,\s*)?(refl(?:\.|ektierend)?|ref\b))?/i.exec(t);
+	const msk = m ? `${m[1].toUpperCase()}${m[2] ? ' refl.' : ''}` : '';
+	return { kind, ral, msk };
+}
+
+/** Ist das eine Folien-Leistung? */
+export const isFoilLine = (l: Pick<WorkLine, 'kind' | 'text'>) => /folie/i.test(l.kind) || (!l.kind && /folie/i.test(l.text));
+
+/**
+ * 3M-Protokoll vorbelegen: Ort, Verlegedatum (Ausführungsdatum) und je
+ * Folien-Leistung eine Zeile mit Linienart, Breite und Gesamtlänge. Der
+ * Folientyp vom letzten Protokoll wird übernommen.
+ */
+export function prefillFoil(form: Pick<WorkOrderForm, 'site' | 'startDate' | 'lines'>, filmType = ''): FoilProtocol {
+	const foil = emptyFoil();
+	foil.place = form.site;
+	foil.layingDate = form.startDate;
+	const films = form.lines.filter(isFoilLine).slice(0, FOIL_FILM_ROWS);
+	films.forEach((l, i) => {
+		const width = /(\d+(?:[.,]\d+)?)\s*cm/i.exec(l.text)?.[1] ?? '';
+		const metres = ['lfm', 'lfd. m', 'm'].includes(l.unit.trim()) && l.quantity != null ? String(l.quantity).replace('.', ',') : '';
+		const lineType = l.text.split(/[,\d]/)[0].trim();
+		foil.films[i] = { ...foil.films[i], type: filmType, width, length: metres, lineType };
+	});
+	return foil;
+}
+
+/** Steht im Protokoll noch nichts? Dann darf es vorbelegt werden. */
+export function isPristineFoil(foil: FoilProtocol): boolean {
+	const { signatures: _s, ...rest } = foil;
+	const { signatures: _e, ...empty } = emptyFoil();
+	return JSON.stringify(sanitizeFoil(rest)) === JSON.stringify(sanitizeFoil(empty));
+}
+
+/**
+ * Unterschriften im 3M-Protokoll: der Vorarbeiter (sonst die Vertretung) als
+ * Auftragnehmer, der Auftraggeber mit seiner Unterschrift unter dem
+ * Arbeitsauftrag – einmal unterschreiben gilt für beides. Ältere eigene
+ * Unterschriften im Protokoll bleiben, wo es sonst keine gibt.
+ */
+export function foilSignatures(c: Pick<WorkOrderContent, 'signatures' | 'foil'>): FoilProtocol['signatures'] {
+	return {
+		auftragnehmer: c.signatures.vorarbeiter ?? c.signatures.vertretung ?? c.foil.signatures.auftragnehmer,
+		auftraggeber: c.signatures.auftraggeber ?? c.foil.signatures.auftraggeber
+	};
+}

@@ -16,7 +16,7 @@ import {
 	setWorkOrderSignature,
 	workScope
 } from '$lib/modules/auftraege/server/work-orders';
-import { isIsoDate, maySign, sanitizeForm, SIGNATURE_ROLES, type SignatureRole, type WorkScope } from '$lib/modules/auftraege/work-order';
+import { isIsoDate, isPristineFoil, maySign, prefillFoil, sanitizeForm, SIGNATURE_ROLES, type SignatureRole, type WorkScope } from '$lib/modules/auftraege/work-order';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -47,6 +47,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			documents: [...order.offerDocuments.map((d) => ({ ...d, href: `a${d.id}`, fromOffer: true })), ...order.documents.map((d) => ({ ...d, href: String(d.id), fromOffer: false }))]
 		},
 		work,
+		// Das 3M-Protokoll – steht noch nichts drin, vorbelegt aus Baustelle, Datum und Folien-Leistungen
+		foilStart: isPristineFoil(work.content.foil) ? { ...prefillFoil(work.content), signatures: work.content.foil.signatures } : work.content.foil,
 		scope,
 		locked: !!work.content.signatures.auftraggeber,
 		/** Den ganzen Auftrag sieht nur das Büro – die Partie arbeitet hier */
@@ -67,7 +69,7 @@ async function saveForm(form: FormData, orderId: number, scope: WorkScope, userI
 	} catch {
 		return 'Das Formular ist unvollständig angekommen – bitte die Seite neu laden.';
 	}
-	return saveWorkOrderForm(orderId, sanitizeForm(raw), scope, userId);
+	return saveWorkOrderForm(orderId, sanitizeForm(raw), scope, userId, (raw as { foil?: unknown } | null)?.foil);
 }
 
 const roleOf = (v: FormDataEntryValue | null) => ((SIGNATURE_ROLES as readonly string[]).includes(String(v)) ? (String(v) as SignatureRole) : null);
@@ -109,7 +111,13 @@ export const actions: Actions = {
 		}
 		const problem = await setWorkOrderSignature(order.id, role, { path, name, at: Date.now() }, user.id);
 		if (problem) return fail(400, { message: problem });
-		return { signed: role };
+		// Mit der Unterschrift des Auftraggebers ist die Arbeit fertig – auf Wunsch gleich abschließen
+		const close = role === 'auftraggeber' && form.get('abschliessen') === '1' && maySetOrderStatus(user, order) && order.status !== 'abgeschlossen';
+		if (close) {
+			await setOrderStatus(order.id, 'abgeschlossen', user.id);
+			notifyOrderStatus(order.id, 'abgeschlossen', user.id);
+		}
+		return { signed: role, closed: close };
 	},
 
 	unsign: async ({ params, request, locals }) => {

@@ -10,7 +10,7 @@ import { bufferResponse, drawLogo, startPdf } from '$lib/server/pdf';
 import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '$lib/modules/stunden/signature';
 import { quantityLabel, spacedNumber } from '../offer';
 import { drawFoil } from './foil-pdf';
-import { ATTACHMENTS, CHECKLIST, ISSUES, type WorkCheck, type WorkOrderContent, type WorkSignature } from '../work-order';
+import { ATTACHMENTS, CHECKLIST, foilSignatures, ISSUES, type WorkCheck, type WorkOrderContent, type WorkSignature } from '../work-order';
 
 const INK = '#1d2127';
 const MUTED = '#5c626b';
@@ -39,7 +39,8 @@ export async function workOrderPdf(input: WorkOrderPdfInput): Promise<Response> 
 	drawWorkOrder(doc, input);
 	if (input.content.foilProtocol === 'ja') {
 		doc.addPage({ size: 'A4', margin: 8 });
-		drawFoil(doc, { number: input.number, foil: input.content.foil });
+		// Unterschriften wie im Arbeitsauftrag: Vorarbeiter als Auftragnehmer, Auftraggeber für beides
+		drawFoil(doc, { number: input.number, foil: { ...input.content.foil, signatures: foilSignatures(input.content) } });
 	}
 	return bufferResponse(`arbeitsauftrag-${input.number}.pdf`, await finish());
 }

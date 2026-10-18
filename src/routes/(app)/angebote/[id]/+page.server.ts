@@ -21,11 +21,11 @@ import {
 	type SaveOffer
 } from '$lib/modules/auftraege/server/offers';
 import { inquiryForOffer } from '$lib/modules/auftraege/server/inquiries';
-import { activeParties, createOrderFromOffer, insertOrderDocument, mayDeleteOrder } from '$lib/modules/auftraege/server/orders';
+import { mayDeleteOrder } from '$lib/modules/auftraege/server/orders';
 import { DocumentError, storeDocument, takeUploads } from '$lib/server/documents';
 import { isValidIsoDate } from '$lib/modules/stunden/week';
 import { parseAmount } from '$lib/modules/auftraege/offer';
-import { notifyOffer, notifyOrderAssigned, notifyOrderDocuments } from '$lib/modules/auftraege/server/notify';
+import { notifyOffer, notifyOrderDocuments } from '$lib/modules/auftraege/server/notify';
 import { addOfferDocuments, deleteOfferDocument, getOfferDocument, listOfferDocuments, setOfferDocumentForCrew } from '$lib/modules/auftraege/server/offer-documents';
 import { titleFromFileName } from '$lib/documents';
 import { unitOptions } from '$lib/server/options';
@@ -59,7 +59,6 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		canDeleteOrder: !!offer.order && mayDeleteOrder(user, offer.order),
 		canLink,
 		canCreateOrder,
-		parties: canCreateOrder ? await activeParties() : [],
 		// Unterlagen: in jedem Stand, auch wenn schon beauftragt
 		documents: await listOfferDocuments(offer.id),
 		canManageDocuments: can(user.role, 'angebote.bearbeiten'),
@@ -283,39 +282,5 @@ export const actions: Actions = {
 		if (!Number.isInteger(id)) return fail(400, { docError: 'Unterlage fehlt.' });
 		await deleteOfferDocument(offer.id, id);
 		return { documentRemoved: true };
-	},
-
-	createOrder: async ({ params, request, locals }) => {
-		const { user, offer } = await open(Number(params.id), locals);
-		if (!can(user.role, 'auftraege.erstellen')) return fail(403, { orderMessage: 'Dafür fehlt dir die Berechtigung.' });
-		const form = await request.formData();
-		// Die Partie ist freiwillig – zuteilen geht auch später, etwa in der Wochenplanung
-		const rawParty = String(form.get('partie') ?? '');
-		const partyId = rawParty ? Number(rawParty) : null;
-		if (partyId !== null && (!Number.isInteger(partyId) || partyId <= 0)) return fail(400, { orderMessage: 'Die Partie stimmt nicht.' });
-		// Pläne erst prüfen und ablegen – ist eine Datei kein PDF, entsteht auch kein Auftrag.
-		// Der Browser lädt sie vorher in Teilen hoch (ohne Größengrenze) und schickt nur die
-		// Kennungen; ohne JavaScript kommen die Dateien selbst.
-		const stored: { name: string; sha256: string; size: number }[] = [];
-		try {
-			stored.push(...takeUploads(user.id, form.getAll('uploads').map(String)));
-		} catch (err) {
-			if (err instanceof DocumentError) return fail(400, { orderMessage: err.message });
-			throw err;
-		}
-		const files = form.getAll('plaene').filter((f): f is File => f instanceof File && f.size > 0);
-		for (const file of files) {
-			try {
-				stored.push({ name: file.name, ...(await storeDocument(file, null)) });
-			} catch (err) {
-				if (err instanceof DocumentError) return fail(400, { orderMessage: `${file.name}: ${err.message}` });
-				throw err;
-			}
-		}
-		const id = await createOrderFromOffer(offer.id, partyId, String(form.get('hinweis') ?? '').trim(), user.id);
-		if (!id) return fail(400, { orderMessage: 'Aus diesem Angebot lässt sich (noch) kein Auftrag erstellen.' });
-		for (const s of stored) await insertOrderDocument(id, s.name, s, user.id);
-		notifyOrderAssigned(id, user.id);
-		redirect(303, `/auftraege/${id}`);
 	}
 };

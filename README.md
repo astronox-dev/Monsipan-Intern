@@ -541,10 +541,11 @@ bleibt sie frei eintippbar.
    **Als angenommen markieren** intern auf angenommen (Recht „Intern annehmen“, von Haus aus
    Admin, Geschäftsführung, Bauleitung) – auf Wunsch mit dem Namen, wer zugesagt hat. Am
    Angebot steht dann, wer es wann eingetragen hat.
-4. **Angenommen:** **Auftrag erstellen** – Partie wählen (freiwillig: ohne Partie bleibt der
-   Auftrag „nicht zugeteilt“ und wird später zugeteilt, z. B. beim Einplanen in der
-   Wochenplanung), optional ein Hinweis für die Partie und gleich die **Pläne als PDF**
-   (mehrere auf einmal).
+4. **Angenommen:** **Auftrag erstellen** – Auftrag und Arbeitsauftrag in einem Schritt: Partie
+   wählen (freiwillig: ohne Partie bleibt der Auftrag „nicht zugeteilt“ und wird später
+   zugeteilt, z. B. beim Einplanen in der Wochenplanung), optional ein Hinweis für die Partie
+   und gleich die **Pläne als PDF** (mehrere auf einmal), darunter das Vorab-Formular des
+   Arbeitsauftrags (siehe unten).
    Ein angenommenes Angebot lässt sich nur wieder öffnen (Admin, Geschäftsführung), solange
    es keinen Auftrag gibt; die Annahme verfällt dabei.
 5. **Abgerechnet:** Ist der Auftrag abgeschlossen und sind alle seine Rechnungen bezahlt
@@ -579,14 +580,20 @@ nur, wer alle Aufträge sieht – die Partien nicht.
   gleich einen mit diesem Auftrag an. Im Tagesbericht-PDF steht „Auftrag Nr. …“ unter der
   Baustelle.
 - **Arbeitsauftrag** (`/auftraege/<id>/arbeitsauftrag`): das Formular FO 0814 – je Auftrag
-  einer. **Arbeitsauftrag erstellen** am Auftrag (Büro) öffnet zuerst das Vorab-Formular
-  (`…/arbeitsauftrag/neu`): Auftrag und Baustelle, Beilagen/Baustelleninformationen,
-  Evaluierung, zu jeder Leistung Art der Markierung, RAL-Farbton und MSK, ob ein
-  Folienverlegeprotokoll nötig ist, und die Rückseite (Schutzausrüstung, besondere Gefahren –
-  je Zeile angehakt und was genau, dazu zwei freie Zeilen). Vorbelegt ist es mit BV,
-  Ausführungsort, Ansprechpartner und Telefon und – wenn eingeplant – erstem und letztem Tag
-  aus der Wochenplanung. Die **Leistungen** sind die Positionen des Auftrags (erste Zeile,
-  Menge, Einheit) und stehen nach dem Erstellen fest – auch für das Büro.
+  einer. **Auftrag erstellen** am angenommenen Angebot (`/angebote/<id>/auftrag`) legt Auftrag
+  und Arbeitsauftrag in einem Schritt an: oben Partie, Pläne und Hinweis, darunter das
+  Vorab-Formular – Auftrag und Baustelle, Beilagen/Baustelleninformationen, Evaluierung, zu
+  jeder Leistung Art der Markierung, RAL-Farbton und MSK, ob ein Folienverlegeprotokoll nötig
+  ist, und die Rückseite (Schutzausrüstung, besondere Gefahren). Mit **… und als BL
+  unterschreiben** steht die Unterschrift BL samt Datum gleich drin. Für einen Auftrag ohne
+  Arbeitsauftrag gibt es dasselbe Formular am Auftrag (`…/arbeitsauftrag/neu`).
+  - **Vorbelegt**: BV, Ausführungsort, Ansprechpartner und Telefon, die Tage aus der
+    Wochenplanung; Beilagen, Evaluierung und Rückseite wie beim zuletzt angelegten
+    Arbeitsauftrag („Pläne“ nur, wenn welche hochgeladen werden); Art, RAL und MSK erkannt aus
+    dem Positionstext („Kaltplastik“, „weiß“ → 9016, „gelb“ → 1023, „RAL 1003“, „MSK D refl.“);
+    mit einer Folien-Leistung steht das Folienverlegeprotokoll auf „ja“.
+  - Die **Leistungen** sind die Positionen des Auftrags (erste Zeile, Menge, Einheit) und
+    stehen nach dem Erstellen fest – auch für das Büro.
   - **Die Partie sieht nicht mehr den ganzen Auftrag**, nur den Arbeitsauftrag: Wer nicht alle
     Aufträge sieht, findet in der Liste, der Suche und der Übersicht nur Aufträge mit
     Arbeitsauftrag; `/auftraege/<id>` führt direkt zu ihm, Auftrags-PDF, Druck und
@@ -598,17 +605,23 @@ nur, wer alle Aufträge sieht – die Partien nicht.
     Unterschrift BL und die Rückseite ändern.
   - **Partie** (Recht „In Arbeit / abgeschlossen“, bei ihren Aufträgen): ausgeführte Mengen,
     Vorarbeiter-Checkliste, Auffälligkeiten mit Regiestunden, „Arbeit fertig am“, die
-    Unterschriften Vorarbeiter und Vertretung, die **Unterweisung der Mitarbeiter** (Name,
-    Datum, Unterschrift der Person am Gerät) und die **Unterschrift des Auftraggebers**.
-    Das Folienverlegeprotokoll (ja/nein) dürfen beide umstellen.
-  - **3M-Verlegeprotokoll** (`…/arbeitsauftrag/folie`, nur bei Folienverlegeprotokoll „ja“):
-    das Eigenüberwachungs-Protokoll für Markierungsfolien zum Ausfüllen durch die Partie –
-    Straße (Ort, Abschnitt, Fahrbahndecke, Spurbreite, Zustand, Vorarbeiten), Wetter um 8, 11,
-    14 und 18 Uhr, letzter Regen, Folien (zwei Zeilen), Lot-Nummern, Grundierung, Verlegung,
-    Andruck, Streckenfreigabe, Verlege- und Demarkierungsdatum, Bemerkungen, dazu „gesehen /
-    anerkannt“ (Auftraggeber) und „ausgefertigt von“ (Auftragnehmer). Mit der Unterschrift des
-    Auftraggebers ist es gesperrt, bis sie entfernt wird. Das PDF ist dem 3M-Vordruck
-    nachgezeichnet, im Firmenfeld steht das Monsipan-Logo.
+    Unterschriften Vorarbeiter und Vertretung, die **Unterweisung der Mitarbeiter** – im Dialog
+    eine Person nach der anderen: Namen der Partie antippen, unterschreiben, speichern, nächste –
+    und die **Unterschrift des Auftraggebers**. Die setzt „Arbeit fertig am“ auf heute, wenn noch
+    leer, und auf Wunsch (Häkchen im Dialog) den Auftrag gleich auf „Abgeschlossen“. Das
+    Folienverlegeprotokoll (ja/nein) dürfen beide umstellen.
+  - **3M-Verlegeprotokoll** (bei Folienverlegeprotokoll „ja“): ein Abschnitt im Arbeitsauftrag,
+    gespeichert mit ihm zusammen und von der Partie ausgefüllt – Straße (Ort, Abschnitt,
+    Fahrbahndecke, Spurbreite, Zustand, Vorarbeiten), Wetter um 8, 11, 14 und 18 Uhr, letzter
+    Regen, Folien (zwei Zeilen), Lot-Nummern, Grundierung, Verlegung, Andruck,
+    Streckenfreigabe, Verlege- und Demarkierungsdatum, Bemerkungen. Vorbelegt mit Ort,
+    Ausführungsdatum als Verlegedatum, Linienart, Breite und Länge aus den Folien-Leistungen und
+    dem Folientyp vom letzten Protokoll. Eigene Unterschriften braucht es nicht: Als
+    „ausgefertigt von – Auftragnehmer“ gilt der Vorarbeiter (sonst die Vertretung), als
+    „gesehen / anerkannt – Auftraggeber“ die Unterschrift des Auftraggebers unter dem
+    Arbeitsauftrag. Das PDF ist dem 3M-Vordruck nachgezeichnet, im Firmenfeld steht das
+    Monsipan-Logo; `…/arbeitsauftrag/folie/pdf` liefert es allein, die frühere eigene Seite
+    `…/folie` führt zum Abschnitt.
 
   Unterschreiben speichert vorher, was im Formular steht. Nach der Unterschrift des
   Auftraggebers ist der Arbeitsauftrag samt Verlegeprotokoll gesperrt, bis sie wieder

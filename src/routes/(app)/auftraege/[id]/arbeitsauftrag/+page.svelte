@@ -13,7 +13,7 @@
 	import MapPin from '@lucide/svelte/icons/map-pin';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import NotebookPen from '@lucide/svelte/icons/notebook-pen';
-	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
+	import Check from '@lucide/svelte/icons/check';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Printer from '@lucide/svelte/icons/printer';
 	import Dialog from '$lib/components/Dialog.svelte';
@@ -25,6 +25,7 @@
 	import WorkOrderHead from '$lib/modules/auftraege/components/WorkOrderHead.svelte';
 	import WorkOrderBack from '$lib/modules/auftraege/components/WorkOrderBack.svelte';
 	import SignatureTile from '$lib/modules/auftraege/components/SignatureTile.svelte';
+	import FoilFields from '$lib/modules/auftraege/components/FoilFields.svelte';
 	import { fileSizeLabel } from '$lib/documents';
 	import { ORDER_STATUS_LABELS, parseAmount, quantityLabel, spacedNumber } from '$lib/modules/auftraege/offer';
 	import { CHECKLIST, ISSUES, MAX_BRIEFINGS, maySign, SIGNATURE_LABELS, type SignatureRole, type WorkOrderContent } from '$lib/modules/auftraege/work-order';
@@ -47,7 +48,12 @@
 	}
 	// svelte-ignore state_referenced_locally
 	let f = $state(toState(data.work.content));
-	const payload = $derived(JSON.stringify({ ...f, lines: f.lines.map((l) => ({ ...l, done: parseAmount(l.done) })) }));
+	/** 3M-Verlegeprotokoll – gespeichert mit dem Arbeitsauftrag; leer kommt es vorbelegt */
+	// svelte-ignore state_referenced_locally
+	const { signatures: _fs, ...foilStart } = structuredClone(data.foilStart);
+	let foil = $state(foilStart);
+	const payload = $derived(JSON.stringify({ ...f, lines: f.lines.map((l) => ({ ...l, done: parseAmount(l.done) })), foil }));
+	const withFoil = $derived(f.foilProtocol === 'ja');
 
 	let busy = $state(false);
 	let deleteOpen = $state(false);
@@ -57,10 +63,13 @@
 	let signRole = $state<SignatureRole>('bl');
 	let signName = $state('');
 	let signPath = $state('');
+	/** Mit der Unterschrift des Auftraggebers gleich abschließen – Rückfrage im Dialog */
+	let finish = $state(true);
 	function openSign(role: SignatureRole) {
 		signRole = role;
 		signName = role === 'auftraggeber' ? f.contacts[0]?.name || '' : role === 'vertretung' ? '' : data.me;
 		signPath = '';
+		finish = data.canStatus && data.order.status !== 'abgeschlossen';
 		signOpen = true;
 	}
 	let removeRole = $state<SignatureRole | null>(null);
@@ -74,17 +83,25 @@
 		onremove: () => (removeRole = role)
 	});
 
-	// Unterweisung: Name, Datum, Unterschrift der Person am Gerät
+	// Unterweisung: Name, Datum, Unterschrift – eine Person nach der anderen im selben Dialog
 	let briefOpen = $state(false);
 	let briefName = $state('');
 	let briefDate = $state(today());
 	let briefPath = $state('');
+	/** Neue Runde: frisches Unterschriftsfeld für die nächste Person */
+	let briefRound = $state(0);
+	/** Wer in diesem Durchgang schon unterschrieben hat */
+	let briefedNow = $state<string[]>([]);
 	function openBrief() {
 		briefName = '';
 		briefDate = today();
 		briefPath = '';
+		briefedNow = [];
+		briefRound++;
 		briefOpen = true;
 	}
+	/** Leute der Partie, die noch nicht unterwiesen sind – antippen statt tippen */
+	const notBriefed = $derived(data.crew.filter((n) => !saved.briefings.some((b) => b.name === n)));
 
 	const DONE: Record<string, string> = { sign: 'Unterschrift gespeichert', brief: 'Unterweisung eingetragen', save: 'Gespeichert' };
 	const mapUrl = $derived(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.order.location)}`);
@@ -186,9 +203,15 @@
 		return async ({ result, update }) => {
 			busy = false;
 			if (result.type === 'success') {
-				toast.success(DONE[step]);
+				toast.success(DONE[step], step === 'sign' && result.data?.closed ? 'Auftrag ist abgeschlossen.' : undefined);
 				if (step === 'sign') signOpen = false;
-				if (step === 'brief') briefOpen = false;
+				if (step === 'brief') {
+					// Gleich die nächste Person – der Dialog bleibt offen
+					briefedNow = [...briefedNow, briefName];
+					briefName = '';
+					briefPath = '';
+					briefRound++;
+				}
 			}
 			await update({ reset: false });
 		};
@@ -199,6 +222,7 @@
 		<input type="hidden" name="wer" value={signRole} />
 		<input type="hidden" name="name" value={signName} />
 		<input type="hidden" name="unterschrift" value={signPath} />
+		{#if signRole === 'auftraggeber' && finish}<input type="hidden" name="abschliessen" value="1" />{/if}
 	{:else if briefOpen}
 		<input type="hidden" name="name" value={briefName} />
 		<input type="hidden" name="datum" value={briefDate} />
@@ -253,28 +277,34 @@
 					<input class="input" type="date" disabled={!office} bind:value={f.signDate} />
 				</label>
 			</div>
-			{#if saved.foilProtocol === 'ja'}
-				<a href="/auftraege/{data.order.id}/arbeitsauftrag/folie" class="mt-4 flex items-center gap-3 rounded-xl border border-line p-3 hover:bg-surface-2">
-					<ClipboardCheck size={20} class="shrink-0 text-ink-3" aria-hidden="true" />
-					<span class="min-w-0 flex-1">
-						<span class="block font-medium">3M-Verlegeprotokoll</span>
-						<span class="block text-sm text-ink-3">
-							{saved.foil.signatures.auftraggeber
-								? `Vom Auftraggeber anerkannt am ${dateTime(saved.foil.signatures.auftraggeber.at)}`
-								: 'Eigenüberwachungs-Protokoll für Markierungsfolien – füllt die Partie aus'} · im PDF und Ausdruck hinter dem Arbeitsauftrag
-						</span>
-					</span>
-					<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
-				</a>
-			{:else if f.foilProtocol === 'ja'}
-				<p class="field-hint mt-3">Nach dem Speichern gibt es hier das 3M-Verlegeprotokoll zum Ausfüllen.</p>
-			{/if}
 			<div class="mt-4 grid gap-3 lg:grid-cols-3">
 				<SignatureTile {...tile('bl')} />
 				<SignatureTile {...tile('vorarbeiter')} />
 				<SignatureTile {...tile('vertretung')} />
 			</div>
+			{#if withFoil}
+				<p class="field-hint mt-2">Die Unterschrift des Vorarbeiters (sonst der Vertretung) gilt im 3M-Protokoll als „ausgefertigt von – Auftragnehmer“.</p>
+			{/if}
 		</section>
+
+		{#if withFoil}
+			<!-- Das 3M-Protokoll gehört zum Arbeitsauftrag: dieselbe Seite, ein Speichern, dieselben Unterschriften -->
+			<section id="folie" class="card scroll-mt-20 p-4 lg:p-5">
+				<div class="flex flex-wrap items-start justify-between gap-2">
+					<div>
+						<h2 class="text-lg">3M-Verlegeprotokoll</h2>
+						<p class="mt-0.5 text-sm text-ink-3">
+							Eigenüberwachungs-Protokoll für Markierungsfolien – füllt die Partie aus. Vorbelegt aus den Folien-Leistungen; im PDF und Ausdruck
+							hinter dem Arbeitsauftrag.
+						</p>
+					</div>
+					{#if saved.foilProtocol === 'ja'}
+						<PdfButton href="/auftraege/{data.order.id}/arbeitsauftrag/folie/pdf" class="btn btn-ghost btn-sm"><FileText size={16} aria-hidden="true" />Nur Protokoll</PdfButton>
+					{/if}
+				</div>
+				<div class="mt-4"><FoilFields bind:foil disabled={!site} /></div>
+			</section>
+		{/if}
 
 		<section class="card border-ok/40 p-4 lg:p-5">
 			<h2 class="text-lg text-ok">Vorarbeiter-Checkliste</h2>
@@ -325,7 +355,10 @@
 				<div>
 					<SignatureTile {...tile('auftraggeber')} />
 					{#if !data.locked && maySign('auftraggeber', data.scope)}
-						<p class="field-hint mt-1">Nach der Unterschrift des Auftraggebers lässt sich der Arbeitsauftrag nicht mehr ändern.</p>
+						<p class="field-hint mt-1">
+							Eine Unterschrift für {withFoil ? 'Arbeitsauftrag und 3M-Protokoll' : 'den Arbeitsauftrag'} – danach ist alles fest, „Arbeit fertig am“
+							steht dann auf heute, wenn noch leer.
+						</p>
 					{/if}
 				</div>
 			</div>
@@ -443,7 +476,7 @@
 <Dialog bind:open={signOpen} title={SIGNATURE_LABELS[signRole]}>
 	<p class="text-ink-2">
 		{signRole === 'auftraggeber'
-			? 'Gib das Gerät dem Auftraggeber: Er trägt seinen Namen ein und unterschreibt. Danach lässt sich der Arbeitsauftrag nicht mehr ändern.'
+			? `Gib das Gerät dem Auftraggeber: Er trägt seinen Namen ein und unterschreibt – ${withFoil ? 'für den Arbeitsauftrag und das 3M-Verlegeprotokoll' : 'für den Arbeitsauftrag'}. Danach lässt sich nichts mehr ändern.`
 			: 'Was im Formular steht, wird vorher gespeichert.'}
 	</p>
 	<label class="mt-4 block">
@@ -451,6 +484,11 @@
 		<input class="input" maxlength="120" autocomplete="off" bind:value={signName} />
 	</label>
 	<div class="mt-3"><SignaturePad bind:path={signPath} /></div>
+	{#if signRole === 'auftraggeber' && data.canStatus && data.order.status !== 'abgeschlossen'}
+		<label class="mt-3 flex items-center gap-2.5">
+			<input type="checkbox" class="size-5 accent-[var(--c-ink)]" bind:checked={finish} />Auftrag gleich auf „Abgeschlossen“ setzen
+		</label>
+	{/if}
 	{#if form && 'message' in form && form.message}<p class="field-error" role="alert">{form.message}</p>{/if}
 	<div class="mt-4 flex flex-wrap justify-end gap-2">
 		<button type="button" class="btn btn-ghost" onclick={() => (signOpen = false)}>Abbrechen</button>
@@ -461,7 +499,21 @@
 </Dialog>
 
 <Dialog bind:open={briefOpen} title="Mitarbeiter unterweisen">
-	<p class="text-ink-2">Die Person trägt ihren Namen ein und bestätigt die Unterweisung mit ihrer Unterschrift.</p>
+	<p class="text-ink-2">
+		Eine Person nach der anderen: Namen antippen oder eintragen, unterschreiben lassen, speichern – dann gleich die nächste.
+	</p>
+	{#if briefedNow.length}
+		<p class="mt-3 flex flex-wrap items-center gap-1.5 text-sm text-ink-2">
+			<Check size={15} class="text-ok" aria-hidden="true" />Eingetragen: {briefedNow.join(', ')}
+		</p>
+	{/if}
+	{#if notBriefed.length}
+		<div class="mt-3 flex flex-wrap gap-1.5">
+			{#each notBriefed as n (n)}
+				<button type="button" class="badge {briefName === n ? 'badge-info' : ''} cursor-pointer" onclick={() => (briefName = n)}>{n}</button>
+			{/each}
+		</div>
+	{/if}
 	<div class="mt-4 grid gap-3 sm:grid-cols-[1fr_11rem]">
 		<label class="block">
 			<span class="field-label">Name</span>
@@ -473,10 +525,10 @@
 		</label>
 	</div>
 	<datalist id="aa-crew">{#each data.crew as n (n)}<option value={n}></option>{/each}</datalist>
-	<div class="mt-3"><SignaturePad bind:path={briefPath} /></div>
+	{#key briefRound}<div class="mt-3"><SignaturePad bind:path={briefPath} /></div>{/key}
 	{#if form && 'message' in form && form.message}<p class="field-error" role="alert">{form.message}</p>{/if}
 	<div class="mt-4 flex flex-wrap justify-end gap-2">
-		<button type="button" class="btn btn-ghost" onclick={() => (briefOpen = false)}>Abbrechen</button>
+		<button type="button" class="btn btn-ghost" onclick={() => (briefOpen = false)}>{briefedNow.length ? 'Fertig' : 'Abbrechen'}</button>
 		<button type="submit" form="aa" formaction="?/brief" class="btn btn-primary" disabled={busy || !briefPath || briefName.trim().length < 2 || !briefDate}>
 			<UserCheck size={18} aria-hidden="true" />Unterweisung speichern
 		</button>

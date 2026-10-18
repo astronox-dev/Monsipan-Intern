@@ -16,17 +16,17 @@ const {
 	createWorkOrder,
 	getWorkOrder,
 	hasWorkOrder,
+	orderSource,
 	prefill,
 	removeBriefing,
-	saveFoilProtocol,
 	saveWorkOrderForm,
-	setFoilSignature,
 	setWorkOrderSignature,
 	workScope
 } = await import('./work-orders');
 const { workOrderPdf } = await import('./work-order-pdf');
 const { foilPdf } = await import('./foil-pdf');
-const { creationForm, emptyForm, mergeForm, readContent, sanitizeForm, maySign } = await import('../work-order');
+const { creationForm, emptyForm, foilSignatures, guessLine, mergeForm, prefillFoil, readContent, sanitizeForm, maySign } = await import('../work-order');
+const { today } = await import('$lib/modules/stunden/week');
 
 const SIG = 'M10 10L200 80L400 20';
 type Who = Parameters<typeof workScope>[0];
@@ -151,32 +151,72 @@ describe('Wer was ändern darf', () => {
 	});
 });
 
+describe('Vorbelegen', () => {
+	it('Art, RAL und MSK aus dem Positionstext', () => {
+		expect(guessLine('Leitlinie 15 cm weiß, Kaltplastik, MSK D refl.')).toEqual({ kind: 'Kaltplastik', ral: '9016', msk: 'D refl.' });
+		expect(guessLine('Haltelinie 50 cm gelb, Folie RAL 1003')).toEqual({ kind: 'Folie', ral: '1003', msk: '' });
+		expect(guessLine('Markierungsfarbe rot, MSK C')).toEqual({ kind: 'Farbe', ral: '3020', msk: 'C' });
+		expect(guessLine('Leitlinie 12 cm\nMSK D, reflektierend')).toEqual({ kind: '', ral: '', msk: 'D refl.' });
+		// „rot" in „Protokoll" ist keine Farbe
+		expect(guessLine('Protokoll erstellen')).toEqual({ kind: '', ral: '', msk: '' });
+	});
+
+	it('3M-Protokoll aus den Folien-Leistungen', () => {
+		const foil = prefillFoil(
+			{
+				site: 'B17',
+				startDate: '2026-10-20',
+				lines: [
+					{ text: 'Leitlinie 15 cm', kind: 'Farbe', ral: '', msk: '', quantity: 100, unit: 'lfm', done: null },
+					{ text: 'Haltelinie 50 cm, Folie', kind: 'Folie', ral: '', msk: '', quantity: 24, unit: 'lfm', done: null }
+				]
+			},
+			'3M Stamark 380'
+		);
+		expect(foil).toMatchObject({ place: 'B17', layingDate: '2026-10-20' });
+		expect(foil.films[0]).toEqual({ type: '3M Stamark 380', width: '50', length: '24', primer: '', dryTime: '', lineType: 'Haltelinie' });
+		expect(foil.films[1].type).toBe('');
+	});
+
+	it('im 3M-Protokoll unterschreiben Vorarbeiter (sonst Vertretung) und Auftraggeber des Arbeitsauftrags', () => {
+		const sig = (name: string) => ({ path: SIG, name, at: 1 });
+		const foil = { ...readContent({}).foil, signatures: { auftraggeber: sig('alt') } };
+		expect(foilSignatures({ signatures: { vertretung: sig('V'), auftraggeber: sig('A') }, foil })).toEqual({ auftragnehmer: sig('V'), auftraggeber: sig('A') });
+		expect(foilSignatures({ signatures: { vorarbeiter: sig('P'), vertretung: sig('V') }, foil })).toEqual({ auftragnehmer: sig('P'), auftraggeber: sig('alt') });
+	});
+});
+
 describe('Arbeitsauftrag am Auftrag', () => {
 	it('ohne Arbeitsauftrag kennt die Partie den Auftrag nicht', async () => {
 		expect(await listOrders(person('partiefuehrer', partyId))).toEqual([]);
 		expect((await listOrders(person('bauleiter'))).map((o) => o.id)).toEqual([orderId]);
 	});
 
-	it('wird mit dem ausgefüllten Kopf erstellt – vorbelegt aus dem Auftrag und der Wochenplanung', async () => {
+	it('wird mit dem ausgefüllten Kopf erstellt – vorbelegt aus Auftrag, Positionstext und Wochenplanung', async () => {
 		const order = (await orderDetail(orderId))!;
-		const start = await prefill(order);
+		const start = await prefill(orderSource(order));
 		expect(start).toMatchObject({
 			title: 'Kreisverkehr Brunn',
 			site: 'B17, Brunn am Gebirge',
 			startDate: '2026-10-19',
 			endDate: '2026-10-21',
-			contacts: [{ name: 'Hr. Huber', phone: '0664 123' }, { name: '', phone: '' }]
+			contacts: [{ name: 'Hr. Huber', phone: '0664 123' }, { name: '', phone: '' }],
+			foilProtocol: ''
 		});
+		expect(start.lines[0]).toMatchObject({ text: 'Leitlinie 15 cm weiß', ral: '9016', msk: 'D refl.' });
 		const form = sanitizeForm({
 			...start,
 			site: 'B17 Kreisverkehr Süd',
 			evaluation: 'baustelle',
 			foilProtocol: 'ja',
+			attachments: { ...start.attachments, discussed: true },
+			ppe: start.ppe.map((p, i) => (i === 0 ? { ...p, checked: true, detail: 'Warnkleidung Klasse 3' } : p)),
 			lines: [{ text: 'Versuch', kind: 'Kaltplastik', ral: '9016', msk: 'D', quantity: 1, unit: 'Stk' }]
 		});
-		expect(await createWorkOrder(order, 1, form)).toBe(true);
+		expect(await createWorkOrder(order, 1, form, { path: SIG, name: 'Bruno Leiter', at: 5 })).toBe(true);
 		const w = (await getWorkOrder(orderId))!;
-		expect(w.content).toMatchObject({ site: 'B17 Kreisverkehr Süd', evaluation: 'baustelle', foilProtocol: 'ja' });
+		expect(w.content).toMatchObject({ site: 'B17 Kreisverkehr Süd', evaluation: 'baustelle', foilProtocol: 'ja', signDate: today() });
+		expect(w.content.signatures.bl?.name).toBe('Bruno Leiter');
 		expect(w.content.lines.map((l) => [l.text, l.quantity, l.unit, l.kind, l.ral])).toEqual([
 			['Leitlinie 15 cm weiß', 1250, 'lfm', 'Kaltplastik', '9016'],
 			['Sperrfläche', 40, 'm²', '', '']
@@ -187,48 +227,59 @@ describe('Arbeitsauftrag am Auftrag', () => {
 		expect(await hasWorkOrder(orderId)).toBe(true);
 	});
 
+	it('der nächste übernimmt Beilagen, Evaluierung und Rückseite – und Folie heißt Verlegeprotokoll „ja"', async () => {
+		const start = await prefill({
+			title: 'Neu',
+			location: 'B1',
+			customerContact: '',
+			customerPhone: '',
+			lines: [{ kind: 'position', text: 'Haltelinie 50 cm, Folie', quantity: 12, unit: 'lfm' }]
+		});
+		expect(start.attachments.discussed).toBe(true);
+		expect(start.evaluation).toBe('baustelle');
+		expect(start.ppe[0]).toMatchObject({ checked: true, detail: 'Warnkleidung Klasse 3' });
+		expect(start.foilProtocol).toBe('ja');
+		expect(start.foil.films[0]).toMatchObject({ width: '50', length: '12', lineType: 'Haltelinie' });
+	});
+
 	it('mit Arbeitsauftrag sieht ihn die Partie', async () => {
 		expect((await listOrders(person('partiefuehrer', partyId))).map((o) => o.id)).toEqual([orderId]);
 		expect(await listOrders(person('partiefuehrer', partyId + 99))).toEqual([]);
 	});
 
-	it('nach der Unterschrift des Auftraggebers ist er gesperrt – bis sie entfernt wird', async () => {
-		const form = { ...(await getWorkOrder(orderId))!.content, finishedOn: '2026-10-22' };
+	it('das 3M-Protokoll wird mit dem Arbeitsauftrag gespeichert – von der Partie', async () => {
+		const c = (await getWorkOrder(orderId))!.content;
+		const foil = { place: 'B17', weather: { air: ['12', '14,5'] }, films: [{ type: '3M 380 AW', width: '15' }], release: 'nach', releaseDays: '1' };
+		expect(await saveWorkOrderForm(orderId, sanitizeForm(c), { office: false, site: true }, 1, foil)).toBeNull();
+		const saved = (await getWorkOrder(orderId))!.content.foil;
+		expect(saved).toMatchObject({ place: 'B17', release: 'nach', releaseDays: '1' });
+		expect(saved.weather.air).toEqual(['12', '14,5', '', '']);
+		expect(saved.films[0]).toMatchObject({ type: '3M 380 AW', width: '15', length: '' });
+		// Wer nur ansieht, ändert es nicht
+		expect(await saveWorkOrderForm(orderId, sanitizeForm(c), { office: false, site: false }, 1, { place: 'X' })).toBeNull();
+		expect((await getWorkOrder(orderId))!.content.foil.place).toBe('B17');
+	});
+
+	it('die Unterschrift des Auftraggebers setzt „Arbeit fertig am" und sperrt – bis sie entfernt wird', async () => {
+		const form = { ...(await getWorkOrder(orderId))!.content, finishedOn: '' };
 		expect(await saveWorkOrderForm(orderId, sanitizeForm(form), { office: false, site: true }, 1)).toBeNull();
 		expect(await addBriefing(orderId, { date: '2026-10-19', name: 'Anna Arbeit', signature: SIG, at: 1 }, 1)).toBeNull();
 		expect(await setWorkOrderSignature(orderId, 'auftraggeber', { path: SIG, name: 'Hr. Huber', at: Date.now() }, 1)).toBeNull();
+		expect((await getWorkOrder(orderId))!.content.finishedOn).toBe(today());
 
 		expect(await saveWorkOrderForm(orderId, sanitizeForm({ ...form, finishedOn: '2026-10-23' }), { office: true, site: true }, 1)).toMatch(/Auftraggeber/);
 		expect(await setWorkOrderSignature(orderId, 'bl', { path: SIG, name: 'BL', at: 1 }, 1)).toMatch(/Auftraggeber/);
 		expect(await removeBriefing(orderId, 0, 1)).toMatch(/Auftraggeber/);
-		expect(await saveFoilProtocol(orderId, { place: 'X' }, 1)).toMatch(/Auftraggeber/);
 
 		expect(await setWorkOrderSignature(orderId, 'auftraggeber', null, 1)).toBeNull();
 		expect(await removeBriefing(orderId, 0, 1)).toBeNull();
 		const w = (await getWorkOrder(orderId))!;
-		expect(w.content.finishedOn).toBe('2026-10-22');
 		expect(w.content.briefings).toEqual([]);
 		expect(w.content.signatures.auftraggeber).toBeUndefined();
 	});
 
-	it('das 3M-Verlegeprotokoll: speichern, anerkennen, gesperrt', async () => {
-		expect(
-			await saveFoilProtocol(orderId, { place: 'B17', weather: { air: ['12', '14,5'] }, films: [{ type: '3M 380 AW', width: '15' }], release: 'nach', releaseDays: '1' }, 1)
-		).toBeNull();
-		expect(await setFoilSignature(orderId, 'auftragnehmer', { path: SIG, name: 'Paul Führer', at: Date.now() }, 1)).toBeNull();
-		expect(await setFoilSignature(orderId, 'auftraggeber', { path: SIG, name: 'Hr. Huber', at: Date.now() }, 1)).toBeNull();
-		expect(await saveFoilProtocol(orderId, { place: 'Anders' }, 1)).toMatch(/Verlegeprotokoll/);
-		expect(await setFoilSignature(orderId, 'auftragnehmer', null, 1)).toMatch(/Verlegeprotokoll/);
-		const { foil } = (await getWorkOrder(orderId))!.content;
-		expect(foil).toMatchObject({ place: 'B17', release: 'nach', releaseDays: '1' });
-		expect(foil.weather.air).toEqual(['12', '14,5', '', '']);
-		expect(foil.films[0]).toMatchObject({ type: '3M 380 AW', width: '15', length: '' });
-		expect(Object.keys(foil.signatures).sort()).toEqual(['auftraggeber', 'auftragnehmer']);
-	});
-
 	it('die PDFs: Arbeitsauftrag zwei Seiten, mit Verlegeprotokoll dahinter drei; das Protokoll allein eine', async () => {
 		await addBriefing(orderId, { date: '2026-10-19', name: 'Anna Kokić', signature: SIG, at: 1 }, 1);
-		await setWorkOrderSignature(orderId, 'bl', { path: SIG, name: 'Bruno Leiter', at: Date.now() }, 1);
 		const { content } = (await getWorkOrder(orderId))!;
 		const pages = async (res: Response) => Buffer.from(await res.arrayBuffer()).toString('latin1').match(/\/Type \/Page\b/g)?.length;
 		const work = await workOrderPdf({ number: '26001', content });
