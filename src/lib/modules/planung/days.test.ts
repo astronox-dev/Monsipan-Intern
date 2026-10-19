@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { easterSunday, holidayName, isWorkday, overlaps, rangeLabel, workdays } from './days';
+import { easterSunday, holidayName, isWorkday, overlaps, rangeLabel, termDays, workdays } from './days';
 
 describe('Feiertage', () => {
 	it('kennt Ostern', () => {
@@ -39,5 +39,20 @@ describe('Arbeitstage', () => {
 		expect(overlaps('2026-10-19', '2026-10-23', '2026-10-23', '2026-10-30')).toBe(true);
 		expect(overlaps('2026-10-19', '2026-10-23', '2026-10-24', null)).toBe(false);
 		expect(overlaps('2026-10-19', null, '2026-12-01', '2026-12-02')).toBe(true);
+	});
+});
+
+describe('Tage eines Termins', () => {
+	it('Arbeitstage dazwischen, erster und letzter Tag immer', () => {
+		// Fr 23.10., Wochenende und Nationalfeiertag (Mo 26.10.) fallen weg
+		expect(termDays('2026-10-23', '2026-10-27')).toEqual(['2026-10-23', '2026-10-27']);
+		expect(termDays('2026-10-19', '2026-10-21')).toEqual(['2026-10-19', '2026-10-20', '2026-10-21']);
+		// Ausdrücklich am Samstag
+		expect(termDays('2026-10-24', '')).toEqual(['2026-10-24']);
+		expect(termDays('2026-10-22', '2026-10-24')).toEqual(['2026-10-22', '2026-10-23', '2026-10-24']);
+		// Ende vor dem Anfang zählt nicht, ohne gültigen Anfang gibt es nichts
+		expect(termDays('2026-10-21', '2026-10-19')).toEqual(['2026-10-21']);
+		expect(termDays('', '2026-10-19')).toEqual([]);
+		expect(termDays('2026-01-01', '2026-12-31')).toHaveLength(60);
 	});
 });

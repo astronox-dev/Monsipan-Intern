@@ -9,5 +9,5 @@
 	back={{ href: `/auftraege/${data.order.id}`, label: `Auftrag ${spacedNumber(data.order.number)}` }}
 	document={data.document}
 	fileUrl="/auftraege/{data.order.id}/unterlagen/{data.document.key}/datei"
-	note={data.document.fromOffer ? 'vom Angebot' : undefined}
+	note={data.note || undefined}
 />

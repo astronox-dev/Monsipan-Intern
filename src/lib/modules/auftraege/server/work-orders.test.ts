@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { and, eq } from 'drizzle-orm';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'arbeitsauftrag-'));
 
@@ -13,6 +14,7 @@ const { orderPositions, orders, parties, planEntries } = await import('$lib/serv
 const { listOrders, orderDetail } = await import('./orders');
 const {
 	addBriefing,
+	closeBlocker,
 	createWorkOrder,
 	getWorkOrder,
 	hasWorkOrder,
@@ -25,7 +27,8 @@ const {
 } = await import('./work-orders');
 const { workOrderPdf } = await import('./work-order-pdf');
 const { foilPdf } = await import('./foil-pdf');
-const { creationForm, emptyForm, foilSignatures, guessLine, mergeForm, prefillFoil, readContent, sanitizeForm, maySign } = await import('../work-order');
+const { closeMessage, creationForm, emptyForm, foilSignatures, guessLine, mergeForm, prefillFoil, readContent, sanitizeForm, maySign } = await import('../work-order');
+const { orderPlanDays, syncWorkOrderPlan } = await import('$lib/modules/planung/server/plan');
 const { today } = await import('$lib/modules/stunden/week');
 
 const SIG = 'M10 10L200 80L400 20';
@@ -288,5 +291,54 @@ describe('Arbeitsauftrag am Auftrag', () => {
 		expect(await pages(work)).toBe(3);
 		expect(await pages(await workOrderPdf({ number: '26001', content: { ...content, foilProtocol: 'nein' } }))).toBe(2);
 		expect(await pages(await foilPdf({ number: '26001', foil: content.foil }))).toBe(1);
+	});
+});
+
+describe('Termin in der Wochenplanung', () => {
+	it('mit Partie und Ausführungsdatum steht der Auftrag dort – und zieht mit, wenn sich Termin oder Partie ändern', async () => {
+		const [o] = await db.insert(orders).values({ number: '26050', title: 'Termin' }).returning({ id: orders.id });
+		// Fr 23.10. bis Di 27.10. – Wochenende und Nationalfeiertag dazwischen
+		const form = sanitizeForm({ ...emptyForm(), startDate: '2026-10-23', endDate: '2026-10-27' });
+		expect(await createWorkOrder((await orderDetail(o.id))!, 1, form)).toBe(true);
+		// Ohne Partie noch nicht
+		expect((await orderPlanDays(o.id)).days).toEqual([]);
+
+		await db.update(orders).set({ partyId }).where(eq(orders.id, o.id));
+		expect(await syncWorkOrderPlan(o.id, 1)).toEqual({ partyName: 'Nord', days: ['2026-10-23', '2026-10-27'] });
+		expect(await orderPlanDays(o.id)).toEqual({ days: ['2026-10-23', '2026-10-27'], parties: ['Nord'] });
+		// Noch einmal ändert nichts
+		await syncWorkOrderPlan(o.id, 1);
+		expect(await db.select().from(planEntries).where(eq(planEntries.orderId, o.id)).all()).toHaveLength(2);
+
+		// Selbst eingetragen – bleibt, was auch passiert
+		await db.insert(planEntries).values({ date: '2026-10-28', partyId, orderId: o.id });
+		// Das Büro verschiebt den Termin: 28. bis 29.
+		expect(await saveWorkOrderForm(o.id, sanitizeForm({ ...form, startDate: '2026-10-28', endDate: '2026-10-29' }), { office: true, site: true }, 1)).toBeNull();
+		expect((await orderPlanDays(o.id)).days).toEqual(['2026-10-28', '2026-10-29']);
+		expect(await db.select().from(planEntries).where(and(eq(planEntries.orderId, o.id), eq(planEntries.date, '2026-10-28'))).all()).toHaveLength(1);
+		// Die Partie speichert nur ihren Teil – der Termin bleibt
+		await saveWorkOrderForm(o.id, sanitizeForm({ ...form, startDate: '2026-11-02' }), { office: false, site: true }, 1);
+		expect((await orderPlanDays(o.id)).days).toEqual(['2026-10-28', '2026-10-29']);
+
+		// Ohne Partie gehen die vom Arbeitsauftrag – der selbst eingetragene bleibt
+		await db.update(orders).set({ partyId: null }).where(eq(orders.id, o.id));
+		expect(await syncWorkOrderPlan(o.id, 1)).toBeNull();
+		expect((await orderPlanDays(o.id)).days).toEqual(['2026-10-28']);
+	});
+});
+
+describe('Abschließen', () => {
+	it('erst mit abgehakter Vorarbeiter-Checkliste', async () => {
+		expect(closeMessage(emptyForm())).toBe('Abschließen geht erst mit abgehakter Vorarbeiter-Checkliste – es fehlt: Mitarbeiter tragen PSA, Baustelle ist abgesichert, Ausrüstung ist in Ordnung.');
+		const [o] = await db.insert(orders).values({ number: '26051', title: 'Abschluss', partyId }).returning({ id: orders.id });
+		// Ohne Arbeitsauftrag gibt es keine Checkliste
+		expect(await closeBlocker(o.id)).toBeNull();
+		await createWorkOrder((await orderDetail(o.id))!, 1);
+		expect(await closeBlocker(o.id)).toContain('Mitarbeiter tragen PSA');
+		const w = (await getWorkOrder(o.id))!;
+		await saveWorkOrderForm(o.id, { ...w.content, checklist: { ppe: true, secured: true, equipment: false } }, { office: false, site: true }, 1);
+		expect(await closeBlocker(o.id)).toBe('Abschließen geht erst mit abgehakter Vorarbeiter-Checkliste – es fehlt: Ausrüstung ist in Ordnung.');
+		await saveWorkOrderForm(o.id, { ...w.content, checklist: { ppe: true, secured: true, equipment: true } }, { office: false, site: true }, 1);
+		expect(await closeBlocker(o.id)).toBeNull();
 	});
 });

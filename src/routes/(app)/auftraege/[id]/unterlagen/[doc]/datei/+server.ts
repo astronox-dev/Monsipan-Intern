@@ -12,7 +12,7 @@ export const GET: RequestHandler = async ({ params, url, locals, request }) => {
 	if (!order || !mayViewOrder(user, order)) error(404, 'Auftrag nicht gefunden');
 	// Die Partie sieht die Unterlagen über den Arbeitsauftrag
 	if (!seesWholeOrder(user) && !(await hasWorkOrder(order.id))) error(404, 'Auftrag nicht gefunden');
-	const doc = await findOrderDocument(order, params.doc);
+	const doc = await findOrderDocument(order, params.doc, user);
 	if (!doc) error(404, 'Unterlage nicht gefunden');
 	return documentResponse(doc, url, request);
 };

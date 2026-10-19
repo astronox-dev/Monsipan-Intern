@@ -10,8 +10,10 @@ import { planEntries, users, workOrders } from '$lib/server/db/schema';
 import { can } from '$lib/permissions';
 import type { SessionUser } from '$lib/server/auth';
 import { today } from '$lib/modules/stunden/week';
+import { syncWorkOrderPlan } from '$lib/modules/planung/server/plan';
 import { isValidSignature } from '$lib/modules/stunden/signature';
 import {
+	closeMessage,
 	creationForm,
 	emptyForm,
 	guessLine,
@@ -158,7 +160,15 @@ export async function createWorkOrder(order: OrderDetail, userId: number, form?:
 		foil: prefillFoil(made, last?.filmType)
 	};
 	const rows = await db.insert(workOrders).values({ orderId: order.id, content, createdBy: userId }).onConflictDoNothing().returning({ id: workOrders.id });
+	// Mit Termin und Partie steht der Auftrag gleich in der Wochenplanung
+	if (rows.length) await syncWorkOrderPlan(order.id, userId);
 	return rows.length > 0;
+}
+
+/** Abschließen erst mit abgehakter Vorarbeiter-Checkliste – ohne Arbeitsauftrag gibt es keine */
+export async function closeBlocker(orderId: number): Promise<string | null> {
+	const row = await db.select({ content: workOrders.content }).from(workOrders).where(eq(workOrders.orderId, orderId)).get();
+	return row ? closeMessage(readContent(row.content)) : null;
 }
 
 export async function hasWorkOrder(orderId: number): Promise<boolean> {
@@ -184,14 +194,17 @@ const LOCKED = 'Der Auftraggeber hat schon unterschrieben – zum Ändern zuerst
  * (`foil`) gehört zur Baustelle; steht es neu auf „ja" und ist noch leer,
  * wird es vorbelegt. Gibt eine Meldung zurück, wenn nicht gespeichert wurde.
  */
-export function saveWorkOrderForm(orderId: number, form: WorkOrderForm, scope: WorkScope, userId: number, foil?: unknown) {
-	return change(orderId, userId, (c) => {
+export async function saveWorkOrderForm(orderId: number, form: WorkOrderForm, scope: WorkScope, userId: number, foil?: unknown) {
+	const problem = await change(orderId, userId, (c) => {
 		if (c.signatures.auftraggeber) return LOCKED;
 		const next: WorkOrderContent = { ...c, ...mergeForm(c, form, scope) };
 		if (scope.site && foil !== undefined && next.foilProtocol === 'ja') next.foil = { ...sanitizeFoil(foil), signatures: c.foil.signatures };
 		if (next.foilProtocol === 'ja' && isPristineFoil(next.foil)) next.foil = { ...prefillFoil(next), signatures: c.foil.signatures };
 		return next;
 	});
+	// Den Termin ändert nur das Büro – die Wochenplanung zieht mit
+	if (!problem && scope.office) await syncWorkOrderPlan(orderId, userId);
+	return problem;
 }
 
 /**

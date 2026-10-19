@@ -67,6 +67,17 @@ export const CHECKLIST = [
 	{ key: 'equipment', label: 'Ausrüstung ist in Ordnung' }
 ] as const;
 
+/** Was in der Vorarbeiter-Checkliste noch fehlt – abgeschlossen wird erst, wenn alles abgehakt ist */
+export function missingChecks(c: Pick<WorkOrderForm, 'checklist'>): string[] {
+	return CHECKLIST.filter(({ key }) => !c.checklist[key]).map(({ label }) => label);
+}
+
+/** Hinweis, warum sich der Auftrag noch nicht abschließen lässt – sonst null */
+export function closeMessage(c: Pick<WorkOrderForm, 'checklist'>): string | null {
+	const missing = missingChecks(c);
+	return missing.length ? `Abschließen geht erst mit abgehakter Vorarbeiter-Checkliste – es fehlt: ${missing.join(', ')}.` : null;
+}
+
 export const ISSUES = [
 	{ key: 'access', label: 'Behinderung bei Zugang/Zufahrt zur Baustelle' },
 	{ key: 'dirty', label: 'Baustelle war nicht sauber' },

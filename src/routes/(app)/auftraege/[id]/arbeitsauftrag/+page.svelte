@@ -26,9 +26,11 @@
 	import WorkOrderBack from '$lib/modules/auftraege/components/WorkOrderBack.svelte';
 	import SignatureTile from '$lib/modules/auftraege/components/SignatureTile.svelte';
 	import FoilFields from '$lib/modules/auftraege/components/FoilFields.svelte';
-	import { fileSizeLabel } from '$lib/documents';
+	import PhotoGallery from '$lib/components/PhotoGallery.svelte';
+	import CaseDocuments from '$lib/modules/auftraege/components/CaseDocuments.svelte';
+	import { rangeLabel } from '$lib/modules/planung/days';
 	import { ORDER_STATUS_LABELS, parseAmount, quantityLabel, spacedNumber } from '$lib/modules/auftraege/offer';
-	import { CHECKLIST, ISSUES, MAX_BRIEFINGS, maySign, SIGNATURE_LABELS, type SignatureRole, type WorkOrderContent } from '$lib/modules/auftraege/work-order';
+	import { CHECKLIST, closeMessage, ISSUES, MAX_BRIEFINGS, maySign, SIGNATURE_LABELS, type SignatureRole, type WorkOrderContent } from '$lib/modules/auftraege/work-order';
 	import { date, dateTime } from '$lib/format';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -54,6 +56,17 @@
 	let foil = $state(foilStart);
 	const payload = $derived(JSON.stringify({ ...f, lines: f.lines.map((l) => ({ ...l, done: parseAmount(l.done) })), foil }));
 	const withFoil = $derived(f.foilProtocol === 'ja');
+	/** Abschließen erst, wenn die Vorarbeiter-Checkliste abgehakt ist – sonst steht hier, was fehlt */
+	const blocker = $derived(closeMessage(f));
+
+	/** Unter dem Termin: steht der Auftrag schon in der Wochenplanung? */
+	const planHint = $derived.by(() => {
+		const p = data.plan;
+		if (p.days.length) return `In der Wochenplanung: ${p.days.length === 1 ? rangeLabel(p.days[0], null) : `${p.days.length} Tage, ${rangeLabel(p.days[0], p.days[p.days.length - 1])}`}${p.parties.length ? ` bei ${p.parties.join(', ')}` : ''}.`;
+		if (!f.startDate) return 'Mit Ausführungsdatum steht der Auftrag nach dem Speichern von selbst in der Wochenplanung.';
+		if (!p.party) return 'Noch keiner Partie zugeteilt – sobald eine Partie dran ist, steht der Termin in der Wochenplanung. Bis dahin steht er dort bei den nicht zugeteilten Aufträgen.';
+		return 'Nach dem Speichern steht der Termin in der Wochenplanung.';
+	});
 
 	let busy = $state(false);
 	let deleteOpen = $state(false);
@@ -69,7 +82,7 @@
 		signRole = role;
 		signName = role === 'auftraggeber' ? f.contacts[0]?.name || '' : role === 'vertretung' ? '' : data.me;
 		signPath = '';
-		finish = data.canStatus && data.order.status !== 'abgeschlossen';
+		finish = data.canStatus && data.order.status !== 'abgeschlossen' && !blocker;
 		signOpen = true;
 	}
 	let removeRole = $state<SignatureRole | null>(null);
@@ -170,17 +183,22 @@
 			return async ({ result, update }) => {
 				busy = false;
 				if (result.type === 'success') toast.success(result.data?.status === 'abgeschlossen' ? 'Auftrag abgeschlossen' : 'Auftrag ist in Arbeit');
+				else if (result.type === 'failure') toast.error(String(result.data?.message ?? 'Das hat nicht geklappt.'));
 				await update({ reset: false });
 			};
 		}}
 	>
+		{#if editable}<input type="hidden" name="inhalt" value={payload} />{/if}
 		<p class="min-w-[12rem] flex-1 text-ink-2">
 			{data.order.status === 'erstellt' ? 'Sobald ihr anfangt, auf „In Arbeit" setzen.' : 'Fertig? Dann auf „Abgeschlossen" setzen.'}
+			{#if blocker}
+				<span class="mt-1 block text-sm text-warn">{blocker} <a href="#checkliste" class="font-medium underline">Zur Checkliste</a></span>
+			{/if}
 		</p>
 		{#if data.order.status === 'erstellt'}
 			<button class="btn btn-primary" name="status" value="in_arbeit" disabled={busy}><Hammer size={18} aria-hidden="true" />In Arbeit</button>
 		{/if}
-		<button class="btn {data.order.status === 'in_arbeit' ? 'btn-primary' : 'btn-secondary'}" name="status" value="abgeschlossen" disabled={busy}>
+		<button class="btn {data.order.status === 'in_arbeit' ? 'btn-primary' : 'btn-secondary'}" name="status" value="abgeschlossen" disabled={busy || !!blocker}>
 			<CircleCheck size={18} aria-hidden="true" />Abgeschlossen
 		</button>
 	</form>
@@ -203,7 +221,10 @@
 		return async ({ result, update }) => {
 			busy = false;
 			if (result.type === 'success') {
-				toast.success(DONE[step], step === 'sign' && result.data?.closed ? 'Auftrag ist abgeschlossen.' : undefined);
+				toast.success(
+					DONE[step],
+					step === 'sign' && result.data?.closed ? 'Auftrag ist abgeschlossen.' : step === 'sign' && result.data?.closeBlocker ? String(result.data.closeBlocker) : undefined
+				);
 				if (step === 'sign') signOpen = false;
 				if (step === 'brief') {
 					// Gleich die nächste Person – der Dialog bleibt offen
@@ -230,7 +251,7 @@
 	{/if}
 
 	<div class="space-y-4">
-		<WorkOrderHead bind:form={f} disabled={!office} />
+		<WorkOrderHead bind:form={f} disabled={!office} {planHint} />
 
 		<section class="card overflow-hidden">
 			<div class="px-4 pt-4 lg:px-5">
@@ -306,8 +327,9 @@
 			</section>
 		{/if}
 
-		<section class="card border-ok/40 p-4 lg:p-5">
+		<section id="checkliste" class="card scroll-mt-20 border-ok/40 p-4 lg:p-5">
 			<h2 class="text-lg text-ok">Vorarbeiter-Checkliste</h2>
+			<p class="mt-0.5 text-sm text-ink-3">Alle drei abhaken – vorher lässt sich der Auftrag nicht abschließen.</p>
 			<fieldset disabled={!site} class="mt-3 space-y-4">
 				<div class="flex flex-wrap gap-x-6 gap-y-2">
 					{#each CHECKLIST as k (k.key)}
@@ -414,24 +436,24 @@
 	{/if}
 </section>
 
-{#if data.order.documents.length}
-	<section class="card mt-4 p-4 lg:p-5">
-		<h2 class="text-lg">Pläne und Unterlagen</h2>
-		<ul class="mt-3 divide-y divide-line rounded-xl border border-line">
-			{#each data.order.documents as d (d.href)}
-				<li>
-					<a href="/auftraege/{data.order.id}/unterlagen/{d.href}" class="flex items-center gap-3 px-3 py-2.5 hover:bg-surface-2">
-						<FileText size={20} class="shrink-0 text-ink-3" aria-hidden="true" />
-						<span class="min-w-0 flex-1">
-							<span class="block truncate font-medium">{d.title}</span>
-							<span class="block truncate text-[0.8125rem] text-ink-3">{d.fileName} · {fileSizeLabel(d.size)}</span>
-						</span>
-						<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
-					</a>
-				</li>
-			{/each}
-		</ul>
-	</section>
+{#if data.documents.length}
+	<CaseDocuments
+		documents={data.documents}
+		here="auftrag"
+		hrefBase="/auftraege/{data.order.id}/unterlagen"
+		canManage={false}
+		crew={false}
+		hint="Pläne und Unterlagen zu diesem Auftrag – auch die aus Anfrage und Angebot."
+	/>
+{/if}
+{#if data.photos.length || office}
+	<PhotoGallery
+		base="/auftraege/{data.order.id}/fotos"
+		photos={data.photos}
+		editable={office}
+		hint="Bilder der Baustelle aus Anfrage, Angebot und Auftrag."
+		empty="Noch keine Fotos."
+	/>
 {/if}
 
 {#if data.reports.length || data.canCreateReport}
@@ -485,9 +507,10 @@
 	</label>
 	<div class="mt-3"><SignaturePad bind:path={signPath} /></div>
 	{#if signRole === 'auftraggeber' && data.canStatus && data.order.status !== 'abgeschlossen'}
-		<label class="mt-3 flex items-center gap-2.5">
-			<input type="checkbox" class="size-5 accent-[var(--c-ink)]" bind:checked={finish} />Auftrag gleich auf „Abgeschlossen“ setzen
+		<label class="mt-3 flex items-center gap-2.5 {blocker ? 'opacity-60' : ''}">
+			<input type="checkbox" class="size-5 accent-[var(--c-ink)]" bind:checked={finish} disabled={!!blocker} />Auftrag gleich auf „Abgeschlossen“ setzen
 		</label>
+		{#if blocker}<p class="mt-1 text-sm text-warn">{blocker}</p>{/if}
 	{/if}
 	{#if form && 'message' in form && form.message}<p class="field-error" role="alert">{form.message}</p>{/if}
 	<div class="mt-4 flex flex-wrap justify-end gap-2">

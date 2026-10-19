@@ -26,9 +26,9 @@ import { DocumentError, storeDocument, takeUploads } from '$lib/server/documents
 import { isValidIsoDate } from '$lib/modules/stunden/week';
 import { parseAmount } from '$lib/modules/auftraege/offer';
 import { notifyOffer, notifyOrderDocuments } from '$lib/modules/auftraege/server/notify';
-import { addOfferDocuments, deleteOfferDocument, getOfferDocument, listOfferDocuments, setOfferDocumentForCrew } from '$lib/modules/auftraege/server/offer-documents';
+import { addOfferDocuments } from '$lib/modules/auftraege/server/offer-documents';
 import { titleFromFileName } from '$lib/documents';
-import { listInquiryDocuments, listRecordPhotos } from '$lib/modules/auftraege/server/attachments';
+import { caseDocuments, casePhotos, chainOfOffer, findCaseDocument, parseRef, removeCaseDocument, setCaseDocumentForCrew } from '$lib/modules/auftraege/server/case-files';
 import { unitOptions } from '$lib/server/options';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -39,17 +39,12 @@ async function open(id: number, locals: App.Locals) {
 	return { user, offer };
 }
 
-async function inquiryWithFiles(offerId: number) {
-	const inquiry = await inquiryForOffer(offerId);
-	if (!inquiry) return null;
-	return { ...inquiry, documents: await listInquiryDocuments(inquiry.id), photos: await listRecordPhotos({ inquiryId: inquiry.id }) };
-}
-
 export const load: PageServerLoad = async ({ params, locals, url }) => {
 	const { user, offer } = await open(Number(params.id), locals);
 	const editable = mayEditOffer(user, offer);
 	const canLink = offerLinkReady(offer.status) && can(user.role, 'angebote.freigeben');
 	const canCreateOrder = offer.status === 'angenommen' && !offer.order && can(user.role, 'auftraege.erstellen');
+	const chain = await chainOfOffer(offer.id);
 	return {
 		offer,
 		editable,
@@ -67,12 +62,13 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		canLink,
 		canCreateOrder,
 		// Unterlagen: in jedem Stand, auch wenn schon beauftragt
-		documents: await listOfferDocuments(offer.id),
+		// Pläne und Fotos des ganzen Vorgangs – auch die von der Anfrage und vom Auftrag
+		documents: await caseDocuments(chain),
 		canManageDocuments: can(user.role, 'angebote.bearbeiten'),
 		mailConfigured: isMailConfigured(),
-		photos: await listRecordPhotos({ offerId: offer.id }),
-		// Die E-Mail der Anfrage, aus der das Angebot entstand – samt ihren PDFs und Fotos
-		inquiry: can(user.role, 'anfragen.sehen') ? await inquiryWithFiles(offer.id) : null,
+		photos: await casePhotos(chain, 'angebot'),
+		// Die E-Mail der Anfrage, aus der das Angebot entstand
+		inquiry: can(user.role, 'anfragen.sehen') ? ((await inquiryForOffer(offer.id)) ?? null) : null,
 		customerUrl: canLink && offer.customerToken ? `${url.origin}/angebot/${offer.customerToken}` : null
 	};
 };
@@ -275,20 +271,23 @@ export const actions: Actions = {
 		const { user, offer } = await open(Number(params.id), locals);
 		if (!can(user.role, 'angebote.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
 		const form = await request.formData();
-		const doc = await getOfferDocument(offer.id, Number(form.get('dokument')));
+		const chain = await chainOfOffer(offer.id);
+		const ref = parseRef(String(form.get('dokument') ?? ''), 'angebot');
+		const doc = await findCaseDocument(chain, ref);
 		if (!doc) return fail(404, { docError: 'Unterlage nicht gefunden.' });
 		const forCrew = form.get('an') === '1';
-		await setOfferDocumentForCrew(offer.id, doc.id, forCrew);
-		if (forCrew && !doc.forCrew && offer.order) notifyOrderDocuments(offer.order.id, [doc.title], user.id);
+		await setCaseDocumentForCrew(chain, ref, forCrew);
+		if (forCrew && !doc.forCrew && chain.orderId) notifyOrderDocuments(chain.orderId, [doc.title], user.id);
 		return { forCrew };
 	},
 
+	/** Aus dem ganzen Vorgang – auch PDFs, die an der Anfrage oder am Auftrag hängen */
 	docDelete: async ({ params, request, locals }) => {
 		const { user, offer } = await open(Number(params.id), locals);
 		if (!can(user.role, 'angebote.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
-		const id = Number((await request.formData()).get('dokument'));
-		if (!Number.isInteger(id)) return fail(400, { docError: 'Unterlage fehlt.' });
-		await deleteOfferDocument(offer.id, id);
+		const ref = parseRef(String((await request.formData()).get('dokument') ?? ''), 'angebot');
+		if (!ref) return fail(400, { docError: 'Unterlage fehlt.' });
+		await removeCaseDocument(await chainOfOffer(offer.id), ref);
 		return { documentRemoved: true };
 	}
 };

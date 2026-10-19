@@ -233,6 +233,8 @@ export const inquiryDocuments = sqliteTable(
 		fileName: text('file_name').notNull(),
 		sha256: text('sha256').notNull(),
 		size: integer('size').notNull(),
+		/** Erscheint auch beim Auftrag für die Partie – Pläne vom Kunden meist schon */
+		forCrew: integer('for_crew', { mode: 'boolean' }).notNull().default(true),
 		uploadedBy: integer('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: createdAt()
 	},
@@ -240,7 +242,8 @@ export const inquiryDocuments = sqliteTable(
 );
 
 /**
- * Fotos an Anfrage oder Angebot – genau eines von beiden ist gesetzt. Die
+ * Fotos an Anfrage, Angebot oder Auftrag – genau eines davon ist gesetzt; gezeigt
+ * werden sie am ganzen Vorgang (siehe modules/auftraege/server/case-files.ts). Die
  * Dateien liegen wie die Fotos der Tagesberichte unter /data/fotos (Foto und
  * Vorschau je als <sha256>.jpg).
  */
@@ -250,6 +253,7 @@ export const recordPhotos = sqliteTable(
 		id: integer('id').primaryKey({ autoIncrement: true }),
 		inquiryId: integer('inquiry_id').references(() => inquiries.id, { onDelete: 'cascade' }),
 		offerId: integer('offer_id').references(() => offers.id, { onDelete: 'cascade' }),
+		orderId: integer('order_id').references(() => orders.id, { onDelete: 'cascade' }),
 		sha256: text('sha256').notNull(),
 		thumbSha256: text('thumb_sha256').notNull(),
 		width: integer('width').notNull(),
@@ -258,7 +262,7 @@ export const recordPhotos = sqliteTable(
 		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: createdAt()
 	},
-	(t) => [index('record_photos_inquiry_idx').on(t.inquiryId), index('record_photos_offer_idx').on(t.offerId)]
+	(t) => [index('record_photos_inquiry_idx').on(t.inquiryId), index('record_photos_offer_idx').on(t.offerId), index('record_photos_order_idx').on(t.orderId)]
 );
 
 /**

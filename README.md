@@ -406,7 +406,9 @@ was er auf der Seite sieht: die Partie nur ihre Spalte, ohne Notizen.
   sieht bei anderen nur „abwesend“.
 - **An die Partien schicken:** Ist die Woche fertig, bekommt jede Partie mit Einträgen eine
   Benachrichtigung – statt bei jedem einzelnen Eintrag.
-- **Nicht zugeteilte Aufträge** unten: die offenen Aufträge ohne Partie, die ältesten zuerst.
+- **Nicht zugeteilte Aufträge** unten: die offenen Aufträge ohne Partie, die ältesten zuerst –
+  mit dem Termin aus dem Arbeitsauftrag, wenn einer drinsteht. Bekommt der Auftrag eine Partie
+  (hier oder am Auftrag), kommen die Tage des Termins bei ihr gleich dazu.
   Schneller geht es per **Ziehen**: das Schild mit Griff und Nummer auf ein Feld der
   Wochenplanung ziehen – der Auftrag steht dann an diesem Tag bei dieser Partie. **Einplanen**
   öffnet das Eintragen mit dem Auftrag – Partie und Tage wählen. Beide Male bekommt die Partie
@@ -467,11 +469,17 @@ die E-Mail daneben. Ist das Angebot angenommen, ist die Anfrage **erledigt** und
 aus der Liste der offenen. Kommt kein Angebot zustande, legt man sie mit **Als erledigt
 ablegen** ab. Erkannt wird nur im Browser – die E-Mail geht an keinen fremden Dienst.
 
-**PDFs und Fotos an der Anfrage:** Unter der Anfrage lassen sich **PDFs** (Pläne,
-Leistungsverzeichnis, Ausschreibung – auch große, in Teilen hochgeladen) und **Fotos** anhängen
-(Recht „Anfragen bearbeiten“); Fotos am Handy direkt mit der Kamera, verkleinert am Gerät, wie
-beim Tagesbericht. Im Angebot aus dieser Anfrage stehen sie bei der E-Mail der Anfrage zum
-Ansehen – geändert werden sie an der Anfrage. Höchstens 60 Fotos je Anfrage.
+**Pläne und Fotos – einmal für den ganzen Vorgang:** Anfrage, Angebot und Auftrag haben
+dieselben **Pläne und Unterlagen** (PDFs, auch große, in Teilen hochgeladen) und dieselben
+**Fotos** (am Handy direkt mit der Kamera, verkleinert am Gerät, wie beim Tagesbericht). Was an
+der Anfrage hochgeladen wird, steht also auch im Angebot und im Auftrag – und umgekehrt; bei
+jedem steht, woher es kommt („aus der Anfrage“, „vom Angebot“, „vom Auftrag“). Hinzufügen,
+entfernen und umschalten geht an jedem der drei (mit dem Recht „bearbeiten“ dort); entfernt ist
+es dann überall. Je PDF entscheidet **Partie / Nur Büro**, ob die Partie es beim Arbeitsauftrag
+sieht – an der Anfrage ist **für die Partie** beim Hochladen vorausgewählt (Pläne vom Kunden),
+am Angebot nicht (etwa ein LV mit Preisen); PDFs am Auftrag sind immer für die Partie. Die Fotos
+sieht die Partie beim Arbeitsauftrag, der Kunde nie. Höchstens 60 Fotos je Anfrage, Angebot bzw.
+Auftrag.
 
 **Stand einer Anfrage:** **Neu** → **In Arbeit** → der Stand ihres Angebots (Ausstehend,
 Änderung gewünscht) → erledigt (Angenommen oder Abgelegt). „In Arbeit“ heißt: Jemand hat sie
@@ -578,19 +586,21 @@ Hinweis. Die Partie lässt sich im Auftrag ändern oder wieder entfernen; in der
 nur, wer alle Aufträge sieht – die Partien nicht.
 
 - **Pläne und Unterlagen:** PDFs am Auftrag – beim Erstellen oder später hochladen (das Büro),
-  die Partie sieht sie direkt in der App. Abgelegt werden sie wie die PDFs am Artikel unter
+  die Partie sieht sie direkt in der App, zusammen mit denen aus Anfrage und Angebot, die „für
+  die Partie“ sind (siehe „Pläne und Fotos – einmal für den ganzen Vorgang“ oben). Wer Angebote
+  sieht, sieht beim Auftrag auch die „Nur Büro“. Abgelegt werden sie wie die PDFs am Artikel unter
   `/data/dokumente`; im Auftrags-PDF steht, welche Unterlagen es in der App gibt. Eine
   Größengrenze gibt es für Pläne nicht: Der Browser schickt sie in Teilen zu 8 MB (so passt
   jede Anfrage durch Cloudflare) und macht nach einem Verbindungsabbruch dort weiter, wo er
   stand; die Anzeige zeigt, wie weit er ist.
 - **Unterlagen am Angebot:** PDFs lassen sich auch direkt ans Angebot hängen – in jedem Stand,
   auch wenn es schon angenommen und beauftragt ist (Recht „Angebote bearbeiten“). Je Datei
-  entscheidet der Knopf **Partie / Nur Büro**: Mit **Partie** erscheint sie auch beim Auftrag
-  (mit „vom Angebot“, im Auftrags-PDF bei den Unterlagen) und die Partie bekommt Bescheid; mit
-  **Nur Büro** bleibt sie beim Angebot – etwa ein Leistungsverzeichnis mit Preisen. Beim
-  Hochladen gilt das Häkchen **für die Partie**; umschalten lässt es sich jederzeit.
-- **Fotos am Angebot:** Unter den Unterlagen – etwa vom Besichtigungstermin. Nur intern: nicht
-  im Angebots-PDF und nicht beim Kunden (Recht „Angebote bearbeiten“, höchstens 60 Fotos).
+  entscheidet der Knopf **Partie / Nur Büro**: Mit **Partie** erscheint sie auch beim Arbeitsauftrag
+  (im Auftrags-PDF bei den Unterlagen) und die Partie bekommt Bescheid; mit **Nur Büro** sieht sie
+  nur das Büro – etwa ein Leistungsverzeichnis mit Preisen. Beim Hochladen gilt das Häkchen
+  **für die Partie**; umschalten lässt es sich jederzeit.
+- **Fotos am Angebot:** Neben den Unterlagen – etwa vom Besichtigungstermin. Nicht im
+  Angebots-PDF und nicht beim Kunden.
 - **Tagesberichte zum Auftrag:** Beim Anlegen oder im Bericht lässt sich ein offener Auftrag
   wählen – die Baustelle wird dann aus dem Ausführungsort übernommen (oder dem BV, wenn keiner
   eingetragen ist). Im Auftrag stehen alle seine Tagesberichte, **Neuer Tagesbericht** legt
@@ -604,6 +614,13 @@ nur, wer alle Aufträge sieht – die Partien nicht.
   ist, und die Rückseite (Schutzausrüstung, besondere Gefahren). Mit **… und als BL
   unterschreiben** steht die Unterschrift BL samt Datum gleich drin. Für einen Auftrag ohne
   Arbeitsauftrag gibt es dasselbe Formular am Auftrag (`…/arbeitsauftrag/neu`).
+  - **Termin → Wochenplanung**: Hat der Auftrag eine Partie und der Arbeitsauftrag ein
+    Ausführungsdatum, steht er an diesen Tagen (bis zum Endtermin; Wochenende und Feiertage
+    dazwischen nicht, erster und letzter Tag immer) von selbst bei der Partie in der
+    Wochenplanung – gleich beim Erstellen. Ändert das Büro den Termin oder die Partie, ziehen
+    diese Einträge mit; was jemand in der Planung selbst eingetragen oder verschoben hat, bleibt.
+    Ohne Partie steht der Termin bei den nicht zugeteilten Aufträgen und kommt in die Planung,
+    sobald eine Partie dran ist. Unter dem Termin steht, ob und wann der Auftrag eingeplant ist.
   - **Vorbelegt**: BV, Ausführungsort, Ansprechpartner und Telefon, die Tage aus der
     Wochenplanung; Beilagen, Evaluierung und Rückseite wie beim zuletzt angelegten
     Arbeitsauftrag („Pläne“ nur, wenn welche hochgeladen werden); Art, RAL und MSK erkannt aus
@@ -627,6 +644,11 @@ nur, wer alle Aufträge sieht – die Partien nicht.
     und die **Unterschrift des Auftraggebers**. Die setzt „Arbeit fertig am“ auf heute, wenn noch
     leer, und auf Wunsch (Häkchen im Dialog) den Auftrag gleich auf „Abgeschlossen“. Das
     Folienverlegeprotokoll (ja/nein) dürfen beide umstellen.
+  - **Abschließen erst mit Checkliste**: Solange in der Vorarbeiter-Checkliste nicht alle drei
+    Punkte abgehakt sind (PSA, Baustelle abgesichert, Ausrüstung in Ordnung), lässt sich der
+    Auftrag nicht auf „Abgeschlossen“ setzen – weder im Arbeitsauftrag noch am Auftrag oder mit
+    der Unterschrift des Auftraggebers; dort steht, was fehlt. Die Haken werden beim
+    Abschließen gleich mitgespeichert.
   - **3M-Verlegeprotokoll** (bei Folienverlegeprotokoll „ja“): ein Abschnitt im Arbeitsauftrag,
     gespeichert mit ihm zusammen und von der Partie ausgefüllt – Straße (Ort, Abschnitt,
     Fahrbahndecke, Spurbreite, Zustand, Vorarbeiten), Wetter um 8, 11, 14 und 18 Uhr, letzter

@@ -8,6 +8,7 @@ import { notifyOrderStatus } from '$lib/modules/auftraege/server/notify';
 import { listReports } from '$lib/modules/tagesberichte/server/reports';
 import {
 	addBriefing,
+	closeBlocker,
 	crewNames,
 	deleteWorkOrder,
 	getWorkOrder,
@@ -17,6 +18,8 @@ import {
 	workScope
 } from '$lib/modules/auftraege/server/work-orders';
 import { isIsoDate, isPristineFoil, maySign, prefillFoil, sanitizeForm, SIGNATURE_ROLES, type SignatureRole, type WorkScope } from '$lib/modules/auftraege/work-order';
+import { caseDocuments, casePhotos, chainFor } from '$lib/modules/auftraege/server/case-files';
+import { orderPlanDays } from '$lib/modules/planung/server/plan';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -34,7 +37,13 @@ async function open(id: number, locals: App.Locals) {
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const { user, order, work, scope } = await open(Number(params.id), locals);
+	const chain = await chainFor(order);
 	return {
+		// Pläne und Fotos des ganzen Vorgangs – was für die Partie ist
+		documents: await caseDocuments(chain, { crewOnly: true }),
+		photos: await casePhotos(chain, 'auftrag'),
+		// Wann der Auftrag in der Wochenplanung steht
+		plan: { ...(await orderPlanDays(order.id)), party: order.partyName },
 		order: {
 			id: order.id,
 			number: order.number,
@@ -43,8 +52,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			status: order.status,
 			location: order.location,
 			note: order.note,
-			// Pläne und Unterlagen – auch die vom Angebot, die „für die Partie" sind
-			documents: [...order.offerDocuments.map((d) => ({ ...d, href: `a${d.id}`, fromOffer: true })), ...order.documents.map((d) => ({ ...d, href: String(d.id), fromOffer: false }))]
 		},
 		work,
 		// Das 3M-Protokoll – steht noch nichts drin, vorbelegt aus Baustelle, Datum und Folien-Leistungen
@@ -85,10 +92,20 @@ export const actions: Actions = {
 
 	/** Stand des Auftrags – die Partie setzt ihn hier, das Büro am Auftrag */
 	status: async ({ params, request, locals }) => {
-		const { user, order } = await open(Number(params.id), locals);
-		const status = String((await request.formData()).get('status') ?? '') as OrderStatus;
+		const { user, order, work, scope } = await open(Number(params.id), locals);
+		const form = await request.formData();
+		const status = String(form.get('status') ?? '') as OrderStatus;
 		if (!ORDER_STATUS.includes(status) || status === 'erstellt') return fail(400, { message: 'Unbekannter Stand' });
 		if (!maySetOrderStatus(user, order)) return fail(403, { message: 'Den Stand setzt die Partie, der der Auftrag gehört.' });
+		// Was im Formular steht (etwa die Haken der Checkliste), gilt – vorher speichern
+		if (form.has('inhalt') && (scope.office || scope.site) && !work.content.signatures.auftraggeber) {
+			const problem = await saveForm(form, order.id, scope, user.id);
+			if (problem) return fail(400, { message: problem });
+		}
+		if (status === 'abgeschlossen' && order.status !== 'abgeschlossen') {
+			const blocker = await closeBlocker(order.id);
+			if (blocker) return fail(400, { message: blocker });
+		}
 		await setOrderStatus(order.id, status, user.id);
 		if (status !== order.status) notifyOrderStatus(order.id, status, user.id);
 		return { status };
@@ -112,12 +129,15 @@ export const actions: Actions = {
 		const problem = await setWorkOrderSignature(order.id, role, { path, name, at: Date.now() }, user.id);
 		if (problem) return fail(400, { message: problem });
 		// Mit der Unterschrift des Auftraggebers ist die Arbeit fertig – auf Wunsch gleich abschließen
-		const close = role === 'auftraggeber' && form.get('abschliessen') === '1' && maySetOrderStatus(user, order) && order.status !== 'abgeschlossen';
+		const wantsClose = role === 'auftraggeber' && form.get('abschliessen') === '1' && maySetOrderStatus(user, order) && order.status !== 'abgeschlossen';
+		// Ohne abgehakte Checkliste bleibt es bei der Unterschrift
+		const blocker = wantsClose ? await closeBlocker(order.id) : null;
+		const close = wantsClose && !blocker;
 		if (close) {
 			await setOrderStatus(order.id, 'abgeschlossen', user.id);
 			notifyOrderStatus(order.id, 'abgeschlossen', user.id);
 		}
-		return { signed: role, closed: close };
+		return { signed: role, closed: close, closeBlocker: blocker };
 	},
 
 	unsign: async ({ params, request, locals }) => {

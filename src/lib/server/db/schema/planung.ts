@@ -24,6 +24,8 @@ export const planEntries = sqliteTable(
 		orderId: integer('order_id').references(() => orders.id, { onDelete: 'set null' }),
 		text: text('text').notNull().default(''),
 		sortOrder: integer('sort_order').notNull().default(0),
+		/** Vom Termin im Arbeitsauftrag eingetragen – zieht mit, wenn sich Termin oder Partie ändern */
+		fromWorkOrder: integer('from_work_order', { mode: 'boolean' }).notNull().default(false),
 		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: createdAt(),
 		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })

@@ -7,7 +7,6 @@ import {
 	activeParties,
 	addOrderDocument,
 	deleteOrder,
-	deleteOrderDocument,
 	insertOrderDocument,
 	mayDeleteOrder,
 	mayViewOrder,
@@ -22,7 +21,9 @@ import { invoiceBlocker, invoicesForOrder, unbilledReports } from '$lib/modules/
 import { reportCount } from '$lib/modules/auftraege/server/summary';
 import { notifyOrderAssigned, notifyOrderDocuments, notifyOrderStatus } from '$lib/modules/auftraege/server/notify';
 import { titleFromFileName } from '$lib/documents';
-import { hasWorkOrder, workOrderSummary } from '$lib/modules/auftraege/server/work-orders';
+import { closeBlocker, hasWorkOrder, workOrderSummary } from '$lib/modules/auftraege/server/work-orders';
+import { caseDocuments, casePhotos, chainFor, findCaseDocument, parseRef, removeCaseDocument, setCaseDocumentForCrew } from '$lib/modules/auftraege/server/case-files';
+import { syncWorkOrderPlan } from '$lib/modules/planung/server/plan';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -42,9 +43,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 	const canManage = can(user.role, 'auftraege.bearbeiten');
 	const seesInvoices = can(user.role, 'rechnungen.sehen');
-	const [invoices, unbilled] = await Promise.all([invoicesForOrder(order.id), unbilledReports(order.id)]);
+	const [invoices, unbilled, chain] = await Promise.all([invoicesForOrder(order.id), unbilledReports(order.id), chainFor(order)]);
 	return {
 		order,
+		// Pläne und Fotos des ganzen Vorgangs – von Anfrage, Angebot und Auftrag; „Nur Büro" sieht, wer Angebote sieht
+		documents: await caseDocuments(chain, { crewOnly: !can(user.role, 'angebote.sehen') }),
+		photos: await casePhotos(chain, 'auftrag'),
+		// Abschließen erst mit abgehakter Vorarbeiter-Checkliste
+		closeBlocker: await closeBlocker(order.id),
 		canStatus: maySetOrderStatus(user, order),
 		canReset: can(user.role, 'auftraege.status.zuruecksetzen'),
 		canManage,
@@ -78,6 +84,10 @@ export const actions: Actions = {
 		if (!ORDER_STATUS.includes(status)) return fail(400, { message: 'Unbekannter Stand' });
 		if (status !== 'erstellt' && !maySetOrderStatus(user, order)) return fail(403, { message: 'Den Stand setzt die Partie, der der Auftrag gehört.' });
 		if (status === 'erstellt' && !can(user.role, 'auftraege.status.zuruecksetzen')) return fail(403, { message: 'Zurücksetzen darfst du nicht.' });
+		if (status === 'abgeschlossen' && order.status !== 'abgeschlossen') {
+			const blocker = await closeBlocker(order.id);
+			if (blocker) return fail(400, { message: blocker });
+		}
 		await setOrderStatus(order.id, status, user.id);
 		if (status !== order.status) notifyOrderStatus(order.id, status, user.id);
 		return { status };
@@ -97,7 +107,9 @@ export const actions: Actions = {
 		});
 		// Neue Partie: deren Partieführer erfährt es (ohne Partie niemand)
 		if (partyId !== null && partyId !== order.partyId) notifyOrderAssigned(order.id, user.id);
-		return { updated: true };
+		// Der Termin aus dem Arbeitsauftrag zieht in der Wochenplanung zur neuen Partie mit
+		const planned = partyId !== order.partyId ? await syncWorkOrderPlan(order.id, user.id) : null;
+		return { updated: true, planned };
 	},
 
 	/**
@@ -105,7 +117,7 @@ export const actions: Actions = {
 	 * lädt sie vorher in Teilen hoch und schickt nur die Kennungen (`uploads`);
 	 * ohne JavaScript kommen die Dateien selbst (`dateien`).
 	 */
-	upload: async ({ params, request, locals }) => {
+	docUpload: async ({ params, request, locals }) => {
 		const { user, order } = await open(Number(params.id), locals);
 		if (!can(user.role, 'auftraege.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
 		const form = await request.formData();
@@ -143,13 +155,29 @@ export const actions: Actions = {
 		return { added };
 	},
 
-	deleteDocument: async ({ params, request, locals }) => {
+	/** Aus dem ganzen Vorgang – auch PDFs, die an der Anfrage oder am Angebot hängen */
+	docDelete: async ({ params, request, locals }) => {
 		const { user, order } = await open(Number(params.id), locals);
 		if (!can(user.role, 'auftraege.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
-		const id = Number((await request.formData()).get('dokument'));
-		if (!Number.isInteger(id)) return fail(400, { docError: 'Unterlage fehlt.' });
-		await deleteOrderDocument(order.id, id);
+		const ref = parseRef(String((await request.formData()).get('dokument') ?? ''), 'auftrag');
+		if (!ref) return fail(400, { docError: 'Unterlage fehlt.' });
+		await removeCaseDocument(await chainFor(order), ref);
 		return { documentRemoved: true };
+	},
+
+	/** PDF von Anfrage oder Angebot für die Partie freigeben bzw. wieder nur fürs Büro */
+	docCrew: async ({ params, request, locals }) => {
+		const { user, order } = await open(Number(params.id), locals);
+		if (!can(user.role, 'auftraege.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
+		const form = await request.formData();
+		const chain = await chainFor(order);
+		const ref = parseRef(String(form.get('dokument') ?? ''), 'auftrag');
+		const doc = await findCaseDocument(chain, ref);
+		if (!doc) return fail(404, { docError: 'Unterlage nicht gefunden.' });
+		const forCrew = form.get('an') === '1';
+		await setCaseDocumentForCrew(chain, ref, forCrew);
+		if (forCrew && !doc.forCrew) notifyOrderDocuments(order.id, [doc.title], user.id);
+		return { forCrew };
 	},
 
 	delete: async ({ params, locals }) => {

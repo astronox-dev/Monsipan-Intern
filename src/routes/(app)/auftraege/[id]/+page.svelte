@@ -11,19 +11,18 @@
 	import FilePen from '@lucide/svelte/icons/file-pen-line';
 	import Trash from '@lucide/svelte/icons/trash';
 	import MapPin from '@lucide/svelte/icons/map-pin';
-	import Upload from '@lucide/svelte/icons/upload';
 	import NotebookPen from '@lucide/svelte/icons/notebook-pen';
 	import Plus from '@lucide/svelte/icons/plus';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import X from '@lucide/svelte/icons/x';
 	import Sigma from '@lucide/svelte/icons/sigma';
 	import ReceiptText from '@lucide/svelte/icons/receipt-text';
 	import ClipboardList from '@lucide/svelte/icons/clipboard-list';
 	import Lock from '@lucide/svelte/icons/lock';
-	import { fileSizeLabel } from '$lib/documents';
-	import { uploadFormPdfs, UploadError } from '$lib/upload';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
+	import { rangeLabel } from '$lib/modules/planung/days';
 	import Dialog from '$lib/components/Dialog.svelte';
+	import PhotoGallery from '$lib/components/PhotoGallery.svelte';
+	import CaseDocuments from '$lib/modules/auftraege/components/CaseDocuments.svelte';
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import { date, dateTime } from '$lib/format';
 	import { INVOICE_STAGE_LABELS } from '$lib/modules/auftraege/signature';
@@ -39,10 +38,6 @@
 	let busy = $state(false);
 	let deleteOpen = $state(false);
 	let resetOpen = $state(false);
-	let uploading = $state(false);
-	let uploadShare = $state(0);
-	let uploadError = $state('');
-	let removeDoc = $state<{ id: number; title: string } | null>(null);
 
 	/** Ausführungsort in der Karten-App öffnen – am Handy gleich mit Navigation */
 	const mapUrl = $derived(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.location)}`);
@@ -95,11 +90,14 @@
 	<form method="POST" action="?/status" class="card mb-4 flex flex-wrap items-center gap-3 p-4" use:enhance={statusEnhance}>
 		<p class="min-w-[12rem] flex-1 text-ink-2">
 			{order.status === 'erstellt' ? 'Sobald ihr anfangt, auf „In Arbeit" setzen.' : 'Fertig? Dann auf „Abgeschlossen" setzen.'}
+			{#if data.closeBlocker}
+				<span class="mt-1 block text-sm text-warn">{data.closeBlocker} <a href="/auftraege/{order.id}/arbeitsauftrag#checkliste" class="font-medium underline">Zur Checkliste</a></span>
+			{/if}
 		</p>
 		{#if order.status === 'erstellt'}
 			<button class="btn btn-primary" name="status" value="in_arbeit" disabled={busy}><Hammer size={18} aria-hidden="true" />In Arbeit</button>
 		{/if}
-		<button class="btn {order.status === 'in_arbeit' ? 'btn-primary' : 'btn-secondary'}" name="status" value="abgeschlossen" disabled={busy}>
+		<button class="btn {order.status === 'in_arbeit' ? 'btn-primary' : 'btn-secondary'}" name="status" value="abgeschlossen" disabled={busy || !!data.closeBlocker}>
 			<CircleCheck size={18} aria-hidden="true" />Abgeschlossen
 		</button>
 	</form>
@@ -201,88 +199,22 @@
 	</ul>
 </section>
 
-<section class="card mt-4 p-4 lg:p-5">
-	<div class="flex flex-wrap items-center justify-between gap-2">
-		<h2 class="text-lg">Pläne und Unterlagen</h2>
-		{#if data.canManage}
-			<form
-				method="POST"
-				action="?/upload"
-				enctype="multipart/form-data"
-				use:enhance={async ({ formData, formElement, cancel }) => {
-					uploading = true;
-					uploadShare = 0;
-					uploadError = '';
-					// Große Pläne in Teilen vorab – ins Formular kommen nur noch die Kennungen
-					try {
-						await uploadFormPdfs(formData, 'dateien', (share) => (uploadShare = share));
-					} catch (err) {
-						uploading = false;
-						uploadError = err instanceof UploadError ? err.message : 'Das Hochladen hat nicht geklappt – bitte noch einmal versuchen.';
-						formElement.reset();
-						cancel();
-						return;
-					}
-					return async ({ result, update }) => {
-						uploading = false;
-						if (result.type === 'success') toast.success(Number(result.data?.added) === 1 ? 'PDF hochgeladen' : `${result.data?.added} PDFs hochgeladen`);
-						await update();
-					};
-				}}
-			>
-				<label class="upload btn btn-secondary btn-sm {uploading ? 'pointer-events-none opacity-50' : ''}">
-					<Upload size={16} aria-hidden="true" />{uploading ? `Wird hochgeladen … ${Math.floor(uploadShare * 100)} %` : 'PDF hochladen'}
-					<input
-						type="file"
-						name="dateien"
-						accept="application/pdf,.pdf"
-						multiple
-						class="sr-only"
-						onchange={(e) => e.currentTarget.files?.length && e.currentTarget.form?.requestSubmit()}
-					/>
-				</label>
-			</form>
-		{/if}
-	</div>
-	{#if uploadError}<p class="field-error mt-2" role="alert">{uploadError}</p>
-	{:else if form && 'docError' in form && form.docError}<p class="field-error mt-2" role="alert">{form.docError}</p>{/if}
-	{#if order.documents.length || order.offerDocuments.length}
-		<ul class="mt-3 divide-y divide-line rounded-xl border border-line">
-			<!-- Vom Angebot, was dort „für die Partie" angehakt ist – geändert wird es am Angebot -->
-			{#each order.offerDocuments as d (d.id)}
-				<li class="flex items-center gap-2">
-					<a href="/auftraege/{order.id}/unterlagen/a{d.id}" class="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 hover:bg-surface-2">
-						<FileText size={20} class="shrink-0 text-ink-3" aria-hidden="true" />
-						<span class="min-w-0 flex-1">
-							<span class="block truncate font-medium">{d.title}</span>
-							<span class="block truncate text-[0.8125rem] text-ink-3">{d.fileName} · {fileSizeLabel(d.size)} · vom Angebot</span>
-						</span>
-						<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
-					</a>
-				</li>
-			{/each}
-			{#each order.documents as d (d.id)}
-				<li class="flex items-center gap-2">
-					<a href="/auftraege/{order.id}/unterlagen/{d.id}" class="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 hover:bg-surface-2">
-						<FileText size={20} class="shrink-0 text-ink-3" aria-hidden="true" />
-						<span class="min-w-0 flex-1">
-							<span class="block truncate font-medium">{d.title}</span>
-							<span class="block truncate text-[0.8125rem] text-ink-3">{d.fileName} · {fileSizeLabel(d.size)}</span>
-						</span>
-						<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
-					</a>
-					{#if data.canManage}
-						<button type="button" class="mr-2 grid size-9 shrink-0 place-items-center rounded-lg text-ink-3 hover:bg-surface-3 hover:text-danger" aria-label="{d.title} entfernen" onclick={() => (removeDoc = d)}>
-							<X size={16} />
-						</button>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	{:else}
-		<p class="mt-2 text-sm text-ink-3">{data.canManage ? 'Noch keine Unterlagen – z. B. Pläne als PDF, auch große.' : 'Keine Unterlagen.'}</p>
-	{/if}
-</section>
+<div class="grid gap-x-4 xl:grid-cols-2">
+	<CaseDocuments
+		documents={data.documents}
+		here="auftrag"
+		hrefBase="/auftraege/{order.id}/unterlagen"
+		canManage={data.canManage}
+		message={form && 'docError' in form ? String(form.docError ?? '') : ''}
+	/>
+	<PhotoGallery
+		base="/auftraege/{order.id}/fotos"
+		photos={data.photos}
+		editable={data.canManage}
+		hint="Gehören zum ganzen Vorgang – an Anfrage, Angebot und Auftrag stehen dieselben. Die Partie sieht sie beim Arbeitsauftrag."
+		empty="Noch keine Fotos – z. B. vom Besichtigungstermin."
+	/>
+</div>
 
 <section class="card mt-4 p-4 lg:p-5">
 	<div class="flex flex-wrap items-center justify-between gap-2">
@@ -374,7 +306,11 @@
 			action="?/update"
 			class="mt-3 space-y-3"
 			use:enhance={() => async ({ result, update }) => {
-				if (result.type === 'success') toast.success('Gespeichert');
+				if (result.type === 'success') {
+					// Mit der Partie steht der Termin aus dem Arbeitsauftrag jetzt in der Wochenplanung
+					const p = result.data?.planned as { partyName: string; days: string[] } | null | undefined;
+					toast.success('Gespeichert', p ? `In der Wochenplanung bei ${p.partyName}: ${rangeLabel(p.days[0], p.days[p.days.length - 1])}` : undefined);
+				}
 				await update({ reset: false });
 			}}
 		>
@@ -422,24 +358,6 @@
 	</form>
 </Dialog>
 
-<Dialog open={!!removeDoc} onclose={() => (removeDoc = null)} title="Unterlage entfernen?">
-	{#if removeDoc}
-		<p class="text-ink-2">„{removeDoc.title}“ wird vom Auftrag entfernt.</p>
-		<form
-			method="POST"
-			action="?/deleteDocument"
-			class="mt-5 flex justify-end gap-2"
-			use:enhance={() => async ({ update }) => {
-				removeDoc = null;
-				await update();
-			}}
-		>
-			<input type="hidden" name="dokument" value={removeDoc.id} />
-			<button type="button" class="btn btn-ghost" onclick={() => (removeDoc = null)}>Abbrechen</button>
-			<button class="btn btn-primary">Entfernen</button>
-		</form>
-	{/if}
-</Dialog>
 
 <Dialog bind:open={deleteOpen} title="Auftrag löschen?">
 	<p class="text-ink-2">
@@ -454,10 +372,3 @@
 	</form>
 </Dialog>
 
-<style>
-	/* Der Knopf ist ein Label um das Dateifeld – den Fokus zeigt er selbst */
-	.upload:has(input:focus-visible) {
-		outline: 2px solid var(--c-focus);
-		outline-offset: 2px;
-	}
-</style>

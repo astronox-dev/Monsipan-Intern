@@ -35,7 +35,7 @@
 	import Dialog from '$lib/components/Dialog.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { addDays, isoWeek } from '$lib/modules/stunden/week';
-	import { holidayName } from '$lib/modules/planung/days';
+	import { holidayName, rangeLabel } from '$lib/modules/planung/days';
 	import { ORDER_STATUS_LABELS, spacedNumber } from '$lib/modules/auftraege/offer';
 	import { date as dateLabel } from '$lib/format';
 
@@ -474,6 +474,10 @@
 							{/if}
 							<span class="block text-[0.8125rem] text-ink-3">{[o.location ? o.title : '', o.customerName, `seit ${dateLabel(o.createdAt)}`].filter(Boolean).join(' · ')}</span>
 						</span>
+						{#if o.startDate}
+							<!-- Termin aus dem Arbeitsauftrag – mit der Partie steht er von selbst in der Planung -->
+							<span class="badge badge-warn" title="Termin aus dem Arbeitsauftrag"><CalendarPlus size={13} aria-hidden="true" />{rangeLabel(o.startDate, o.endDate || null)}</span>
+						{/if}
 						<span class="badge {st.tone}">{st.label}</span>
 						{#if data.canEdit}
 							<button type="button" class="btn btn-secondary btn-sm" onclick={() => openPlan(o)}><CalendarPlus size={16} aria-hidden="true" />Einplanen</button>

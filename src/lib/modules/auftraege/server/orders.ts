@@ -19,7 +19,8 @@ import { titleFromFileName } from '$lib/documents';
 import { col } from '$lib/server/db/sql';
 import { lineNumbers } from '../offer';
 import { syncOfferBilling } from './billing';
-import { crewDocumentsOfOffer, getOfferDocument } from './offer-documents';
+import { crewDocumentsOfOffer } from './offer-documents';
+import { caseDocuments, chainFor, findCaseDocument, parseRef } from './case-files';
 
 const creator = alias(users, 'creator');
 const statusUser = alias(users, 'status_user');
@@ -140,8 +141,14 @@ export async function orderDetail(id: number) {
 		...order,
 		lines,
 		documents: await listOrderDocuments(id),
-		// Vom Angebot, was dort „für die Partie" angehakt ist
-		offerDocuments: order.offerId ? await crewDocumentsOfOffer(order.offerId) : []
+		// Vom Angebot und von der Anfrage, was dort „für die Partie" angehakt ist
+		offerDocuments: order.offerId ? await crewDocumentsOfOffer(order.offerId) : [],
+		inquiryDocuments: (await caseDocuments({ ...(await chainFor(order)), offerId: null, orderId: null }, { crewOnly: true })).map((d) => ({
+			id: d.id,
+			title: d.title,
+			fileName: d.fileName,
+			size: d.size
+		}))
 	};
 }
 
@@ -304,16 +311,12 @@ export function getOrderDocument(orderId: number, documentId: number) {
 
 /**
  * Unterlage zum Auftrag nach ihrem Teil in der Adresse: „12" ist eine eigene,
- * „a12" eine vom Angebot – die nur, wenn sie dort für die Partie angehakt ist.
+ * „a12" eine vom Angebot, „i12" eine von der Anfrage – die nur, wenn sie dort
+ * für die Partie angehakt ist. Wer Angebote sieht, bekommt auch die fürs Büro.
  */
-export async function findOrderDocument(order: { id: number; offerId: number | null }, param: string) {
-	const fromOffer = /^a(\d+)$/.exec(param);
-	if (fromOffer) {
-		if (!order.offerId) return undefined;
-		const doc = await getOfferDocument(order.offerId, Number(fromOffer[1]));
-		return doc?.forCrew ? doc : undefined;
-	}
-	return /^\d+$/.test(param) ? getOrderDocument(order.id, Number(param)) : undefined;
+export async function findOrderDocument(order: { id: number; offerId: number | null }, param: string, user?: Pick<SessionUser, 'role'>) {
+	const crewOnly = !user || !can(user.role, 'angebote.sehen');
+	return findCaseDocument(await chainFor(order), parseRef(param, 'auftrag'), { crewOnly });
 }
 
 /** Die Datei bleibt noch eine Weile für Sicherungen liegen */

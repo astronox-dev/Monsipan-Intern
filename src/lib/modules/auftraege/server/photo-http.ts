@@ -1,10 +1,10 @@
-/** Hochladen und Ausliefern der Fotos an Anfrage und Angebot – für deren Routen */
+/** Hochladen und Ausliefern der Fotos am Vorgang (Anfrage, Angebot, Auftrag) – für deren Routen */
 import fs from 'node:fs';
 import { Readable } from 'node:stream';
 import { error, json } from '@sveltejs/kit';
 import { photoFile } from '$lib/modules/tagesberichte/server/photos';
 import { PhotoError } from '$lib/modules/tagesberichte/photos';
-import { addRecordPhoto, getRecordPhoto, type PhotoOwner } from './attachments';
+import { addRecordPhoto, getCasePhoto, type CaseChain, type PhotoOwner } from './case-files';
 
 /** Foto hinzufügen – das Gerät schickt es verkleinert, mit Vorschau */
 export async function uploadPhoto(owner: PhotoOwner, userId: number, request: Request): Promise<Response> {
@@ -21,11 +21,11 @@ export async function uploadPhoto(owner: PhotoOwner, userId: number, request: Re
 }
 
 /**
- * Foto bzw. mit ?vorschau seine kleine Fassung – unveränderlich, darf lange im
- * Zwischenspeicher bleiben. Mit ?download als Datei zum Speichern.
+ * Ein Foto des Vorgangs bzw. mit ?vorschau seine kleine Fassung – unveränderlich,
+ * darf lange im Zwischenspeicher bleiben. Mit ?download als Datei zum Speichern.
  */
-export async function photoResponse(owner: PhotoOwner, photoId: number, url: URL, name: string): Promise<Response> {
-	const photo = await getRecordPhoto(owner, photoId);
+export async function photoResponse(chain: CaseChain, photoId: number, url: URL, name: string): Promise<Response> {
+	const photo = await getCasePhoto(chain, photoId);
 	if (!photo) error(404, 'Foto nicht gefunden');
 	const file = photoFile(url.searchParams.has('vorschau') ? photo.thumbSha256 : photo.sha256);
 	const stat = await fs.promises.stat(file).catch(() => null);

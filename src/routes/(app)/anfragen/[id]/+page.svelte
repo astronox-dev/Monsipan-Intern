@@ -17,7 +17,7 @@
 	import Undo from '@lucide/svelte/icons/undo-2';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import CustomerFields from '$lib/modules/auftraege/components/CustomerFields.svelte';
-	import PdfAttachments from '$lib/modules/auftraege/components/PdfAttachments.svelte';
+	import CaseDocuments from '$lib/modules/auftraege/components/CaseDocuments.svelte';
 	import PhotoGallery from '$lib/components/PhotoGallery.svelte';
 	import { date as dateLabel, dateTime } from '$lib/format';
 	import { MAX_INQUIRY_TEXT } from '$lib/modules/auftraege/inquiry';
@@ -194,20 +194,20 @@
 </form>
 
 <div class="grid gap-x-4 xl:grid-cols-2">
-	<PdfAttachments
+	<CaseDocuments
 		documents={data.documents}
+		here="anfrage"
 		hrefBase="/anfragen/{inquiry.id}/unterlagen"
 		canManage={data.canEdit}
-		title="PDFs"
-		hint="Pläne, Leistungsverzeichnis oder Ausschreibung zur Anfrage."
+		crewDefault
 		message={form && 'docError' in form ? String(form.docError ?? '') : ''}
 	/>
 	<PhotoGallery
 		base="/anfragen/{inquiry.id}/fotos"
 		photos={data.photos}
 		editable={data.canEdit}
-		hint="Bilder der Baustelle – auch direkt mit der Kamera. Am Angebot aus dieser Anfrage stehen sie ebenfalls."
-		empty="Noch keine Fotos – z. B. vom Besichtigungstermin."
+		hint="Gehören zum ganzen Vorgang – an Anfrage, Angebot und Auftrag stehen dieselben. Nicht beim Kunden."
+		empty="Noch keine Fotos – z. B. vom Besichtigungstermin, auch direkt mit der Kamera."
 	/>
 </div>
 

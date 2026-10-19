@@ -11,10 +11,12 @@
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lte, max, ne, or, sql } from 'drizzle-orm';
 import { can } from '$lib/permissions';
 import { db } from '$lib/server/db';
-import { leaveRequests, orders, parties, planCrewDays, planCrewWeeks, planEntries, planNotes, sickReports, users } from '$lib/server/db/schema';
+import { leaveRequests, orders, parties, planCrewDays, planCrewWeeks, planEntries, planNotes, sickReports, users, workOrders } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
 import { notify } from '$lib/server/notifications';
 import { isoWeek, isValidIsoDate, mondayOf, weekDays } from '$lib/modules/stunden/week';
+import { readContent } from '$lib/modules/auftraege/work-order';
+import { termDays } from '../days';
 
 export const MAX_ENTRY_TEXT = 200;
 export const MAX_NOTE_TEXT = 500;
@@ -179,7 +181,10 @@ export function unassignedOrders() {
 			location: orders.location,
 			customerName: orders.customerName,
 			status: orders.status,
-			createdAt: orders.createdAt
+			createdAt: orders.createdAt,
+			// Termin aus dem Arbeitsauftrag – damit man sieht, wann er dran ist
+			startDate: sql<string | null>`(select json_extract(${workOrders.content}, '$.startDate') from ${workOrders} where ${workOrders.orderId} = ${orders.id})`,
+			endDate: sql<string | null>`(select json_extract(${workOrders.content}, '$.endDate') from ${workOrders} where ${workOrders.orderId} = ${orders.id})`
 		})
 		.from(orders)
 		.where(and(isNull(orders.partyId), or(eq(orders.status, 'erstellt'), eq(orders.status, 'in_arbeit'))))
@@ -285,7 +290,7 @@ export async function updateEntry(id: number, input: EntryInput): Promise<true |
 	if (problem) return { message: problem };
 	const done = await db
 		.update(planEntries)
-		.set({ ...input, updatedAt: new Date() })
+		.set({ ...input, fromWorkOrder: false, updatedAt: new Date() })
 		.where(eq(planEntries.id, id))
 		.returning({ id: planEntries.id });
 	return done.length ? true : { message: 'Den Eintrag gibt es nicht mehr.' };
@@ -314,10 +319,70 @@ export async function moveEntry(id: number, target: { date: string; partyId: num
 	const at = target.beforeId == null ? -1 : order.indexOf(target.beforeId);
 	order.splice(at < 0 ? order.length : at, 0, id);
 	await db.transaction(async (tx) => {
-		await tx.update(planEntries).set({ date: target.date, partyId: target.partyId, updatedAt: new Date() }).where(eq(planEntries.id, id));
+		await tx.update(planEntries).set({ date: target.date, partyId: target.partyId, fromWorkOrder: false, updatedAt: new Date() }).where(eq(planEntries.id, id));
 		for (const [i, entryId] of order.entries()) await tx.update(planEntries).set({ sortOrder: i }).where(eq(planEntries.id, entryId));
 	});
 	return { orderId: entry.orderId };
+}
+
+/**
+ * Termin aus dem Arbeitsauftrag in die Wochenplanung: Hat der Auftrag eine
+ * Partie und der Arbeitsauftrag ein Ausführungsdatum, steht der Auftrag an
+ * diesen Tagen (bis zum Endtermin, siehe termDays) bei der Partie. Was jemand
+ * selbst eingetragen oder verschoben hat, bleibt, wie es ist; die Einträge vom
+ * Arbeitsauftrag ziehen mit, wenn sich Termin oder Partie ändern.
+ * Gibt zurück, wo der Auftrag jetzt steht – ohne Partie oder Termin null.
+ */
+export async function syncWorkOrderPlan(orderId: number, userId: number | null): Promise<{ partyName: string; days: string[] } | null> {
+	const [order, work] = await Promise.all([
+		db.select({ partyId: orders.partyId, partyName: parties.name }).from(orders).leftJoin(parties, eq(parties.id, orders.partyId)).where(eq(orders.id, orderId)).get(),
+		db.select({ content: workOrders.content }).from(workOrders).where(eq(workOrders.orderId, orderId)).get()
+	]);
+	if (!order || !work) return null;
+	const c = readContent(work.content);
+	const days = c.startDate ? termDays(c.startDate, c.endDate) : [];
+	const partyId = order.partyId;
+	// Was vom Arbeitsauftrag kam und nicht mehr passt, geht weg
+	const auto = await db
+		.select({ id: planEntries.id, date: planEntries.date, partyId: planEntries.partyId })
+		.from(planEntries)
+		.where(and(eq(planEntries.orderId, orderId), eq(planEntries.fromWorkOrder, true)))
+		.all();
+	const stale = auto.filter((e) => e.partyId !== partyId || !days.includes(e.date)).map((e) => e.id);
+	if (stale.length) await db.delete(planEntries).where(inArray(planEntries.id, stale));
+	if (!partyId || !days.length) return null;
+	// Steht er an einem Tag schon bei der Partie (auch selbst eingetragen), bleibt es dabei
+	const have = new Set(
+		(
+			await db
+				.select({ date: planEntries.date })
+				.from(planEntries)
+				.where(and(eq(planEntries.orderId, orderId), eq(planEntries.partyId, partyId), inArray(planEntries.date, days)))
+				.all()
+		).map((r) => r.date)
+	);
+	for (const date of days) {
+		if (have.has(date)) continue;
+		const last = await db
+			.select({ n: max(planEntries.sortOrder) })
+			.from(planEntries)
+			.where(and(eq(planEntries.partyId, partyId), eq(planEntries.date, date)))
+			.get();
+		await db.insert(planEntries).values({ date, partyId, orderId, text: '', sortOrder: (last?.n ?? -1) + 1, fromWorkOrder: true, createdBy: userId, updatedAt: new Date() });
+	}
+	return { partyName: order.partyName ?? '', days };
+}
+
+/** An welchen Tagen und bei welchen Partien ein Auftrag in der Wochenplanung steht */
+export async function orderPlanDays(orderId: number): Promise<{ days: string[]; parties: string[] }> {
+	const rows = await db
+		.select({ date: planEntries.date, party: parties.name })
+		.from(planEntries)
+		.innerJoin(parties, eq(parties.id, planEntries.partyId))
+		.where(eq(planEntries.orderId, orderId))
+		.orderBy(asc(planEntries.date))
+		.all();
+	return { days: [...new Set(rows.map((r) => r.date))], parties: [...new Set(rows.map((r) => r.party))] };
 }
 
 /** Reihenfolge der Spalten – für alle, auch im PDF; nicht genannte Partien bleiben alphabetisch dahinter */

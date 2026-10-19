@@ -16,7 +16,18 @@ import {
 import { numberTaken, suggestNumbers } from '$lib/modules/auftraege/server/offers';
 import { isValidIsoDate, today } from '$lib/modules/stunden/week';
 import { DocumentError, storeDocument, takeUploads } from '$lib/server/documents';
-import { addInquiryDocuments, deleteInquiryDocument, listInquiryDocuments, listRecordPhotos } from '$lib/modules/auftraege/server/attachments';
+import {
+	addInquiryDocuments,
+	caseDocuments,
+	casePhotos,
+	chainOfInquiry,
+	findCaseDocument,
+	parseRef,
+	removeCaseDocument,
+	setCaseDocumentForCrew
+} from '$lib/modules/auftraege/server/case-files';
+import { notifyOrderDocuments } from '$lib/modules/auftraege/server/notify';
+import { titleFromFileName } from '$lib/documents';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -30,6 +41,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const { user, inquiry } = await open(Number(params.id), locals);
 	const canEdit = can(user.role, 'anfragen.bearbeiten');
 	const canCreateOffer = !inquiry.offerId && can(user.role, 'angebote.erstellen');
+	const chain = await chainOfInquiry(inquiry.id);
 	return {
 		inquiry,
 		canEdit,
@@ -39,9 +51,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		canAddCustomer: canEdit && can(user.role, 'kunden.erstellen'),
 		customers: canEdit || canCreateOffer ? (await listCustomers()).map((c) => ({ id: c.id, name: c.name, city: c.city })) : [],
 		suggestion: canCreateOffer ? { ...(await suggestNumbers()), date: today() } : null,
-		// PDFs und Fotos zur Anfrage – z. B. Pläne oder Bilder der Baustelle vom Kunden
-		documents: await listInquiryDocuments(inquiry.id),
-		photos: await listRecordPhotos({ inquiryId: inquiry.id })
+		// Pläne und Fotos des ganzen Vorgangs – auch was später am Angebot oder Auftrag dazukam
+		documents: await caseDocuments(chain),
+		photos: await casePhotos(chain, 'anfrage')
 	};
 };
 
@@ -63,17 +75,37 @@ export const actions: Actions = {
 			throw err;
 		}
 		if (!files.length) return fail(400, { docError: 'Bitte eine oder mehrere PDF-Dateien auswählen.' });
-		await addInquiryDocuments(inquiry.id, files, user.id);
+		const forCrew = form.get('partie') === 'on';
+		await addInquiryDocuments(inquiry.id, files, user.id, forCrew);
+		const chain = await chainOfInquiry(inquiry.id);
+		if (forCrew && chain.orderId) notifyOrderDocuments(chain.orderId, files.map((f) => titleFromFileName(f.name) || f.name), user.id);
 		return { added: files.length };
 	},
 
+	/** Aus dem ganzen Vorgang – auch PDFs, die am Angebot oder Auftrag hängen */
 	docDelete: async ({ params, request, locals }) => {
 		const { user, inquiry } = await open(Number(params.id), locals);
 		if (!can(user.role, 'anfragen.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
-		const id = Number((await request.formData()).get('dokument'));
-		if (!Number.isInteger(id)) return fail(400, { docError: 'Unterlage fehlt.' });
-		await deleteInquiryDocument(inquiry.id, id);
+		const ref = parseRef(String((await request.formData()).get('dokument') ?? ''), 'anfrage');
+		if (!ref) return fail(400, { docError: 'Unterlage fehlt.' });
+		await removeCaseDocument(await chainOfInquiry(inquiry.id), ref);
 		return { documentRemoved: true };
+	},
+
+	docCrew: async ({ params, request, locals }) => {
+		const { user, inquiry } = await open(Number(params.id), locals);
+		if (!can(user.role, 'anfragen.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
+		const form = await request.formData();
+		const ref = parseRef(String(form.get('dokument') ?? ''), 'anfrage');
+		if (!ref) return fail(400, { docError: 'Unterlage fehlt.' });
+		const forCrew = form.get('an') === '1';
+		const chain = await chainOfInquiry(inquiry.id);
+		const doc = await findCaseDocument(chain, ref);
+		if (!doc) return fail(404, { docError: 'Unterlage nicht gefunden.' });
+		await setCaseDocumentForCrew(chain, ref, forCrew);
+		// Gibt es den Auftrag schon, bekommt die Partie Bescheid
+		if (forCrew && !doc.forCrew && chain.orderId) notifyOrderDocuments(chain.orderId, [doc.title], user.id);
+		return { forCrew };
 	},
 
 	save: async ({ params, request, locals }) => {

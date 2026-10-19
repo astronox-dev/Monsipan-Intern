@@ -33,6 +33,8 @@
 		height: number;
 		createdAt: Date | string;
 		createdBy: string | null;
+		/** Woher es kommt, z. B. „aus der Anfrage" – steht beim großen Foto */
+		from?: string;
 	}
 	interface Props {
 		/** Adresse der Fotos, z. B. /anfragen/12/fotos */
@@ -248,7 +250,7 @@
 			<header class="flex items-center gap-2 p-2 text-white">
 				<p class="min-w-0 flex-1 truncate px-2 text-sm">
 					<span class="num font-medium">Foto {current + 1} von {photos.length}</span>
-					<span class="text-white/70"> · {[shown.createdBy, dateTime(shown.createdAt)].filter(Boolean).join(', ')}</span>
+					<span class="text-white/70"> · {[shown.createdBy, dateTime(shown.createdAt)].filter(Boolean).join(', ')}{shown.from ? ` · ${shown.from}` : ''}</span>
 				</p>
 				{#if printable || !app}
 					<a href="{src(shown)}?download" download class="knopf" onclick={(e) => download(e, shown)} aria-label="Foto herunterladen" title="Herunterladen"><Download size={20} /></a>

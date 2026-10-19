@@ -8,6 +8,6 @@
 <DocumentPage
 	back={{ href: `/angebote/${data.offer.id}`, label: `Angebot ${spacedNumber(data.offer.number)}` }}
 	document={data.document}
-	fileUrl="/angebote/{data.offer.id}/unterlagen/{data.document.id}/datei"
-	note={data.document.forCrew ? 'auch für die Partie' : 'nur Büro'}
+	fileUrl="/angebote/{data.offer.id}/unterlagen/{data.document.key}/datei"
+	note={data.note}
 />

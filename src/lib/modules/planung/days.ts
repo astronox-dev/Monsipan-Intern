@@ -70,6 +70,19 @@ export function workdays(from: string, to: string): number {
 	return n;
 }
 
+/**
+ * Die Tage eines Termins von–bis (etwa aus dem Arbeitsauftrag): die Arbeitstage
+ * dazwischen. Erster und letzter Tag zählen immer – auch an einem Samstag oder
+ * Feiertag ist dann ausdrücklich gearbeitet. Höchstens 60 Tage.
+ */
+export function termDays(from: string, to: string): string[] {
+	if (!isValidIsoDate(from)) return [];
+	const end = isValidIsoDate(to) && to >= from ? to : from;
+	const out: string[] = [];
+	for (let d = from; d <= end && out.length < 60; d = addDays(d, 1)) if (d === from || d === end || isWorkday(d)) out.push(d);
+	return out;
+}
+
 /** „07.10." bzw. „07.10. – 09.10.2026" für Listen */
 export function rangeLabel(from: string, to: string | null): string {
 	const [y, m, d] = from.split('-');

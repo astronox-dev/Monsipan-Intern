@@ -5,6 +5,7 @@ import {
 	addEntry,
 	addNote,
 	claimOrder,
+	syncWorkOrderPlan,
 	deleteEntry,
 	deleteNote,
 	moveEntry,
@@ -54,6 +55,8 @@ const id = (form: FormData) => Number(form.get('id'));
 async function assign(user: SessionUser, input: { orderId: number | null; partyId: number }): Promise<false | 'sichtbar' | 'ohne-arbeitsauftrag'> {
 	if (!input.orderId || !(await claimOrder(input.orderId, input.partyId))) return false;
 	notifyOrderAssigned(input.orderId, user.id);
+	// Hat der Arbeitsauftrag einen Termin, kommen dessen Tage bei der Partie gleich dazu
+	await syncWorkOrderPlan(input.orderId, user.id);
 	return (await hasWorkOrder(input.orderId)) ? 'sichtbar' : 'ohne-arbeitsauftrag';
 }
 

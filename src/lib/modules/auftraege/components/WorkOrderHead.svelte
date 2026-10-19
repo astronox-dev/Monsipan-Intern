@@ -8,8 +8,10 @@
 	interface Props {
 		form: Pick<WorkOrderForm, 'title' | 'site' | 'startDate' | 'endDate' | 'contacts' | 'attachments' | 'evaluation'>;
 		disabled?: boolean;
+		/** Unter dem Termin: ob und wann der Auftrag in der Wochenplanung steht */
+		planHint?: string;
 	}
-	let { form = $bindable(), disabled = false }: Props = $props();
+	let { form = $bindable(), disabled = false, planHint = '' }: Props = $props();
 </script>
 
 <section class="card p-4 lg:p-5">
@@ -32,6 +34,7 @@
 			<span class="field-label">Endtermin</span>
 			<input class="input" type="date" bind:value={form.endDate} />
 		</label>
+		{#if planHint}<p class="-mt-1 text-sm text-ink-2 sm:col-span-2">{planHint}</p>{/if}
 		{#each form.contacts as k, i (i)}
 			<label class="block">
 				<span class="field-label">Kontaktperson {i + 1}</span>

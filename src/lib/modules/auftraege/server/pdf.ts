@@ -392,7 +392,7 @@ export async function orderPdf(order: OrderDetail): Promise<Response> {
 	}
 
 	// Pläne und andere Unterlagen gibt es in der App – hier nur, welche dazugehören
-	const documents = [...(order.offerDocuments ?? []), ...order.documents];
+	const documents = [...(order.inquiryDocuments ?? []), ...(order.offerDocuments ?? []), ...order.documents];
 	if (documents.length) {
 		y += 5 * MM;
 		y = labeled(doc, 'Unterlagen in der App', documents.map((d) => d.title).join(', '), y);
