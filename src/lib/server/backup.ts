@@ -8,6 +8,7 @@ import { sweepParts } from './parts';
 import { notifyOverdueInvoices } from '$lib/modules/auftraege/server/invoices';
 import { checkArchive } from '$lib/modules/auftraege/server/signatur/verification';
 import { tidyPhotos } from '$lib/modules/tagesberichte/server/photos';
+import { backfillWorkOrderPlans } from '$lib/modules/planung/server/plan';
 import { tidyBelege } from '$lib/modules/planung/server/belege';
 
 export const BACKUP_DIR = path.join(DATA_DIR, 'backups');
@@ -152,6 +153,9 @@ export function scheduleMaintenance() {
 				const archive = await checkArchive();
 				if (archive.problems.length || !archive.audit.ok) console.warn(`[rechnungen] Archivprüfung: ${archive.problems.length} mit Fehlern, Protokoll ${archive.audit.ok ? 'in Ordnung' : 'unterbrochen'}`);
 			}
+			// Einmalig: Arbeitsaufträge mit Termin und Partie von vor dem Update in die Wochenplanung
+			const planned = await backfillWorkOrderPlans();
+			if (planned) console.info(`[planung] ${planned} Arbeitsaufträge mit Termin in die Wochenplanung eingetragen`);
 			// Überfällige Rechnungen melden – ab 7 Uhr, damit es nicht nachts summt
 			if (now.getHours() >= 7) await notifyOverdueInvoices();
 		} catch (err) {

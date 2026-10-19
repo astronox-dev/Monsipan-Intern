@@ -10,12 +10,13 @@ vi.mock('$env/dynamic/private', () => ({ env: { DATA_DIR: TMP, DEMO_DATA: 'false
 vi.mock('$app/environment', () => ({ dev: true, browser: false, building: false, version: 'test' }));
 
 const { db, client, ensureDatabase } = await import('$lib/server/db');
-const { orderPositions, orders, parties, planEntries } = await import('$lib/server/db/schema');
-const { listOrders, orderDetail } = await import('./orders');
+const { orderPositions, orders, parties, planEntries, workOrders } = await import('$lib/server/db/schema');
+const { deleteOrder, listOrders, orderDetail } = await import('./orders');
 const {
 	addBriefing,
 	closeBlocker,
 	createWorkOrder,
+	deleteWorkOrder,
 	getWorkOrder,
 	hasWorkOrder,
 	orderSource,
@@ -28,7 +29,7 @@ const {
 const { workOrderPdf } = await import('./work-order-pdf');
 const { foilPdf } = await import('./foil-pdf');
 const { closeMessage, creationForm, emptyForm, foilSignatures, guessLine, mergeForm, prefillFoil, readContent, sanitizeForm, maySign } = await import('../work-order');
-const { orderPlanDays, syncWorkOrderPlan } = await import('$lib/modules/planung/server/plan');
+const { backfillWorkOrderPlans, orderPlanDays, syncWorkOrderPlan } = await import('$lib/modules/planung/server/plan');
 const { today } = await import('$lib/modules/stunden/week');
 
 const SIG = 'M10 10L200 80L400 20';
@@ -324,6 +325,39 @@ describe('Termin in der Wochenplanung', () => {
 		await db.update(orders).set({ partyId: null }).where(eq(orders.id, o.id));
 		expect(await syncWorkOrderPlan(o.id, 1)).toBeNull();
 		expect((await orderPlanDays(o.id)).days).toEqual(['2026-10-28']);
+	});
+});
+
+describe('Termin in der Wochenplanung – nachtragen und aufräumen', () => {
+	it('bestehende Arbeitsaufträge mit Termin und Partie kommen einmalig hinein; gelöscht gehen ihre Einträge', async () => {
+		// Ein Arbeitsauftrag von „vor dem Update": Termin und Partie, aber nichts in der Planung
+		const [o] = await db.insert(orders).values({ number: '26060', title: 'Alt', partyId }).returning({ id: orders.id });
+		const content = readContent({ ...emptyForm(), startDate: '2026-11-03', endDate: '2026-11-04' });
+		await db.insert(workOrders).values({ orderId: o.id, content });
+		// Ein abgeschlossener bleibt draußen
+		const [done] = await db.insert(orders).values({ number: '26061', title: 'Fertig', partyId, status: 'abgeschlossen' }).returning({ id: orders.id });
+		await db.insert(workOrders).values({ orderId: done.id, content });
+
+		expect(await backfillWorkOrderPlans()).toBeGreaterThanOrEqual(1);
+		expect((await orderPlanDays(o.id)).days).toEqual(['2026-11-03', '2026-11-04']);
+		expect((await orderPlanDays(done.id)).days).toEqual([]);
+
+		// Einmal reicht – wer danach einen Eintrag löscht, bekommt ihn nicht wieder
+		await db.delete(planEntries).where(and(eq(planEntries.orderId, o.id), eq(planEntries.date, '2026-11-04')));
+		expect(await backfillWorkOrderPlans()).toBeNull();
+		expect((await orderPlanDays(o.id)).days).toEqual(['2026-11-03']);
+
+		// Arbeitsauftrag gelöscht: seine Einträge gehen, selbst eingetragene bleiben
+		await db.insert(planEntries).values({ date: '2026-11-05', partyId, orderId: o.id });
+		await deleteWorkOrder(o.id);
+		expect((await orderPlanDays(o.id)).days).toEqual(['2026-11-05']);
+
+		// Auftrag gelöscht: keine leeren Einträge vom Arbeitsauftrag bleiben zurück
+		const [p] = await db.insert(orders).values({ number: '26062', title: 'Weg', partyId }).returning({ id: orders.id });
+		expect(await createWorkOrder((await orderDetail(p.id))!, 1, sanitizeForm({ ...emptyForm(), startDate: '2026-11-10' }))).toBe(true);
+		expect((await orderPlanDays(p.id)).days).toEqual(['2026-11-10']);
+		await deleteOrder(p.id);
+		expect(await db.select().from(planEntries).where(and(eq(planEntries.date, '2026-11-10'), eq(planEntries.partyId, partyId))).all()).toEqual([]);
 	});
 });
 

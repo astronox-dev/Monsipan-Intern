@@ -11,7 +11,7 @@
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lte, max, ne, or, sql } from 'drizzle-orm';
 import { can } from '$lib/permissions';
 import { db } from '$lib/server/db';
-import { leaveRequests, orders, parties, planCrewDays, planCrewWeeks, planEntries, planNotes, sickReports, users, workOrders } from '$lib/server/db/schema';
+import { leaveRequests, orders, parties, planCrewDays, planCrewWeeks, planEntries, planNotes, settings, sickReports, users, workOrders } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
 import { notify } from '$lib/server/notifications';
 import { isoWeek, isValidIsoDate, mondayOf, weekDays } from '$lib/modules/stunden/week';
@@ -338,9 +338,10 @@ export async function syncWorkOrderPlan(orderId: number, userId: number | null):
 		db.select({ partyId: orders.partyId, partyName: parties.name }).from(orders).leftJoin(parties, eq(parties.id, orders.partyId)).where(eq(orders.id, orderId)).get(),
 		db.select({ content: workOrders.content }).from(workOrders).where(eq(workOrders.orderId, orderId)).get()
 	]);
-	if (!order || !work) return null;
-	const c = readContent(work.content);
-	const days = c.startDate ? termDays(c.startDate, c.endDate) : [];
+	if (!order) return null;
+	// Ohne Arbeitsauftrag (etwa gelöscht) gibt es keinen Termin – seine Einträge gehen
+	const c = work ? readContent(work.content) : null;
+	const days = c?.startDate ? termDays(c.startDate, c.endDate) : [];
 	const partyId = order.partyId;
 	// Was vom Arbeitsauftrag kam und nicht mehr passt, geht weg
 	const auto = await db
@@ -371,6 +372,34 @@ export async function syncWorkOrderPlan(orderId: number, userId: number | null):
 		await db.insert(planEntries).values({ date, partyId, orderId, text: '', sortOrder: (last?.n ?? -1) + 1, fromWorkOrder: true, createdBy: userId, updatedAt: new Date() });
 	}
 	return { partyName: order.partyName ?? '', days };
+}
+
+/** Offene Aufträge mit Arbeitsauftrag abgleichen (alle oder die genannten) – gibt zurück, wie viele jetzt eingeplant sind */
+export async function syncWorkOrderPlans(orderIds?: number[]): Promise<number> {
+	if (orderIds && !orderIds.length) return 0;
+	const rows = await db
+		.select({ id: orders.id })
+		.from(workOrders)
+		.innerJoin(orders, eq(orders.id, workOrders.orderId))
+		.where(and(ne(orders.status, 'abgeschlossen'), orderIds ? inArray(orders.id, orderIds) : undefined))
+		.all();
+	let planned = 0;
+	for (const r of rows) if (await syncWorkOrderPlan(r.id, null)) planned++;
+	return planned;
+}
+
+const BACKFILL_KEY = 'planung.arbeitsauftraege-nachgetragen';
+
+/**
+ * Einmalig: Arbeitsaufträge, die schon Termin und Partie hatten, bevor das von
+ * selbst in die Wochenplanung ging, kommen nachträglich hinein. Nur einmal –
+ * wer danach einen Eintrag in der Planung löscht, bekommt ihn nicht wieder.
+ */
+export async function backfillWorkOrderPlans(): Promise<number | null> {
+	if (await db.select({ key: settings.key }).from(settings).where(eq(settings.key, BACKFILL_KEY)).get()) return null;
+	const planned = await syncWorkOrderPlans();
+	await db.insert(settings).values({ key: BACKFILL_KEY, value: JSON.stringify(new Date().toISOString()) }).onConflictDoNothing();
+	return planned;
 }
 
 /** An welchen Tagen und bei welchen Partien ein Auftrag in der Wochenplanung steht */

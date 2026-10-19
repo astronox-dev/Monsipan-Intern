@@ -27,6 +27,7 @@ import { invoiceLabel, invoiceTotals, OFFER_STATUS_LABELS, offerState, parseAmou
 import { INVOICE_STAGE_LABELS } from '../signature';
 import { TRANSFER, type TransferKind, type TransferMapping } from '../transfer';
 import { audit } from './signatur/audit';
+import { syncWorkOrderPlans } from '$lib/modules/planung/server/plan';
 
 /* ------------------------------------------------------------ Werte */
 
@@ -584,6 +585,10 @@ export async function runImport(
 			}
 		}
 	});
+	// Aufträge mit neuer Partie: der Termin aus dem Arbeitsauftrag kommt in die Wochenplanung
+	if (kind === 'auftraege') {
+		await syncWorkOrderPlans(plan.items.filter((i) => i.action === 'aktualisieren' && i.existingId && 'partyId' in i.data).map((i) => i.existingId!));
+	}
 	return { plan, result };
 }
 

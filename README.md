@@ -620,7 +620,12 @@ nur, wer alle Aufträge sieht – die Partien nicht.
     Wochenplanung – gleich beim Erstellen. Ändert das Büro den Termin oder die Partie, ziehen
     diese Einträge mit; was jemand in der Planung selbst eingetragen oder verschoben hat, bleibt.
     Ohne Partie steht der Termin bei den nicht zugeteilten Aufträgen und kommt in die Planung,
-    sobald eine Partie dran ist. Unter dem Termin steht, ob und wann der Auftrag eingeplant ist.
+    sobald eine Partie dran ist – am Auftrag, per Ziehen in der Planung oder per Import. Unter
+    dem Termin steht, ob und wann der Auftrag eingeplant ist. Wird der Arbeitsauftrag oder der
+    Auftrag gelöscht, gehen diese Einträge mit. Arbeitsaufträge, die schon vor dieser Funktion
+    Termin und Partie hatten, trägt der Server nach dem Update einmalig nach (offene Aufträge;
+    im Log „[planung] … eingetragen“) – einmalig, damit ein danach gelöschter Eintrag nicht
+    wiederkommt.
   - **Vorbelegt**: BV, Ausführungsort, Ansprechpartner und Telefon, die Tage aus der
     Wochenplanung; Beilagen, Evaluierung und Rückseite wie beim zuletzt angelegten
     Arbeitsauftrag („Pläne“ nur, wenn welche hochgeladen werden); Art, RAL und MSK erkannt aus

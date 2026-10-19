@@ -12,7 +12,7 @@ import { and, asc, desc, eq, inArray, isNull, like, or, sql, type SQL } from 'dr
 import { alias } from 'drizzle-orm/sqlite-core';
 import { can } from '$lib/permissions';
 import { db } from '$lib/server/db';
-import { customers, offerPositions, offers, orderDocuments, orderPositions, orders, parties, users, workOrders, type OrderStatus } from '$lib/server/db/schema';
+import { customers, offerPositions, offers, orderDocuments, orderPositions, orders, parties, planEntries, users, workOrders, type OrderStatus } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
 import { storeDocument } from '$lib/server/documents';
 import { titleFromFileName } from '$lib/documents';
@@ -330,6 +330,8 @@ export async function deleteOrderDocument(orderId: number, documentId: number) {
  * ein Auftrag erstellen.
  */
 export async function deleteOrder(id: number) {
+	// Die Einträge vom Termin des Arbeitsauftrags gehen mit – sonst blieben leere Felder in der Planung
+	await db.delete(planEntries).where(and(eq(planEntries.orderId, id), eq(planEntries.fromWorkOrder, true)));
 	await db.delete(orders).where(eq(orders.id, id));
 }
 

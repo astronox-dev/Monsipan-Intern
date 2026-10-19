@@ -9,7 +9,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lte, or, sql
 import { alias } from 'drizzle-orm/sqlite-core';
 import { can } from '$lib/permissions';
 import { db } from '$lib/server/db';
-import { customers, offerPositions, offers, orders, users, type OfferStatus } from '$lib/server/db/schema';
+import { customers, offerPositions, offers, orders, planEntries, users, type OfferStatus } from '$lib/server/db/schema';
 import { col } from '$lib/server/db/sql';
 import { getSettings } from '$lib/server/settings';
 import type { SessionUser } from '$lib/server/auth';
@@ -416,7 +416,13 @@ export async function customerRequestChange(id: number, name: string, message: s
  */
 export async function deleteOffer(id: number, withOrder = false) {
 	await db.transaction(async (tx) => {
-		if (withOrder) await tx.delete(orders).where(eq(orders.offerId, id));
+		if (withOrder) {
+			// Die Einträge vom Termin des Arbeitsauftrags gehen mit dem Auftrag
+			await tx
+				.delete(planEntries)
+				.where(and(eq(planEntries.fromWorkOrder, true), inArray(planEntries.orderId, tx.select({ id: orders.id }).from(orders).where(eq(orders.offerId, id)))));
+			await tx.delete(orders).where(eq(orders.offerId, id));
+		}
 		await tx.delete(offers).where(eq(offers.id, id));
 	});
 }

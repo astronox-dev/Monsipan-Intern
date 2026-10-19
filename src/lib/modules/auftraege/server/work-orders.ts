@@ -241,6 +241,8 @@ export function removeBriefing(orderId: number, index: number, userId: number) {
 
 export async function deleteWorkOrder(orderId: number) {
 	await db.delete(workOrders).where(eq(workOrders.orderId, orderId));
+	// Was der Termin in die Wochenplanung gestellt hat, geht mit
+	await syncWorkOrderPlan(orderId, null);
 }
 
 /** Namen für die Unterweisung: die aktiven Leute der Partie des Auftrags */
