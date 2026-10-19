@@ -22,6 +22,7 @@ import {
 } from '$lib/modules/planung/server/plan';
 import { isValidIsoDate, mondayOf, today } from '$lib/modules/stunden/week';
 import { notifyOrderAssigned } from '$lib/modules/auftraege/server/notify';
+import { hasWorkOrder } from '$lib/modules/auftraege/server/work-orders';
 import type { SessionUser } from '$lib/server/auth';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -47,11 +48,15 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 const id = (form: FormData) => Number(form.get('id'));
 
-/** Ein noch nicht zugeteilter Auftrag geht an die Partie, bei der er eingeplant wird */
-async function assign(user: SessionUser, input: { orderId: number | null; partyId: number }): Promise<boolean> {
+/**
+ * Ein noch nicht zugeteilter Auftrag geht an die Partie, bei der er eingeplant
+ * wird. Zurück kommt, ob er zugeteilt wurde – und ob die Partie ihn schon sieht
+ * („sichtbar") oder erst, wenn es den Arbeitsauftrag gibt.
+ */
+async function assign(user: SessionUser, input: { orderId: number | null; partyId: number }): Promise<false | 'sichtbar' | 'ohne-arbeitsauftrag'> {
 	if (!input.orderId || !(await claimOrder(input.orderId, input.partyId))) return false;
 	notifyOrderAssigned(input.orderId, user.id);
-	return true;
+	return (await hasWorkOrder(input.orderId)) ? 'sichtbar' : 'ohne-arbeitsauftrag';
 }
 
 export const actions: Actions = {

@@ -366,7 +366,9 @@ angelegten.
 Drei Seiten unter **Planung** in der Seitenleiste.
 
 **Wochenplanung** (`/planung`) – wie der Zettel im Büro: je Partie eine Spalte (mit den
-Leuten darunter), je Tag eine Zeile, Montag bis Sonntag, Feiertage stehen beim Tag. In ein
+Leuten darunter), je Tag eine Zeile, Montag bis Sonntag, Feiertage stehen beim Tag. Die Seite
+nimmt die ganze Bildschirmbreite, die Partien teilen sich den Platz – seitlich gescrollt wird
+erst, wenn der Bildschirm zu schmal für alle ist. In ein
 Feld kommt ein **Auftrag** (die Aufträge der Partie stehen in der Auswahl oben) oder **freier
 Text** wie „Stbe 1“ oder „Leitschutz?“ – oder beides, dann ist der Text ein Zusatz. Beim
 Eintragen lassen sich **mehrere Tage** auf einmal ankreuzen; ein Eintrag lässt sich ändern,
@@ -401,9 +403,12 @@ was er auf der Seite sieht: die Partie nur ihre Spalte, ohne Notizen.
 - **An die Partien schicken:** Ist die Woche fertig, bekommt jede Partie mit Einträgen eine
   Benachrichtigung – statt bei jedem einzelnen Eintrag.
 - **Nicht zugeteilte Aufträge** unten: die offenen Aufträge ohne Partie, die ältesten zuerst.
-  **Einplanen** öffnet das Eintragen mit dem Auftrag – Partie und Tage wählen; die Partie
-  bekommt den Auftrag damit **zugeteilt** (und eine Benachrichtigung). Das gilt genauso, wenn
-  man einen nicht zugeteilten Auftrag über das Plus in einem Feld auswählt. Ein schon
+  Schneller geht es per **Ziehen**: das Schild mit Griff und Nummer auf ein Feld der
+  Wochenplanung ziehen – der Auftrag steht dann an diesem Tag bei dieser Partie. **Einplanen**
+  öffnet das Eintragen mit dem Auftrag – Partie und Tage wählen. Beide Male bekommt die Partie
+  den Auftrag **zugeteilt**; sehen (und Bescheid bekommen) tut sie ihn mit dem
+  Arbeitsauftrag. Das gilt genauso, wenn man einen nicht zugeteilten Auftrag über das Plus in
+  einem Feld auswählt. Ein schon
   zugeteilter Auftrag bleibt bei seiner Partie – plant man ihn woanders ein, hilft die andere
   Partie nur aus. Die Liste steht auch im PDF und im Ausdruck; die Partien sehen sie nicht.
 - **Notizen** unten: eine durchgehende Liste („noch einzuplanen“), unabhängig von der Woche.

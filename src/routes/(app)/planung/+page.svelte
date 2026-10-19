@@ -60,6 +60,11 @@
 	/* ------------------------------------------------ Ziehen und Ablegen */
 	type EntryDrag = { id: number; partyId: number; date: string };
 	type PersonDrag = { userId: number; name: string; weekParty: number; day?: string };
+	type OrderDrag = { id: number; number: string };
+
+	/** Die Partie sieht einen Auftrag erst mit seinem Arbeitsauftrag */
+	const assignedHint = (how: unknown) =>
+		how === 'sichtbar' ? 'Die Partie bekommt dazu eine Benachrichtigung.' : 'Die Partie sieht ihn, sobald es den Arbeitsauftrag gibt.';
 
 	/** Aktion ohne Formular abschicken, danach neu laden */
 	async function post(action: string, fields: Record<string, string | number | (string | number)[]>, ok?: string) {
@@ -69,14 +74,21 @@
 		const result = deserialize(await res.text());
 		if (result.type === 'failure') toast.error(String(result.data?.message ?? 'Das hat nicht geklappt.'));
 		else if (result.type === 'error') toast.error('Das hat nicht geklappt – bitte noch einmal versuchen.');
-		else if (result.type === 'success' && result.data?.assigned) toast.success('Auftrag ist jetzt dieser Partie zugeteilt', 'Die Partie bekommt dazu eine Benachrichtigung.');
+		else if (result.type === 'success' && result.data?.assigned) toast.success(ok ?? 'Auftrag ist jetzt dieser Partie zugeteilt', assignedHint(result.data.assigned));
 		else if (ok) toast.success(ok);
 		await invalidateAll();
 	}
 
-	/** Ins Feld: ein Eintrag (vor den Eintrag, auf dem er landet) oder eine Person für diesen Tag */
+	/**
+	 * Ins Feld: ein Eintrag (vor den Eintrag, auf dem er landet), eine Person
+	 * für diesen Tag oder ein nicht zugeteilter Auftrag – der wird an diesem Tag
+	 * eingeplant und der Partie zugeteilt.
+	 */
 	const dropOnCell = (partyId: number, day: string) => (item: DragItem, at: { target: Element }) => {
-		if (item.kind === 'entry') {
+		if (item.kind === 'order') {
+			const o = item.data as OrderDrag;
+			post('add', { partie: partyId, tage: day, auftrag: o.id, text: '' }, `Auftrag ${spacedNumber(o.number)}: ${dayName(day)} bei ${nameOfParty(partyId)}`);
+		} else if (item.kind === 'entry') {
 			const e = item.data as EntryDrag;
 			const before = (at.target.closest('[data-entry]') as HTMLElement | null)?.dataset.entry;
 			const beforeId = before ? Number(before) : null;
@@ -186,7 +198,7 @@
 			busy = false;
 			if (result.type === 'success') {
 				open = false;
-				if (result.data?.assigned) toast.success(`Auftrag ist jetzt bei ${name}`, 'Die Partie bekommt dazu eine Benachrichtigung.');
+				if (result.data?.assigned) toast.success(`Auftrag ist jetzt bei ${name}`, assignedHint(result.data.assigned));
 				else if (msg) toast.success(msg);
 			}
 			await update();
@@ -374,7 +386,7 @@
 							{@const off = away(p.id, day)}
 							{@const help = guests(p.id, day)}
 							{@const gone = elsewhere(p.id, day)}
-							<td class="group px-1.5 py-1.5" use:dropzone={{ accepts: ['entry', 'person'], onDrop: dropOnCell(p.id, day), disabled: !data.canEdit }}>
+							<td class="group px-1.5 py-1.5" use:dropzone={{ accepts: ['entry', 'person', 'order'], onDrop: dropOnCell(p.id, day), disabled: !data.canEdit }}>
 								<div class="flex min-h-10 flex-col gap-1">
 									{#each items as e (e.id)}{@render entryChip(e)}{/each}
 									{#if off.length}<div class="flex flex-wrap gap-1">{#each off as a, n (n)}{@render absence(a)}{/each}</div>{/if}
@@ -431,14 +443,29 @@
 	<section class="card mt-5 p-4 lg:p-5" aria-labelledby="h-unassigned">
 		<h2 id="h-unassigned" class="flex items-center gap-2 text-lg"><HardHat size={20} aria-hidden="true" />Nicht zugeteilte Aufträge</h2>
 		<p class="mt-1 text-sm text-ink-2">
-			Offene Aufträge ohne Partie.{data.canEdit ? ' Beim Einplanen bekommt die gewählte Partie den Auftrag zugeteilt.' : ''} Die Partien sehen diese Liste nicht.
+			Offene Aufträge ohne Partie.{data.canEdit
+				? ' Zum Einplanen am Griff in ein Feld der Wochenplanung ziehen (Partie und Tag) oder „Einplanen“ – die Partie bekommt den Auftrag dann zugeteilt.'
+				: ''} Die Partien sehen diese Liste nicht.
 		</p>
 		{#if data.unassigned.length}
 			<ul class="mt-3 divide-y divide-line rounded-xl border border-line">
 				{#each data.unassigned as o (o.id)}
 					{@const st = ORDER_STATUS_LABELS[o.status] ?? ORDER_STATUS_LABELS.erstellt}
 					<li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-						<span class="num w-16 shrink-0 font-display font-semibold">{spacedNumber(o.number)}</span>
+						{#if data.canEdit}
+							<!-- Zum Ziehen: Griff und Nummer – so sieht man beim Ziehen, welcher Auftrag es ist -->
+							<button
+								type="button"
+								class="order-pill num"
+								aria-label="Auftrag {spacedNumber(o.number)} in die Wochenplanung ziehen"
+								title="In ein Feld der Wochenplanung ziehen"
+								use:draggable={{ kind: 'order', data: { id: o.id, number: o.number } satisfies OrderDrag }}
+							>
+								<GripVertical size={14} class="text-ink-3" aria-hidden="true" />{spacedNumber(o.number)}
+							</button>
+						{:else}
+							<span class="num w-16 shrink-0 font-display font-semibold">{spacedNumber(o.number)}</span>
+						{/if}
 						<span class="min-w-[12rem] flex-1">
 							{#if data.canOpenOrders}
 								<a href="/auftraege/{o.id}" class="font-medium hover:underline">{o.location || o.title || 'Ohne Bezeichnung'}</a>
@@ -685,6 +712,23 @@
 		padding: 0.25rem 0.5rem;
 		line-height: 1.25;
 		font-size: 0.8125rem;
+	}
+	.order-pill {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: 0.25rem;
+		min-width: 5.5rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--c-line);
+		background: var(--c-surface-2);
+		padding: 0.25rem 0.5rem 0.25rem 0.25rem;
+		font-family: var(--font-display);
+		font-weight: 600;
+		cursor: grab;
+	}
+	.order-pill:hover {
+		border-color: var(--c-line-strong);
 	}
 	button.chip:hover,
 	a.chip:hover {
