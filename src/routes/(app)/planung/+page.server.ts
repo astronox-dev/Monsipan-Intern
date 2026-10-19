@@ -32,6 +32,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const week = await planWeek(user, weekStart);
 	const canEdit = can(user.role, 'planung.bearbeiten');
 	return {
+		// Viele Partien nebeneinander – die Seite nimmt die ganze Bildschirmbreite
+		wide: true,
 		weekStart,
 		today: today(),
 		...week,

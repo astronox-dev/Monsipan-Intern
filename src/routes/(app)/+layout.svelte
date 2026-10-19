@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { invalidate } from '$app/navigation';
+	import { page } from '$app/state';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import BottomNav from '$lib/components/BottomNav.svelte';
@@ -102,7 +103,7 @@
 	<main
 		id="main"
 		tabindex="-1"
-		class="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-28 outline-none sm:px-6 lg:px-8 lg:pt-2 lg:pb-12 print:max-w-none print:px-0 print:pt-0 print:pb-0"
+		class="mx-auto w-full {page.data.wide ? 'max-w-none' : 'max-w-[1440px]'} px-4 pt-4 pb-28 outline-none sm:px-6 lg:px-8 lg:pt-2 lg:pb-12 print:max-w-none print:px-0 print:pt-0 print:pb-0"
 		style="view-transition-name: main"
 	>
 		{@render children()}

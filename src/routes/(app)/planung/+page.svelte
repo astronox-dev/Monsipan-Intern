@@ -315,10 +315,11 @@
 	</ul>
 {:else}
 	<div class="card relative overflow-x-auto" data-dnd-scroll>
-		<table class="plan w-full border-collapse text-sm" style="min-width: {6 + data.parties.length * 10}rem">
+		<!-- Feste Spalten: alle Partien teilen sich die Breite; erst wenn es zu schmal wird, wird gescrollt -->
+		<table class="plan w-full table-fixed border-collapse text-sm" style="min-width: {4.5 + data.parties.length * 7.25}rem">
 			<thead>
 				<tr class="border-b border-line">
-					<th scope="col" class="sticky left-0 z-10 w-24 bg-surface px-3 py-2 text-left align-bottom">KW {kw.week}</th>
+					<th scope="col" class="sticky left-0 z-10 w-[4.5rem] bg-surface px-2.5 py-2 text-left align-bottom">KW {kw.week}</th>
 					{#each data.parties as p (p.id)}
 						<th scope="col" class="head px-2 py-2 text-left align-bottom" use:dropzone={{ accepts: ['person', 'party'], onDrop: dropOnHead(p.id), disabled: !data.canEdit }}>
 							<span class="flex items-center gap-1">
@@ -334,7 +335,7 @@
 										<GripVertical size={14} aria-hidden="true" />
 									</button>
 								{/if}
-								<span class="font-semibold">{p.name}</span>
+								<span class="min-w-0 font-semibold break-words">{p.name}</span>
 							</span>
 							{#if p.members.length}
 								<span class="mt-1 flex flex-wrap gap-1 font-normal">
@@ -363,7 +364,7 @@
 				{#each data.days as day, i (day)}
 					{@const holiday = holidayName(day)}
 					<tr class="border-b border-line align-top {day === data.today ? 'today' : ''} {i >= 5 ? 'weekend' : ''}">
-						<th scope="row" class="sticky left-0 z-10 bg-surface px-3 py-2 text-left">
+						<th scope="row" class="sticky left-0 z-10 bg-surface px-2.5 py-2 text-left">
 							<span class="block font-display text-base font-semibold">{DAY[i]}</span>
 							<span class="num block text-[0.75rem] font-normal text-ink-2">{short(day)}</span>
 							{#if holiday}<span class="block text-[0.6875rem] font-normal text-danger">{holiday}</span>{/if}
@@ -675,6 +676,9 @@
 		display: block;
 		width: 100%;
 		text-align: left;
+		/* Schmale Spalten: lange Wörter (Straßennamen, Nummern) umbrechen statt hinausragen */
+		overflow-wrap: anywhere;
+		hyphens: auto;
 		border-radius: 0.5rem;
 		border: 1px solid var(--c-line);
 		background: var(--c-surface-2);
