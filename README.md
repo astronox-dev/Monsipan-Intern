@@ -463,6 +463,12 @@ die E-Mail daneben. Ist das Angebot angenommen, ist die Anfrage **erledigt** und
 aus der Liste der offenen. Kommt kein Angebot zustande, legt man sie mit **Als erledigt
 ablegen** ab. Erkannt wird nur im Browser – die E-Mail geht an keinen fremden Dienst.
 
+**PDFs und Fotos an der Anfrage:** Unter der Anfrage lassen sich **PDFs** (Pläne,
+Leistungsverzeichnis, Ausschreibung – auch große, in Teilen hochgeladen) und **Fotos** anhängen
+(Recht „Anfragen bearbeiten“); Fotos am Handy direkt mit der Kamera, verkleinert am Gerät, wie
+beim Tagesbericht. Im Angebot aus dieser Anfrage stehen sie bei der E-Mail der Anfrage zum
+Ansehen – geändert werden sie an der Anfrage. Höchstens 60 Fotos je Anfrage.
+
 **Stand einer Anfrage:** **Neu** → **In Arbeit** → der Stand ihres Angebots (Ausstehend,
 Änderung gewünscht) → erledigt (Angenommen oder Abgelegt). „In Arbeit“ heißt: Jemand hat sie
 mit **In Arbeit nehmen** übernommen, solange es noch kein Angebot gibt (etwa für Rückfragen
@@ -579,6 +585,8 @@ nur, wer alle Aufträge sieht – die Partien nicht.
   (mit „vom Angebot“, im Auftrags-PDF bei den Unterlagen) und die Partie bekommt Bescheid; mit
   **Nur Büro** bleibt sie beim Angebot – etwa ein Leistungsverzeichnis mit Preisen. Beim
   Hochladen gilt das Häkchen **für die Partie**; umschalten lässt es sich jederzeit.
+- **Fotos am Angebot:** Unter den Unterlagen – etwa vom Besichtigungstermin. Nur intern: nicht
+  im Angebots-PDF und nicht beim Kunden (Recht „Angebote bearbeiten“, höchstens 60 Fotos).
 - **Tagesberichte zum Auftrag:** Beim Anlegen oder im Bericht lässt sich ein offener Auftrag
   wählen – die Baustelle wird dann aus dem Ausführungsort übernommen (oder dem BV, wenn keiner
   eingetragen ist). Im Auftrag stehen alle seine Tagesberichte, **Neuer Tagesbericht** legt
@@ -1196,7 +1204,7 @@ testet ein Admin unter **Einstellungen → Test senden**.
 
 **Komplettsicherung:** **Herunterladen** ergibt eine ZIP-Datei mit allem – der Datenbank
 dieser Sicherung und allen Dateien: PDFs an Artikeln und Pläne an Aufträgen
-(`/data/dokumente`), Fotos der Tagesberichte (`/data/fotos`), Krankmeldungen
+(`/data/dokumente`), Fotos der Tagesberichte, Anfragen und Angebote (`/data/fotos`), Krankmeldungen
 (`/data/krankmeldungen`), Briefkopf (`/data/briefkopf`), das Rechnungsarchiv
 (`/data/rechnungen`) und der Signaturschlüssel (`/data/signatur`; liegt er per
 `SIGNATUR_DATEI` woanders, nicht). Dazu `monsipan-sicherung.json` mit Zeitpunkt und
@@ -1334,8 +1342,9 @@ Server das ganze Volume mitnehmen oder die ZIP-Datei aus Einstellungen → Daten
 herunterladen und dort wieder hochladen – sie enthält Datenbank und alle Dateien. Eine
 reine `.db`-Datei enthält die PDFs nicht.
 
-Die Fotos der Tagesberichte liegen genauso unter `/data/fotos/<sha256>.jpg` (Foto und Vorschau)
-und bleiben nach dem Löschen ebenfalls 90 Tage liegen.
+Die Fotos der Tagesberichte, Anfragen und Angebote liegen genauso unter
+`/data/fotos/<sha256>.jpg` (Foto und Vorschau) und bleiben nach dem Löschen ebenfalls 90 Tage
+liegen; die PDFs der Anfragen liegen bei den anderen unter `/data/dokumente`.
 
 ## App fürs Handy
 

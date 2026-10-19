@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { DATA_DIR, db } from '$lib/server/db';
-import { dailyReportPhotos, users } from '$lib/server/db/schema';
+import { dailyReportPhotos, recordPhotos, users } from '$lib/server/db/schema';
 import { tidyFolder } from '$lib/server/documents';
 import { jpegSize, MAX_PHOTO_BYTES, MAX_PHOTOS, MAX_THUMB_BYTES, PhotoError } from '../photos';
 
@@ -20,8 +20,8 @@ const SHA_FILE = /^([0-9a-f]{64})\.jpg$/;
 
 export const photoFile = (sha256: string) => path.join(PHOTO_DIR, `${sha256}.jpg`);
 
-/** Datei prüfen und unter ihrer Prüfsumme ablegen */
-async function store(upload: File, max: number) {
+/** Datei prüfen und unter ihrer Prüfsumme ablegen – auch für die Fotos an Anfragen und Angeboten */
+export async function storePhoto(upload: File, max: number) {
 	if (upload.size === 0) throw new PhotoError('Das Bild ist leer.');
 	if (upload.size > max) throw new PhotoError(`Das Bild ist zu groß – erlaubt sind ${Math.round(max / 1024 / 1024)} MB.`);
 	const buf = Buffer.from(await upload.arrayBuffer());
@@ -78,8 +78,8 @@ export async function photosWithFiles(reportId: number, only?: number) {
 export async function addPhoto(reportId: number, userId: number, photo: File, thumb: File): Promise<ReportPhoto> {
 	const [{ n }] = await db.select({ n: count() }).from(dailyReportPhotos).where(eq(dailyReportPhotos.reportId, reportId)).all();
 	if (n >= MAX_PHOTOS) throw new PhotoError(`Ein Bericht kann höchstens ${MAX_PHOTOS} Fotos haben.`);
-	const full = await store(photo, MAX_PHOTO_BYTES);
-	const small = await store(thumb, MAX_THUMB_BYTES);
+	const full = await storePhoto(photo, MAX_PHOTO_BYTES);
+	const small = await storePhoto(thumb, MAX_THUMB_BYTES);
 	const row = await db
 		.insert(dailyReportPhotos)
 		.values({
@@ -114,8 +114,11 @@ export async function deletePhoto(reportId: number, photoId: number) {
 	await db.delete(dailyReportPhotos).where(and(eq(dailyReportPhotos.id, photoId), eq(dailyReportPhotos.reportId, reportId)));
 }
 
-/** Einmal am Tag: benutzte Bilder frisch halten, lange unbenutzte löschen */
+/** Einmal am Tag: benutzte Bilder frisch halten, lange unbenutzte löschen – auch die an Anfragen und Angeboten */
 export async function tidyPhotos(now = new Date()): Promise<{ removed: number }> {
-	const rows = await db.select({ a: dailyReportPhotos.sha256, b: dailyReportPhotos.thumbSha256 }).from(dailyReportPhotos).all();
-	return tidyFolder(PHOTO_DIR, SHA_FILE, new Set(rows.flatMap((r) => [r.a, r.b])), now);
+	const [reports, records] = await Promise.all([
+		db.select({ a: dailyReportPhotos.sha256, b: dailyReportPhotos.thumbSha256 }).from(dailyReportPhotos).all(),
+		db.select({ a: recordPhotos.sha256, b: recordPhotos.thumbSha256 }).from(recordPhotos).all()
+	]);
+	return tidyFolder(PHOTO_DIR, SHA_FILE, new Set([...reports, ...records].flatMap((r) => [r.a, r.b])), now);
 }

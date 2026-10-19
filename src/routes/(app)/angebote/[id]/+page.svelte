@@ -26,6 +26,7 @@
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import CustomerFields from '$lib/modules/auftraege/components/CustomerFields.svelte';
+	import PhotoGallery from '$lib/components/PhotoGallery.svelte';
 	import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '$lib/modules/stunden/signature';
 	import {
 		amountInput,
@@ -202,6 +203,32 @@
 		</p>
 		{#if data.inquiry.body}
 			<p class="mt-3 max-h-80 overflow-y-auto rounded-xl bg-surface-2 px-4 py-3 font-mono text-[0.8125rem] leading-relaxed whitespace-pre-wrap">{data.inquiry.body}</p>
+		{/if}
+		{#if data.inquiry.documents.length || data.inquiry.photos.length}
+			<!-- Was zur Anfrage hochgeladen wurde – zum Ansehen, geändert wird es an der Anfrage -->
+			<div class="mt-3 flex flex-wrap items-start gap-2">
+				{#each data.inquiry.documents as d (d.id)}
+					<a
+						href="/anfragen/{data.inquiry.id}/unterlagen/{d.id}"
+						class="flex max-w-full items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm hover:bg-surface-2"
+					>
+						<FileText size={16} class="shrink-0 text-ink-3" aria-hidden="true" />
+						<span class="truncate font-medium">{d.title}</span>
+						<span class="num shrink-0 text-ink-3">{fileSizeLabel(d.size)}</span>
+					</a>
+				{/each}
+				{#each data.inquiry.photos as p, i (p.id)}
+					<a
+						href="/anfragen/{data.inquiry.id}/fotos/{p.id}"
+						target="_blank"
+						rel="noopener"
+						class="block size-16 overflow-hidden rounded-xl border border-line bg-surface-2"
+						aria-label="Foto {i + 1} der Anfrage öffnen"
+					>
+						<img src="/anfragen/{data.inquiry.id}/fotos/{p.id}?vorschau" alt="" loading="lazy" class="size-full object-cover" />
+					</a>
+				{/each}
+			</div>
 		{/if}
 	</details>
 {/if}
@@ -572,6 +599,14 @@
 		<p class="mt-2 text-sm text-ink-3">Noch keine Unterlagen.</p>
 	{/if}
 </section>
+
+<PhotoGallery
+	base="/angebote/{offer.id}/fotos"
+	photos={data.photos}
+	editable={data.canManageDocuments}
+	hint="Nur intern – Fotos stehen nicht im Angebot und nicht beim Kunden."
+	empty="Noch keine Fotos – z. B. vom Besichtigungstermin."
+/>
 
 <Dialog open={!!removeDoc} onclose={() => (removeDoc = null)} title="Unterlage entfernen?">
 	{#if removeDoc}

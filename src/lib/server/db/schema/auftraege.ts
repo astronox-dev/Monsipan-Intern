@@ -221,6 +221,46 @@ export const offerDocuments = sqliteTable(
 	(t) => [index('offer_documents_offer_idx').on(t.offerId)]
 );
 
+/** PDFs an der Anfrage (Pläne, Leistungsverzeichnis des Kunden …) – abgelegt wie die PDFs am Artikel */
+export const inquiryDocuments = sqliteTable(
+	'inquiry_documents',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		inquiryId: integer('inquiry_id')
+			.notNull()
+			.references(() => inquiries.id, { onDelete: 'cascade' }),
+		title: text('title').notNull(),
+		fileName: text('file_name').notNull(),
+		sha256: text('sha256').notNull(),
+		size: integer('size').notNull(),
+		uploadedBy: integer('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
+		createdAt: createdAt()
+	},
+	(t) => [index('inquiry_documents_inquiry_idx').on(t.inquiryId)]
+);
+
+/**
+ * Fotos an Anfrage oder Angebot – genau eines von beiden ist gesetzt. Die
+ * Dateien liegen wie die Fotos der Tagesberichte unter /data/fotos (Foto und
+ * Vorschau je als <sha256>.jpg).
+ */
+export const recordPhotos = sqliteTable(
+	'record_photos',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		inquiryId: integer('inquiry_id').references(() => inquiries.id, { onDelete: 'cascade' }),
+		offerId: integer('offer_id').references(() => offers.id, { onDelete: 'cascade' }),
+		sha256: text('sha256').notNull(),
+		thumbSha256: text('thumb_sha256').notNull(),
+		width: integer('width').notNull(),
+		height: integer('height').notNull(),
+		size: integer('size').notNull(),
+		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+		createdAt: createdAt()
+	},
+	(t) => [index('record_photos_inquiry_idx').on(t.inquiryId), index('record_photos_offer_idx').on(t.offerId)]
+);
+
 /**
  * Arbeitsauftrag nach dem Vordruck FO 0814 – je Auftrag höchstens einer. Der
  * Inhalt (Kopf, Leistungen, Checklisten, Unterschriften …) steht als JSON da,

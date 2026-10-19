@@ -15,6 +15,8 @@ import {
 } from '$lib/modules/auftraege/server/inquiries';
 import { numberTaken, suggestNumbers } from '$lib/modules/auftraege/server/offers';
 import { isValidIsoDate, today } from '$lib/modules/stunden/week';
+import { DocumentError, storeDocument, takeUploads } from '$lib/server/documents';
+import { addInquiryDocuments, deleteInquiryDocument, listInquiryDocuments, listRecordPhotos } from '$lib/modules/auftraege/server/attachments';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -36,11 +38,44 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		canSeeOffer: can(user.role, 'angebote.sehen'),
 		canAddCustomer: canEdit && can(user.role, 'kunden.erstellen'),
 		customers: canEdit || canCreateOffer ? (await listCustomers()).map((c) => ({ id: c.id, name: c.name, city: c.city })) : [],
-		suggestion: canCreateOffer ? { ...(await suggestNumbers()), date: today() } : null
+		suggestion: canCreateOffer ? { ...(await suggestNumbers()), date: today() } : null,
+		// PDFs und Fotos zur Anfrage – z. B. Pläne oder Bilder der Baustelle vom Kunden
+		documents: await listInquiryDocuments(inquiry.id),
+		photos: await listRecordPhotos({ inquiryId: inquiry.id })
 	};
 };
 
 export const actions: Actions = {
+	/** PDFs – der Browser lädt sie vorher in Teilen hoch und schickt nur die Kennungen */
+	docUpload: async ({ params, request, locals }) => {
+		const { user, inquiry } = await open(Number(params.id), locals);
+		if (!can(user.role, 'anfragen.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
+		const form = await request.formData();
+		let files: { name: string; sha256: string; size: number }[];
+		try {
+			files = takeUploads(user.id, form.getAll('uploads').map(String));
+			// Ohne JavaScript kommen die Dateien selbst
+			for (const file of form.getAll('dateien').filter((f): f is File => f instanceof File && f.size > 0)) {
+				files.push({ name: file.name, ...(await storeDocument(file, null)) });
+			}
+		} catch (err) {
+			if (err instanceof DocumentError) return fail(400, { docError: err.message });
+			throw err;
+		}
+		if (!files.length) return fail(400, { docError: 'Bitte eine oder mehrere PDF-Dateien auswählen.' });
+		await addInquiryDocuments(inquiry.id, files, user.id);
+		return { added: files.length };
+	},
+
+	docDelete: async ({ params, request, locals }) => {
+		const { user, inquiry } = await open(Number(params.id), locals);
+		if (!can(user.role, 'anfragen.bearbeiten')) return fail(403, { docError: 'Dafür fehlt dir die Berechtigung.' });
+		const id = Number((await request.formData()).get('dokument'));
+		if (!Number.isInteger(id)) return fail(400, { docError: 'Unterlage fehlt.' });
+		await deleteInquiryDocument(inquiry.id, id);
+		return { documentRemoved: true };
+	},
+
 	save: async ({ params, request, locals }) => {
 		const { user, inquiry } = await open(Number(params.id), locals);
 		if (!can(user.role, 'anfragen.bearbeiten')) return fail(403, { message: 'Dafür fehlt dir die Berechtigung.' });

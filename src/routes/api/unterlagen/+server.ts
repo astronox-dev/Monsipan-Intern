@@ -8,11 +8,12 @@ import type { RequestHandler } from './$types';
 /**
  * Pläne in Teilen hochladen (siehe `$lib/upload`): POST ?id=…&ab=<Byte> mit dem
  * Teil als Inhalt, zum Schluss POST ?id=…&fertig&name=<Dateiname>. Angehängt
- * wird danach im Formular des Auftrags, des Angebots bzw. beim Erstellen des Auftrags.
+ * wird danach im Formular des Auftrags, des Angebots, der Anfrage bzw. beim Erstellen des Auftrags.
  */
 export const POST: RequestHandler = async ({ url, request, locals }) => {
 	const user = requireUser(locals);
-	if (!can(user.role, 'auftraege.bearbeiten') && !can(user.role, 'auftraege.erstellen') && !can(user.role, 'angebote.bearbeiten')) {
+	const allowed = ['auftraege.bearbeiten', 'auftraege.erstellen', 'angebote.bearbeiten', 'anfragen.bearbeiten'] as const;
+	if (!allowed.some((p) => can(user.role, p))) {
 		error(403, 'Dafür fehlt dir die Berechtigung.');
 	}
 	const id = url.searchParams.get('id') ?? '';

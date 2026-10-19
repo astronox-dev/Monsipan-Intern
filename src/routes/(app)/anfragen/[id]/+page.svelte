@@ -17,6 +17,8 @@
 	import Undo from '@lucide/svelte/icons/undo-2';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import CustomerFields from '$lib/modules/auftraege/components/CustomerFields.svelte';
+	import PdfAttachments from '$lib/modules/auftraege/components/PdfAttachments.svelte';
+	import PhotoGallery from '$lib/components/PhotoGallery.svelte';
 	import { date as dateLabel, dateTime } from '$lib/format';
 	import { MAX_INQUIRY_TEXT } from '$lib/modules/auftraege/inquiry';
 	import { OFFER_STATUS_LABELS, spacedNumber } from '$lib/modules/auftraege/offer';
@@ -190,6 +192,24 @@
 		</p>
 	</section>
 </form>
+
+<div class="grid gap-x-4 xl:grid-cols-2">
+	<PdfAttachments
+		documents={data.documents}
+		hrefBase="/anfragen/{inquiry.id}/unterlagen"
+		canManage={data.canEdit}
+		title="PDFs"
+		hint="Pläne, Leistungsverzeichnis oder Ausschreibung zur Anfrage."
+		message={form && 'docError' in form ? String(form.docError ?? '') : ''}
+	/>
+	<PhotoGallery
+		base="/anfragen/{inquiry.id}/fotos"
+		photos={data.photos}
+		editable={data.canEdit}
+		hint="Bilder der Baustelle – auch direkt mit der Kamera. Am Angebot aus dieser Anfrage stehen sie ebenfalls."
+		empty="Noch keine Fotos – z. B. vom Besichtigungstermin."
+	/>
+</div>
 
 <div class="mt-4 flex flex-wrap gap-2">
 	{#if data.canEdit && inquiry.offerStatus !== 'angenommen'}

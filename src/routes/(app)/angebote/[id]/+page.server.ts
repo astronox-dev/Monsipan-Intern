@@ -28,6 +28,7 @@ import { parseAmount } from '$lib/modules/auftraege/offer';
 import { notifyOffer, notifyOrderDocuments } from '$lib/modules/auftraege/server/notify';
 import { addOfferDocuments, deleteOfferDocument, getOfferDocument, listOfferDocuments, setOfferDocumentForCrew } from '$lib/modules/auftraege/server/offer-documents';
 import { titleFromFileName } from '$lib/documents';
+import { listInquiryDocuments, listRecordPhotos } from '$lib/modules/auftraege/server/attachments';
 import { unitOptions } from '$lib/server/options';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -36,6 +37,12 @@ async function open(id: number, locals: App.Locals) {
 	const offer = await offerDetail(id);
 	if (!offer) error(404, 'Angebot nicht gefunden');
 	return { user, offer };
+}
+
+async function inquiryWithFiles(offerId: number) {
+	const inquiry = await inquiryForOffer(offerId);
+	if (!inquiry) return null;
+	return { ...inquiry, documents: await listInquiryDocuments(inquiry.id), photos: await listRecordPhotos({ inquiryId: inquiry.id }) };
 }
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
@@ -63,8 +70,9 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		documents: await listOfferDocuments(offer.id),
 		canManageDocuments: can(user.role, 'angebote.bearbeiten'),
 		mailConfigured: isMailConfigured(),
-		// Die E-Mail der Anfrage, aus der das Angebot entstand
-		inquiry: can(user.role, 'anfragen.sehen') ? ((await inquiryForOffer(offer.id)) ?? null) : null,
+		photos: await listRecordPhotos({ offerId: offer.id }),
+		// Die E-Mail der Anfrage, aus der das Angebot entstand – samt ihren PDFs und Fotos
+		inquiry: can(user.role, 'anfragen.sehen') ? await inquiryWithFiles(offer.id) : null,
 		customerUrl: canLink && offer.customerToken ? `${url.origin}/angebot/${offer.customerToken}` : null
 	};
 };
