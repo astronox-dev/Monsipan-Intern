@@ -160,6 +160,12 @@ export const DEFAULT_PERMISSIONS = {
 	'krankenstand.melden': ['admin', 'geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer', 'arbeiter'],
 	'krankenstand.bearbeiten': BUERO,
 
+	// Ablage: Richtlinien & Vorschriften – lesen alle, pflegen das Büro
+	'richtlinien.sehen': ALL,
+	'richtlinien.erstellen': BUERO,
+	'richtlinien.bearbeiten': BUERO,
+	'richtlinien.loeschen': BUERO,
+
 	// Verwaltung
 	'stammdaten.sehen': BUERO,
 	'stammdaten.erstellen': BUERO,
@@ -385,6 +391,16 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 		create: { key: 'krankenstand.melden', label: 'Melden', hint: 'Für sich – wer die Partie bzw. alle sieht, auch für diese' },
 		edit: { all: 'krankenstand.bearbeiten', hint: 'Ende, Belege, löschen' },
 		implies: { 'krankenstand.melden': 'krankenstand.eigene.sehen', 'krankenstand.bearbeiten': 'krankenstand.alle.sehen' }
+	},
+	{
+		key: 'richtlinien',
+		title: 'Richtlinien & Vorschriften',
+		section: 'Ablage',
+		hint: 'PDFs in Ordnern',
+		view: { all: 'richtlinien.sehen' },
+		create: { key: 'richtlinien.erstellen', label: 'Hochladen', hint: 'PDFs hochladen und Ordner anlegen' },
+		edit: { all: 'richtlinien.bearbeiten', hint: 'Umbenennen und verschieben' },
+		remove: { all: 'richtlinien.loeschen', hint: 'PDFs und Ordner samt Inhalt' }
 	},
 	{
 		key: 'stammdaten',

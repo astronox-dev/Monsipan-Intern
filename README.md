@@ -13,6 +13,7 @@ Oberfläche, auf dem Handy wie am PC. Die übrigen Bereiche kommen nach und nach
 | Lagermanagement | fertig – Bestand, Buchen, Inventur, Bewegungen, Bestellliste, Berichte, Artikel |
 | Benutzer | fertig – Zugänge, Gruppen, Berechtigungen |
 | Administration | fertig – Stammdaten, Benachrichtigungen (Glocke, Push, Info-Mail), Import und Export, Einstellungen, Sicherungen |
+| Ablage: Richtlinien & Vorschriften | fertig – PDFs in Ordnern wie in einem Dateibrowser, für alle zum Nachlesen |
 | Partien | geplant |
 | Bestellungen, Dokumente, Auswertungen | geplant |
 
@@ -27,7 +28,8 @@ Jeder sieht nur, was er auch öffnen darf – ein Partieführer etwa die Aufträ
 seiner Partie, keine Preise. Jeder Punkt führt in die passende, schon gefilterte Liste.
 
 **Suche oben** (Strg K, am Handy die Lupe): durchsucht das ganze Portal – Aufträge, Angebote,
-Rechnungen, Tagesberichte, Anfragen (auch erledigte), Kunden, Artikel, Benutzer und die Seiten
+Rechnungen, Tagesberichte, Anfragen (auch erledigte), Kunden, Artikel, Richtlinien & Vorschriften
+(Ordner und PDFs), Benutzer und die Seiten
 selbst („Wochenplanung“, „Einstellungen“ …). Je Bereich die ersten fünf Treffer mit Stand, dazu
 **Alle Treffer** in der gefilterten Liste; Pfeiltasten und Enter öffnen. Jeder sieht nur, was er
 auch öffnen darf: Bereiche ohne Recht bleiben ganz draußen, und gesucht wird mit denselben Abfragen
@@ -76,6 +78,7 @@ Inventur-Buchung festgehalten, auch wenn sie stimmt.
 2. [Stundenzettel](#stundenzettel)
 3. [Tagesberichte](#tagesberichte)
 4. [Auftragsmanagement](#auftragsmanagement)
+4. [Richtlinien & Vorschriften](#richtlinien--vorschriften)
 5. [Benachrichtigungen](#benachrichtigungen)
 5. [Lokale Entwicklung](#lokale-entwicklung)
 3. [Betrieb auf dem Server](#betrieb-auf-dem-server)
@@ -100,6 +103,7 @@ Administration unter `/verwaltung/…`:
 | Stundenzettel | `/stundenzettel` |
 | Tagesberichte | `/tagesberichte` |
 | Wochenplanung, Urlaub, Krankenstand | `/planung` (`?woche=JJJJ-MM-TT`), `/urlaub`, `/krankenstand` |
+| Richtlinien & Vorschriften | `/richtlinien` (`?ordner=<id>`, `?suche=…`), ein PDF unter `/richtlinien/<id>` |
 | Tagesbericht für den Kunden (ohne Anmeldung) | `/bericht/<link>` |
 | Anfragen, Angebote, Aufträge, Rechnungen, Kunden | `/anfragen`, `/angebote`, `/auftraege`, `/rechnungen`, `/kunden` |
 | Summenblatt eines Auftrags bzw. einer Rechnung | `/auftraege/<id>/summenblatt`, `/rechnungen/<id>/summenblatt` |
@@ -913,6 +917,31 @@ regelmäßige Nachstempeln selbst ist noch nicht eingebaut. Wird eine ältere Si
 eingespielt, fehlen danach die später ausgestellten Rechnungen in der Datenbank – ihre
 Dateien bleiben im Archiv, der Stand davor steckt in der „-vor-restore“-Sicherung.
 
+## Richtlinien & Vorschriften
+
+Unter **Ablage → Richtlinien & Vorschriften** (`/richtlinien`) liegen Vorschriften, Normen,
+Betriebsanweisungen und Merkblätter als PDF – in Ordnern, wie in einem Dateibrowser.
+
+- **Lesen** dürfen von Haus aus alle, auch die Partien am Handy. Ein PDF öffnet sich in der
+  Ansicht des Portals, mit **Herunterladen** und **Im Browser öffnen**.
+- **Ordner:** Antippen öffnet ihn, oben steht der Weg zurück (Alle › Arbeitssicherheit › …).
+  Ordner lassen sich beliebig schachteln; im selben Ordner gibt es jeden Namen nur einmal. Bei
+  jedem Ordner steht, wie viel samt Unterordnern darin liegt.
+- **Hochladen:** **PDF hochladen** oder die Dateien einfach auf die Seite ziehen. Vor dem
+  Hochladen bekommt jedes PDF seinen **Namen** – vorgeschlagen aus dem Dateinamen, änderbar.
+  Auch große Dateien gehen (in Teilen hochgeladen); was keine PDF ist, bleibt weg. Neue Ordner
+  und PDFs landen im Ordner, der gerade offen ist.
+- **⋯ an jedem Eintrag:** umbenennen, verschieben (Auswahl aller Ordner) und löschen – einen
+  Ordner samt allem, was darin liegt, nach Rückfrage. Am Computer lassen sich Ordner und PDFs
+  auch auf einen Ordner oder auf den Weg oben **ziehen**.
+- **Suche** über alle Ordner (Namen und Dateinamen), jeder Treffer mit seinem Ort; die Suche
+  oben im Portal findet Ordner und PDFs ebenso.
+- **Rechte** unter Verwaltung → Berechtigungen, Abschnitt „Ablage“: Sehen, Hochladen (auch Ordner
+  anlegen), Bearbeiten (umbenennen, verschieben) und Löschen – Sehen von Haus aus für alle, der
+  Rest fürs Büro (Admin, Geschäftsführer, Bauleiter, Buchhaltung).
+- Die Dateien liegen wie alle PDFs unter `/data/dokumente` und sind in der Komplettsicherung;
+  gelöschte bleiben noch 90 Tage liegen.
+
 ## Import und Export
 
 Unter **Verwaltung → Import und Export** (`/verwaltung/import`) gehen Kunden, Anfragen,
@@ -1203,8 +1232,8 @@ testet ein Admin unter **Einstellungen → Test senden**.
 - Unter **Einstellungen → Datensicherung** lassen sich Sicherungen sofort erstellen und herunterladen.
 
 **Komplettsicherung:** **Herunterladen** ergibt eine ZIP-Datei mit allem – der Datenbank
-dieser Sicherung und allen Dateien: PDFs an Artikeln und Pläne an Aufträgen
-(`/data/dokumente`), Fotos der Tagesberichte, Anfragen und Angebote (`/data/fotos`), Krankmeldungen
+dieser Sicherung und allen Dateien: PDFs an Artikeln, Aufträgen, Angeboten und Anfragen und die
+Richtlinien & Vorschriften (`/data/dokumente`), Fotos der Tagesberichte, Anfragen und Angebote (`/data/fotos`), Krankmeldungen
 (`/data/krankmeldungen`), Briefkopf (`/data/briefkopf`), das Rechnungsarchiv
 (`/data/rechnungen`) und der Signaturschlüssel (`/data/signatur`; liegt er per
 `SIGNATUR_DATEI` woanders, nicht). Dazu `monsipan-sicherung.json` mit Zeitpunkt und
@@ -1494,6 +1523,7 @@ src/
     notifications.ts  Katalog der Benachrichtigungen und wer sie bekommen darf
     server/db/schema/   core.ts (Benutzer, Partien, Einstellungen) + je Bereich eine Datei
     modules/
+      ablage/      Richtlinien & Vorschriften: server/richtlinien.ts (Ordner, PDFs, Suche)
       auftraege/   Auftragsmanagement: offer.ts (Beträge, Summen, Nummern), inquiry.ts
                    (E-Mail auslesen), summary.ts (Summenblatt, Zuordnung zur Rechnung),
                    server/ (Kunden, Anfragen, Angebote, Aufträge, Rechnungen, PDF), components/,

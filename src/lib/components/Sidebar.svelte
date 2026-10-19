@@ -30,7 +30,8 @@
 				<span class="lane-v absolute top-2 bottom-2 -left-3 w-[3px] rounded-full" aria-hidden="true"></span>
 			{/if}
 			<n.icon size={19} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
-			<span class="flex-1">{n.label}</span>
+			<!-- Lange Namen („Richtlinien & Vorschriften") brechen eng um, damit sie in die Zeile passen -->
+			<span class="flex-1 leading-tight">{n.label}</span>
 			{#if n.badge === 'lowStock' && lowStockCount > 0}
 				<span class="badge badge-warn num h-5 min-w-5 justify-center px-1.5 text-xs" aria-label="{lowStockCount} Artikel nachbestellen">
 					{lowStockCount}

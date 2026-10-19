@@ -20,6 +20,7 @@ import { listInvoices } from '$lib/modules/auftraege/server/invoices';
 import { listReports } from '$lib/modules/tagesberichte/server/reports';
 import { INVOICE_STATUS_LABELS, invoiceNo, OFFER_STATUS_LABELS, offerState, ORDER_STATUS_LABELS, spacedNumber } from '$lib/modules/auftraege/offer';
 import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
+import { searchPolicies } from '$lib/modules/ablage/server/richtlinien';
 
 export interface SearchHit {
 	id: string;
@@ -164,6 +165,29 @@ export async function globalSearch(user: SessionUser, raw: string): Promise<Sear
 					detail: join(p.articleNumber, p.categoryName, `Bestand ${p.total}`),
 					href: `/lager/artikel/${p.id}`
 				}))
+			}))
+		);
+	}
+	if (has('richtlinien.sehen')) {
+		tasks.push(
+			searchPolicies(q, PER_GROUP).then((r) => ({
+				key: 'richtlinien',
+				label: 'Richtlinien & Vorschriften',
+				more: `/richtlinien?suche=${enc(q)}`,
+				hits: [
+					...r.folders.map((f) => ({
+						id: `richtlinien-ordner-${f.id}`,
+						title: f.name,
+						detail: join('Ordner', f.place && `in ${f.place}`),
+						href: `/richtlinien?ordner=${f.id}`
+					})),
+					...r.documents.map((d) => ({
+						id: `richtlinie-${d.id}`,
+						title: d.title,
+						detail: join('PDF', d.place && `in ${d.place}`),
+						href: `/richtlinien/${d.id}`
+					}))
+				].slice(0, PER_GROUP)
 			}))
 		);
 	}

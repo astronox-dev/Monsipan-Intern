@@ -15,7 +15,7 @@ import { error } from '@sveltejs/kit';
 import { asc, eq, sql } from 'drizzle-orm';
 import { MAX_DOCUMENT_BYTES } from '$lib/documents';
 import { DATA_DIR, db } from './db';
-import { inquiryDocuments, offerDocuments, orderDocuments, productDocuments, users } from './db/schema';
+import { inquiryDocuments, offerDocuments, orderDocuments, policyDocuments, productDocuments, users } from './db/schema';
 import { appendPart, isWriting, partFile } from './parts';
 
 export const DOC_DIR = path.join(DATA_DIR, 'dokumente');
@@ -187,14 +187,15 @@ export function listDocuments(productId: number) {
  * mehr benutzt, werden gelöscht. Abgebrochene Uploads nach einem Tag.
  */
 export async function tidyDocuments(now = new Date()): Promise<{ removed: number }> {
-	// Benutzt sind die PDFs an Artikeln, Aufträgen, Angeboten und Anfragen
-	const [products, orders, offers, inquiries] = await Promise.all([
+	// Benutzt sind die PDFs an Artikeln, Aufträgen, Angeboten und Anfragen und die Richtlinien
+	const [products, orders, offers, inquiries, policies] = await Promise.all([
 		db.select({ sha: productDocuments.sha256 }).from(productDocuments).all(),
 		db.select({ sha: orderDocuments.sha256 }).from(orderDocuments).all(),
 		db.select({ sha: offerDocuments.sha256 }).from(offerDocuments).all(),
-		db.select({ sha: inquiryDocuments.sha256 }).from(inquiryDocuments).all()
+		db.select({ sha: inquiryDocuments.sha256 }).from(inquiryDocuments).all(),
+		db.select({ sha: policyDocuments.sha256 }).from(policyDocuments).all()
 	]);
-	return tidyFolder(DOC_DIR, SHA_FILE, new Set([...products, ...orders, ...offers, ...inquiries].map((r) => r.sha)), now);
+	return tidyFolder(DOC_DIR, SHA_FILE, new Set([...products, ...orders, ...offers, ...inquiries, ...policies].map((r) => r.sha)), now);
 }
 
 /**

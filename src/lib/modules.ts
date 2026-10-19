@@ -29,6 +29,7 @@ import ChartColumn from '@lucide/svelte/icons/chart-column';
 import ChartPie from '@lucide/svelte/icons/chart-pie';
 import ShoppingCart from '@lucide/svelte/icons/shopping-cart';
 import FolderOpen from '@lucide/svelte/icons/folder-open';
+import Scale from '@lucide/svelte/icons/scale';
 import UserCog from '@lucide/svelte/icons/user-cog';
 import ShieldCheck from '@lucide/svelte/icons/shield-check';
 import Settings from '@lucide/svelte/icons/settings';
@@ -135,6 +136,19 @@ export const MODULES: AppModule[] = [
 		]
 	},
 	{ key: 'bestellungen', label: 'Bestellungen', icon: ShoppingCart, href: '/bestellungen', group: 'material', status: 'geplant', items: [] },
+	{
+		key: 'ablage',
+		label: 'Ablage',
+		icon: FolderOpen,
+		href: '/richtlinien',
+		group: 'ablage',
+		status: 'aktiv',
+		hint: 'Richtlinien & Vorschriften',
+		cardsPerItem: true,
+		items: [
+			{ href: '/richtlinien', label: 'Richtlinien & Vorschriften', icon: Scale, permission: 'richtlinien.sehen', hint: 'PDFs in Ordnern, für alle' }
+		]
+	},
 	{ key: 'dokumente', label: 'Dokumente', icon: FolderOpen, href: '/dokumente', group: 'ablage', status: 'geplant', items: [] },
 	{ key: 'auswertungen', label: 'Auswertungen', icon: ChartPie, href: '/auswertungen', group: 'ablage', status: 'geplant', items: [] },
 	{

@@ -309,6 +309,13 @@
       "when": 1792406863744,
       "tag": "0043_anhaenge",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1792409086856,
+      "tag": "0044_richtlinien",
+      "breakpoints": true
     }
   ]
 }

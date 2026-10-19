@@ -40,7 +40,7 @@ export interface FileFolder {
 export const SIGNATUR_DIR = path.join(DATA_DIR, 'signatur');
 
 export const FILE_FOLDERS: FileFolder[] = [
-	{ name: 'dokumente', dir: DOC_DIR, pattern: /^[0-9a-f]{64}\.pdf$/, label: 'PDFs an Artikeln und Pläne an Aufträgen' },
+	{ name: 'dokumente', dir: DOC_DIR, pattern: /^[0-9a-f]{64}\.pdf$/, label: 'PDFs (Artikel, Aufträge, Angebote, Anfragen, Richtlinien)' },
 	{ name: 'fotos', dir: PHOTO_DIR, pattern: /^[0-9a-f]{64}\.jpg$/, label: 'Fotos (Tagesberichte, Anfragen, Angebote)' },
 	{ name: 'krankmeldungen', dir: BELEG_DIR, pattern: /^[0-9a-f]{64}\.(?:jpg|pdf)$/, label: 'Krankmeldungen' },
 	{ name: 'briefkopf', dir: LETTERHEAD_DIR, pattern: /^[0-9a-f]{64}\.(?:png|jpg)$/, label: 'Briefkopf' },
