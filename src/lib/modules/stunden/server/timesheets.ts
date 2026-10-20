@@ -174,6 +174,9 @@ export async function weekOverview(user: SessionUser, weekStart: string): Promis
 	return rows;
 }
 
+/** VAZ in Prozent, die ein neuer Zettel eines Partieführers von selbst bekommt */
+export const PARTY_LEAD_VAZ = 10;
+
 /**
  * Zettel eines Monatsteils samt Tagen; legt ihn an, wenn es ihn noch nicht gibt.
  * Angelegt werden nur die Tage der Woche, die in diesen Monat fallen.
@@ -194,9 +197,12 @@ export async function openSheet(
 	if (existing) return existing.id;
 
 	return db.transaction(async (tx) => {
+		// Partieführer bekommen die VAZ gleich eingetragen – im Zettel änderbar
+		const person = await tx.select({ role: users.role }).from(users).where(eq(users.id, userId)).get();
+		const vazPercent = person?.role === 'partiefuehrer' ? PARTY_LEAD_VAZ : null;
 		const row = await tx
 			.insert(timesheets)
-			.values({ userId, weekStart: monday, month, createdBy, writingPartyId, updatedAt: new Date() })
+			.values({ userId, weekStart: monday, month, createdBy, writingPartyId, vazPercent, updatedAt: new Date() })
 			.returning({ id: timesheets.id })
 			.get();
 		await createDays(tx, row.id, monday, month);

@@ -202,8 +202,10 @@ bisherigen Einstellungen übernommen (Migration `0028_rechte_einheitlich`).
 Eine Woche je Mitarbeiter, aufgebaut wie der Lohnzettel auf Papier: Montag bis Sonntag mit
 Kostenstelle, Baustelle/Tätigkeit, Arbeitszeit und den Stundenarten Norm, Überstunden 50 %
 und 100 %, Urlaub, Feiertag, Regen und Efzg (Entgeltfortzahlung). Dazu Auslöse (Tage und
-Betrag) und die VAZ in Prozent. Die Summen je Spalte und die Gesamtstunden rechnet die
-Seite mit, während getippt wird.
+Betrag) und die VAZ in Prozent – beim Zettel eines **Partieführers** stehen von selbst
+**10 %** drin (änderbar; auch auf seinen Zetteln, die beim Einspielen noch in Arbeit und ohne
+VAZ waren). Die Summen je Spalte und die Gesamtstunden rechnet die Seite mit, während
+getippt wird.
 
 **Wochenübersicht:** nach Partien gegliedert – die eigene Partie zuerst, „Ohne Partie“
 zuletzt. Maßgeblich ist die Partie, die den Zettel schreibt: Eine übernommene Aushilfe

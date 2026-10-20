@@ -139,3 +139,11 @@ describe('Einteilung bei einer anderen Partie', () => {
 		expect(await mayOpenOrder(eva, mitt)).toBe(true);
 	});
 });
+
+describe('VAZ', () => {
+	it('ein neuer Zettel eines Partieführers hat 10 % VAZ, der eines Arbeiters keine', async () => {
+		const week = '2026-11-02';
+		expect((await sheetDetail(await openSheet(hans.id, week, week.slice(0, 7), admin.id)))!.vazPercent).toBe(10);
+		expect((await sheetDetail(await openSheet(eva.id, week, week.slice(0, 7), admin.id)))!.vazPercent).toBeNull();
+	});
+});
