@@ -110,6 +110,8 @@ export const offerPositions = sqliteTable(
 		sortOrder: integer('sort_order').notNull().default(0),
 		kind: text('kind', { enum: OFFER_LINE_KINDS }).notNull().default('position'),
 		text: text('text').notNull().default(''),
+		/** Bemerkung zur Position – steht im PDF darunter, nicht fett */
+		note: text('note').notNull().default(''),
 		quantity: real('quantity'),
 		unit: text('unit').notNull().default(''),
 		/** Einheitspreis netto in Euro */
@@ -171,6 +173,8 @@ export const orderPositions = sqliteTable(
 		sortOrder: integer('sort_order').notNull().default(0),
 		kind: text('kind', { enum: OFFER_LINE_KINDS }).notNull().default('position'),
 		text: text('text').notNull().default(''),
+		/** Bemerkung zur Position – steht im PDF darunter, nicht fett */
+		note: text('note').notNull().default(''),
 		quantity: real('quantity'),
 		unit: text('unit').notNull().default('')
 	},
@@ -433,6 +437,8 @@ export const invoicePositions = sqliteTable(
 		number: text('number').notNull().default(''),
 		kind: text('kind', { enum: OFFER_LINE_KINDS }).notNull().default('position'),
 		text: text('text').notNull().default(''),
+		/** Bemerkung zur Position – steht im PDF darunter, nicht fett */
+		note: text('note').notNull().default(''),
 		quantity: real('quantity'),
 		unit: text('unit').notNull().default(''),
 		/** Einheitspreis netto in Euro */

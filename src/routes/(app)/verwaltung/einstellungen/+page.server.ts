@@ -65,19 +65,33 @@ export const actions: Actions = {
 		await disconnectWebsite();
 		return { saved: 'websiteOff' };
 	},
-	/** Vorlagen für Angebote: Einleitung, Schlusstext, Fußzeile */
+	/** Vorlagen für Angebote: Einleitung und Schlusstext */
 	offerTexts: async ({ request, locals }) => {
 		requirePermission(locals, 'einstellungen.bearbeiten');
 		const f = await request.formData();
 		const text = (key: string, max: number) => String(f.get(key) ?? '').replace(/\r\n/g, '\n').trim().slice(0, max);
+		await updateSettings({ offerIntro: text('intro', 3000), offerClosing: text('closing', 5000) });
+		return { saved: 'offerTexts' };
+	},
+	/** Einleitung und Schlusstext im Auftrags-PDF */
+	orderTexts: async ({ request, locals }) => {
+		requirePermission(locals, 'einstellungen.bearbeiten');
+		const f = await request.formData();
+		const text = (key: string, max: number) => String(f.get(key) ?? '').replace(/\r\n/g, '\n').trim().slice(0, max);
+		await updateSettings({ orderIntro: text('intro', 3000), orderClosing: text('closing', 5000) });
+		return { saved: 'orderTexts' };
+	},
+	/** Fußzeile – für Angebote, Aufträge und Rechnungen gleich */
+	footerTexts: async ({ request, locals }) => {
+		requirePermission(locals, 'einstellungen.bearbeiten');
+		const f = await request.formData();
+		const text = (key: string, max: number) => String(f.get(key) ?? '').replace(/\r\n/g, '\n').trim().slice(0, max);
 		await updateSettings({
-			offerIntro: text('intro', 3000),
-			offerClosing: text('closing', 5000),
 			offerFooterAddress: text('footerAddress', 400),
 			offerFooterBank: text('footerBank', 400),
 			offerFooterContact: text('footerContact', 400)
 		});
-		return { saved: 'offerTexts' };
+		return { saved: 'footerTexts' };
 	},
 	/** Vorlagen für Rechnungen: Einleitung, Schlusstext, Zahlungsziel */
 	invoiceTexts: async ({ request, locals }) => {

@@ -5,7 +5,6 @@
 
 	interface Offer {
 		number: string;
-		projectNumber: string;
 		date: string;
 		title: string;
 		location?: string;
@@ -17,7 +16,7 @@
 		intro: string;
 		closing: string;
 		vatRate: number;
-		lines: { id: number; kind: 'position' | 'titel'; text: string; quantity: number | null; unit: string; unitPrice: number | null }[];
+		lines: { id: number; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null }[];
 	}
 	let { offer }: { offer: Offer } = $props();
 
@@ -34,7 +33,6 @@
 		<dl class="grid grid-cols-[auto_auto] gap-x-4 text-ink-2">
 			<dt>Angebotsdatum</dt>
 			<dd class="num text-ink">{dateLabel(offer.date)}</dd>
-			{#if offer.projectNumber}<dt>Projektnummer</dt><dd class="num text-ink">{offer.projectNumber}</dd>{/if}
 			<dt>Angebotsnummer</dt>
 			<dd class="num text-ink">{offer.number}</dd>
 		</dl>
@@ -52,7 +50,10 @@
 				<li class="px-3 py-2.5">
 					<div class="flex gap-3">
 						<span class="num w-8 shrink-0 text-sm text-ink-3">{numbers[i]}</span>
-						<span class="min-w-0 flex-1 font-medium whitespace-pre-line">{l.text}</span>
+						<span class="min-w-0 flex-1">
+							<span class="block font-medium whitespace-pre-line">{l.text}</span>
+							{#if l.note}<span class="mt-0.5 block text-sm whitespace-pre-line text-ink-2">{l.note}</span>{/if}
+						</span>
 						<span class="num shrink-0 text-right font-semibold">{money(lineTotal(l))}</span>
 					</div>
 					<p class="num mt-0.5 pl-11 text-[0.8125rem] text-ink-3">{quantityLabel(l.quantity)} {l.unit} × {priceLabel(l.unitPrice)}</p>

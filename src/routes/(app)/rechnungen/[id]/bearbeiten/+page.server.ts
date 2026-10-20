@@ -31,7 +31,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			serviceTo: invoice.serviceTo ?? '',
 			title: invoice.title,
 			location: invoice.location,
-			projectNumber: invoice.projectNumber,
 			costCenter: invoice.costCenter,
 			customerName: invoice.customerName,
 			customerAddition: invoice.customerAddition,

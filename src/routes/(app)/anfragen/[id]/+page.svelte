@@ -255,16 +255,12 @@
 				<span class="field-label">Bauvorhaben (BV)</span>
 				<input class="input" name="titel" maxlength="300" value={inquiry.subject} />
 			</label>
-			<div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+			<div class="grid grid-cols-2 gap-4">
 				<label class="block">
 					<span class="field-label">Angebotsnummer *</span>
 					<input class="input num" name="nummer" required maxlength="30" value={data.suggestion.number} />
 				</label>
 				<label class="block">
-					<span class="field-label">Projektnummer</span>
-					<input class="input num" name="projekt" maxlength="30" value={data.suggestion.projectNumber} />
-				</label>
-				<label class="col-span-2 block sm:col-span-1">
 					<span class="field-label">Datum *</span>
 					<input class="input num" type="date" name="datum" required value={data.suggestion.date} />
 				</label>

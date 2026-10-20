@@ -118,6 +118,8 @@ interface Row {
 	kind: 'position' | 'titel';
 	nr: string;
 	text: string;
+	/** Bemerkung – unter dem Text, nicht fett */
+	note?: string;
 	cells: string[];
 }
 
@@ -143,7 +145,11 @@ function table(doc: Doc, y: number, columns: Column[], rows: Row[], continued: s
 		const titel = row.kind === 'titel';
 		doc.font('Helvetica-Bold').fontSize(titel ? 10.5 : 9.5);
 		const textW = titel ? RIGHT - textCol.x : textCol.w;
-		const height = Math.max(12, doc.heightOfString(row.text || ' ', { width: textW, lineGap: 1 })) + (titel ? 10 : 8);
+		const textH = doc.heightOfString(row.text || ' ', { width: textW, lineGap: 1 });
+		const note = !titel && row.note?.trim() ? row.note.trim() : '';
+		doc.font('Helvetica').fontSize(9);
+		const noteH = note ? doc.heightOfString(note, { width: textW, lineGap: 1 }) + 2 : 0;
+		const height = Math.max(12, textH + noteH) + (titel ? 10 : 8);
 		if (y + height > FOOTER_TOP - 6 * MM) {
 			doc.addPage();
 			doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text(continued, LEFT, 15 * MM, { width: WIDTH, lineBreak: false });
@@ -153,6 +159,7 @@ function table(doc: Doc, y: number, columns: Column[], rows: Row[], continued: s
 		doc.font(titel ? 'Helvetica-Bold' : 'Helvetica').fontSize(titel ? 10.5 : 9).fillColor(INK);
 		doc.text(row.nr, columns[0].x, top + (titel ? 0 : 0.5), { width: columns[0].w, lineBreak: false });
 		doc.font('Helvetica-Bold').fontSize(titel ? 10.5 : 9.5).text(row.text, textCol.x, top, { width: textW, lineGap: 1 });
+		if (note) doc.font('Helvetica').fontSize(9).fillColor(INK).text(note, textCol.x, top + textH + 2, { width: textW, lineGap: 1 });
 		if (!titel) {
 			doc.font('Helvetica').fontSize(9.5);
 			columns.slice(2).forEach((c, i) => {
@@ -268,7 +275,6 @@ export async function offerPdf(offer: OfferDetail, { forCustomer = false } = {})
 	let y = addressAndFacts(doc, addressLines({ name: offer.customerName, addition: offer.customerAddition, street: offer.customerStreet, zip: offer.customerZip, city: offer.customerCity }), [
 		['Angebotsdatum:', isoDate(offer.date)],
 		['Kunden UID-Nummer:', offer.customerUid],
-		['Projektnummer:', offer.projectNumber],
 		['Angebotsnummer:', offer.number]
 	]);
 
@@ -287,6 +293,7 @@ export async function offerPdf(offer: OfferDetail, { forCustomer = false } = {})
 		kind: l.kind,
 		nr: numbers[i],
 		text: l.text,
+		note: l.note,
 		cells: [quantityLabel(l.quantity), l.unit, priceLabel(l.unitPrice), money(lineTotal(l))]
 	}));
 	y = table(
@@ -356,7 +363,6 @@ export async function orderPdf(order: OrderDetail): Promise<Response> {
 	const created = order.createdAt instanceof Date ? order.createdAt : new Date(order.createdAt);
 	let y = addressAndFacts(doc, addressLines({ name: order.customerName, addition: order.customerAddition, street: order.customerStreet, zip: order.customerZip, city: order.customerCity }), [
 		['Auftragsdatum:', new Intl.DateTimeFormat('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(created)],
-		['Projektnummer:', order.projectNumber],
 		['Auftragsnummer:', order.number],
 		['Partie:', order.partyName ?? '–']
 	]);
@@ -370,6 +376,8 @@ export async function orderPdf(order: OrderDetail): Promise<Response> {
 
 	const contact = [order.customerContact && `Ansprechpartner: ${order.customerContact}`, order.customerPhone && `Tel. ${order.customerPhone}`].filter(Boolean).join(' · ');
 	if (contact) y = paragraph(doc, contact, y, 9.5) + 4 * MM;
+	// Einleitung aus den Einstellungen – für alle Aufträge gleich
+	if (settings.orderIntro.trim()) y = paragraph(doc, settings.orderIntro, y, 10) + 5 * MM;
 
 	const numbers = lineNumbers(order.lines);
 	y = table(
@@ -381,7 +389,7 @@ export async function orderPdf(order: OrderDetail): Promise<Response> {
 			{ label: 'Menge', x: 150 * MM, w: 18 * MM, align: 'right' },
 			{ label: 'Einheit', x: 172 * MM, w: RIGHT - 172 * MM }
 		],
-		order.lines.map((l, i) => ({ kind: l.kind, nr: numbers[i], text: l.text, cells: [quantityLabel(l.quantity), l.unit] })),
+		order.lines.map((l, i) => ({ kind: l.kind, nr: numbers[i], text: l.text, note: l.note, cells: [quantityLabel(l.quantity), l.unit] })),
 		`${title} – Fortsetzung`
 	);
 
@@ -397,6 +405,8 @@ export async function orderPdf(order: OrderDetail): Promise<Response> {
 		y += 5 * MM;
 		y = labeled(doc, 'Unterlagen in der App', documents.map((d) => d.title).join(', '), y);
 	}
+
+	if (settings.orderClosing.trim()) y = paragraph(doc, settings.orderClosing, y + 6 * MM);
 
 	finishPages(doc, null);
 	const buffer = await finish();
@@ -489,7 +499,6 @@ export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }
 		[
 			['Rechnungsdatum:', isoDate(invoice.date)],
 			['Kunden UID-Nummer:', invoice.customerUid],
-			['Projektnummer:', invoice.projectNumber],
 			['Rechnungsnummer:', invoice.costCenter ? `${invoice.number}/${invoice.costCenter}` : invoice.number],
 			...(isStorno ? [] : ([['Zahlbar bis:', isoDate(invoice.dueDate)]] as [string, string][]))
 		]
@@ -525,6 +534,7 @@ export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }
 			kind: l.kind,
 			nr: l.number || numbers[i],
 			text: l.text,
+			note: l.note,
 			cells: [quantityLabel(l.quantity), l.unit, priceLabel(l.unitPrice), money(lineTotal(l))]
 		})),
 		`${title} – Fortsetzung`

@@ -238,10 +238,6 @@
 				<dt class="text-ink-3">Ausführungsort</dt>
 				<dd>{invoice.location}</dd>
 			{/if}
-			{#if invoice.projectNumber}
-				<dt class="text-ink-3">Projektnummer</dt>
-				<dd class="num">{invoice.projectNumber}</dd>
-			{/if}
 			{#if invoice.costCenter}
 				<dt class="text-ink-3">Kostenstelle</dt>
 				<dd class="num">{invoice.costCenter}</dd>
@@ -402,7 +398,10 @@
 			{:else}
 				<li class="grid grid-cols-[2.75rem_minmax(0,1fr)_auto] gap-x-3 px-4 py-3 lg:px-5">
 					<span class="num text-sm text-ink-3">{l.number || numbers[i]}</span>
-					<span class="min-w-0 font-medium whitespace-pre-line">{l.text}</span>
+					<span class="min-w-0">
+						<span class="block font-medium whitespace-pre-line">{l.text}</span>
+						{#if l.note}<span class="mt-0.5 block text-sm whitespace-pre-line text-ink-2">{l.note}</span>{/if}
+					</span>
 					<span class="num text-right font-medium">{money(lineTotal(l))}</span>
 					<span class="num col-start-2 text-sm text-ink-2">{quantityLabel(l.quantity)} {l.unit} × {priceLabel(l.unitPrice)}</span>
 				</li>

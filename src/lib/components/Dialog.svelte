@@ -9,11 +9,13 @@
 		/** Auf dem Handy als Bottom-Sheet von unten */
 		bottom?: boolean;
 		wide?: boolean;
+		/** Noch breiter – etwa für die PDF-Vorschau */
+		huge?: boolean;
 		onclose?: () => void;
 		children: Snippet;
 		footer?: Snippet;
 	}
-	let { open = $bindable(), title, description, bottom = true, wide = false, onclose, children, footer }: Props = $props();
+	let { open = $bindable(), title, description, bottom = true, wide = false, huge = false, onclose, children, footer }: Props = $props();
 
 	let dialog: HTMLDialogElement;
 
@@ -45,7 +47,7 @@
 <dialog
 	bind:this={dialog}
 	class="sheet {bottom ? 'sheet-bottom' : ''}"
-	style:max-width={wide ? 'min(760px, calc(100vw - 2rem))' : null}
+	style:max-width={huge ? 'min(1100px, calc(100vw - 2rem))' : wide ? 'min(760px, calc(100vw - 2rem))' : null}
 	aria-labelledby="dlg-title"
 	onclose={handleClose}
 	onclick={onBackdrop}

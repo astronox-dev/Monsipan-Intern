@@ -70,7 +70,7 @@
 	</div>
 	<div class="flex gap-2">
 		<a href="/lager/bestand/druck{page.url.search}" class="btn btn-secondary"><Printer size={18} aria-hidden="true" /><span class="hidden sm:inline">Drucken</span></a>
-		<PdfButton href="/export/bestand.pdf{page.url.search}"><FileText size={18} aria-hidden="true" /><span class="hidden sm:inline">PDF</span></PdfButton>
+		<PdfButton href="/export/bestand.pdf{page.url.search}" title="Bestand" compact><FileText size={18} aria-hidden="true" /><span class="hidden sm:inline">PDF</span></PdfButton>
 		<a href={exportHref} class="btn btn-secondary" download><Download size={18} aria-hidden="true" /><span class="hidden sm:inline">CSV</span></a>
 		{#if canManage}
 			<a href="/lager/artikel/neu" class="btn btn-primary"><Plus size={18} aria-hidden="true" />Neuer Artikel</a>

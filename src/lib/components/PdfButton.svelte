@@ -2,21 +2,30 @@
 	/**
 	 * PDF-Knopf. Am Computer ein gewöhnlicher Download-Link; in der Android-App
 	 * und am iPhone/iPad holt er das PDF selbst und speichert oder teilt es
-	 * (siehe pdf-download.ts).
+	 * (siehe pdf-download.ts). Davor steht immer „Vorschau": zeigt dasselbe PDF
+	 * gleich hier an, ohne es herunterzuladen.
 	 */
 	import type { Snippet } from 'svelte';
 	import FileText from '@lucide/svelte/icons/file-text';
 	import Share from '@lucide/svelte/icons/share';
+	import Eye from '@lucide/svelte/icons/eye';
 	import Dialog from '$lib/components/Dialog.svelte';
+	import PdfViewer from '$lib/components/PdfViewer.svelte';
 	import { deliverPdf, fetchPdf, needsPdfHelp, type PdfOutcome } from '$lib/pdf-download';
 	import { toast } from '$lib/stores/toast.svelte';
 
 	interface Props {
 		href: string;
 		class?: string;
+		/** Titel der Vorschau */
+		title?: string;
+		/** Am Handy nur das Symbol – wie die Knöpfe daneben */
+		compact?: boolean;
 		children: Snippet;
 	}
-	let { href, class: cls = 'btn btn-secondary', children }: Props = $props();
+	let { href, class: cls = 'btn btn-secondary', title = 'Vorschau', compact = false, children }: Props = $props();
+
+	let preview = $state(false);
 
 	let busy = $state(false);
 	/** Fertiges PDF, das noch einen Fingertipp zum Teilen braucht */
@@ -56,9 +65,20 @@
 	}
 </script>
 
+<button type="button" class={cls} onclick={() => (preview = true)} title="PDF ansehen, ohne es herunterzuladen">
+	<Eye size={cls.includes('btn-sm') ? 16 : 18} aria-hidden="true" />{#if compact}<span class="hidden sm:inline">Vorschau</span><span class="sr-only sm:hidden">Vorschau</span>{:else}Vorschau{/if}
+</button>
 <a {href} class={cls} download {onclick} aria-busy={busy}>
 	{#if busy}<span class="inline-flex items-center gap-2"><FileText size={18} aria-hidden="true" />Wird erstellt …</span>{:else}{@render children()}{/if}
 </a>
+
+<Dialog open={preview} {title} huge onclose={() => (preview = false)}>
+	<PdfViewer url={href} {title} />
+	<div class="mt-4 flex justify-end gap-2">
+		<button type="button" class="btn btn-ghost" onclick={() => (preview = false)}>Schließen</button>
+		<a {href} class="btn btn-secondary" download {onclick}><FileText size={18} aria-hidden="true" />Herunterladen</a>
+	</div>
+</Dialog>
 
 <Dialog open={!!ready} title="PDF ist fertig" onclose={() => (ready = null)}>
 	<p class="text-ink-2">Über „Teilen“ lässt es sich in Dateien sichern, drucken oder verschicken.</p>

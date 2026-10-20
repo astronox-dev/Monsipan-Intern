@@ -17,7 +17,7 @@ import {
 	updateOrder
 } from '$lib/modules/auftraege/server/orders';
 import { listReports } from '$lib/modules/tagesberichte/server/reports';
-import { invoiceBlocker, invoicesForOrder, unbilledReports } from '$lib/modules/auftraege/server/invoices';
+import { invoicesForOrder, unbilledReports } from '$lib/modules/auftraege/server/invoices';
 import { reportCount } from '$lib/modules/auftraege/server/summary';
 import { notifyOrderAssigned, notifyOrderDocuments, notifyOrderStatus } from '$lib/modules/auftraege/server/notify';
 import { titleFromFileName } from '$lib/documents';
@@ -69,10 +69,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		// Rechnung über alles oder Teilrechnungen – jeder geprüfte Bericht einmal
 		invoices: seesInvoices ? invoices : [],
 		unbilled: seesInvoices ? unbilled : 0,
-		// Stornierte Rechnungen und Stornorechnungen zählen nicht – danach geht eine neue (Korrektur-)Rechnung
-		canCreateInvoice:
-			can(user.role, 'rechnungen.erstellen') &&
-			!invoiceBlocker({ status: order.status, previous: invoices.filter((i) => i.stage !== 'storniert' && i.kind !== 'storno').length, available: unbilled })
+		// Eine Rechnung (als Entwurf) geht aus jedem Stand des Auftrags
+		canCreateInvoice: can(user.role, 'rechnungen.erstellen'),
 	};
 };
 

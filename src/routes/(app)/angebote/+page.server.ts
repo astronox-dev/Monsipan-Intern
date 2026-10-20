@@ -47,7 +47,7 @@ export const actions: Actions = {
 		if (!isValidIsoDate(date)) return fail(400, { message: 'Das Datum ist ungültig.' });
 		const id = await createOffer(user, {
 			number,
-			projectNumber: String(form.get('projekt') ?? '').trim(),
+			projectNumber: '',
 			date,
 			title: String(form.get('titel') ?? '').trim(),
 			customerId: Number.isInteger(customer) && customer > 0 ? customer : null

@@ -196,7 +196,7 @@
 
 	<section class="card p-4 lg:col-span-2 lg:p-6" aria-labelledby="h-offers">
 		<h2 id="h-offers" class="flex items-center gap-2 text-xl"><FilePen size={20} aria-hidden="true" />Angebote, Aufträge und Rechnungen</h2>
-		<p class="mt-1 text-sm text-ink-2">Briefkopf und Vorlagetexte. Einleitung und Schlusstext kommen in jedes neue Angebot und lassen sich dort ändern.</p>
+		<p class="mt-1 text-sm text-ink-2">Briefkopf und Fußzeile gelten für alle drei. Einleitung und Schlusstext je Art – bei Angeboten und Rechnungen kommen sie in jedes neue Dokument und lassen sich dort noch ändern.</p>
 
 		<div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
 			<div>
@@ -218,37 +218,59 @@
 				<p class="field-hint mt-2">PNG oder JPG, am besten der ganze Kopf als breiter Streifen (Logo, Firmenname, Anschrift). Er wird oben mittig eingepasst.</p>
 			</div>
 
-			<form method="POST" action="?/offerTexts" class="space-y-3" use:enhance={done('offerTexts', () => 'Vorlagen gespeichert')}>
-				<label class="block">
-					<span class="field-label">Einleitung</span>
-					<textarea class="textarea" name="intro" rows="2" maxlength="3000">{data.settings.offerIntro}</textarea>
-				</label>
-				<label class="block">
-					<span class="field-label">Schlusstext</span>
-					<textarea class="textarea" name="closing" rows="4" maxlength="5000">{data.settings.offerClosing}</textarea>
-				</label>
+			<form method="POST" action="?/footerTexts" class="space-y-3" use:enhance={done('footerTexts', () => 'Fußzeile gespeichert')}>
+				<p class="field-label">Fußzeile</p>
 				<div class="grid gap-3 sm:grid-cols-3">
 					<label class="block">
-						<span class="field-label">Fußzeile: Anschrift</span>
+						<span class="field-label">Anschrift</span>
 						<textarea class="textarea text-sm" name="footerAddress" rows="4" maxlength="400">{data.settings.offerFooterAddress}</textarea>
 					</label>
 					<label class="block">
-						<span class="field-label">Fußzeile: Bank</span>
+						<span class="field-label">Bank</span>
 						<textarea class="textarea text-sm" name="footerBank" rows="4" maxlength="400">{data.settings.offerFooterBank}</textarea>
 					</label>
 					<label class="block">
-						<span class="field-label">Fußzeile: Kontakt</span>
+						<span class="field-label">Kontakt</span>
 						<textarea class="textarea text-sm" name="footerContact" rows="4" maxlength="400">{data.settings.offerFooterContact}</textarea>
 					</label>
 				</div>
-				<button class="btn btn-secondary" disabled={busy === 'offerTexts'}>Speichern</button>
+				<button class="btn btn-secondary" disabled={busy === 'footerTexts'}>Speichern</button>
 			</form>
 		</div>
 
-		<form method="POST" action="?/invoiceTexts" class="mt-6 space-y-3 border-t border-line pt-5" use:enhance={done('invoiceTexts', () => 'Vorlagen für Rechnungen gespeichert')}>
-			<h3 class="font-display text-lg font-semibold">Rechnungen</h3>
-			<p class="text-sm text-ink-2">Briefkopf und Fußzeile wie bei den Angeboten. Einleitung, Schlusstext und Zahlungsziel kommen in jede neue Rechnung und lassen sich dort ändern.</p>
-			<div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10rem]">
+		<!-- Einleitung und Schlusstext – je Art für sich -->
+		<div class="mt-6 grid gap-6 border-t border-line pt-5 lg:grid-cols-3">
+			<form method="POST" action="?/offerTexts" class="flex flex-col gap-3" use:enhance={done('offerTexts', () => 'Vorlagen für Angebote gespeichert')}>
+				<h3 class="font-display text-lg font-semibold">Angebote</h3>
+				<p class="text-sm text-ink-2">Kommt in jedes neue Angebot und lässt sich dort ändern.</p>
+				<label class="block">
+					<span class="field-label">Einleitung</span>
+					<textarea class="textarea" name="intro" rows="3" maxlength="3000">{data.settings.offerIntro}</textarea>
+				</label>
+				<label class="block">
+					<span class="field-label">Schlusstext</span>
+					<textarea class="textarea" name="closing" rows="5" maxlength="5000">{data.settings.offerClosing}</textarea>
+				</label>
+				<button class="btn btn-secondary mt-auto self-start" disabled={busy === 'offerTexts'}>Speichern</button>
+			</form>
+
+			<form method="POST" action="?/orderTexts" class="flex flex-col gap-3" use:enhance={done('orderTexts', () => 'Vorlagen für Aufträge gespeichert')}>
+				<h3 class="font-display text-lg font-semibold">Aufträge</h3>
+				<p class="text-sm text-ink-2">Steht im PDF jedes Auftrags – über bzw. unter den Positionen. Leer bleibt nichts stehen.</p>
+				<label class="block">
+					<span class="field-label">Einleitung</span>
+					<textarea class="textarea" name="intro" rows="3" maxlength="3000">{data.settings.orderIntro}</textarea>
+				</label>
+				<label class="block">
+					<span class="field-label">Schlusstext</span>
+					<textarea class="textarea" name="closing" rows="5" maxlength="5000">{data.settings.orderClosing}</textarea>
+				</label>
+				<button class="btn btn-secondary mt-auto self-start" disabled={busy === 'orderTexts'}>Speichern</button>
+			</form>
+
+			<form method="POST" action="?/invoiceTexts" class="flex flex-col gap-3" use:enhance={done('invoiceTexts', () => 'Vorlagen für Rechnungen gespeichert')}>
+				<h3 class="font-display text-lg font-semibold">Rechnungen</h3>
+				<p class="text-sm text-ink-2">Kommt mit dem Zahlungsziel in jede neue Rechnung und lässt sich dort ändern.</p>
 				<label class="block">
 					<span class="field-label">Einleitung</span>
 					<textarea class="textarea" name="intro" rows="3" maxlength="3000">{data.settings.invoiceIntro}</textarea>
@@ -259,11 +281,11 @@
 				</label>
 				<label class="block">
 					<span class="field-label">Zahlungsziel</span>
-					<span class="flex items-center gap-2"><input class="input num" type="number" name="days" min="0" max="365" required value={data.settings.invoicePaymentDays} />Tage</span>
+					<span class="flex items-center gap-2"><input class="input num w-28" type="number" name="days" min="0" max="365" required value={data.settings.invoicePaymentDays} />Tage</span>
 				</label>
-			</div>
-			<button class="btn btn-secondary" disabled={busy === 'invoiceTexts'}>Speichern</button>
-		</form>
+				<button class="btn btn-secondary mt-auto self-start" disabled={busy === 'invoiceTexts'}>Speichern</button>
+			</form>
+		</div>
 
 		<div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
 			<div class="min-w-0">

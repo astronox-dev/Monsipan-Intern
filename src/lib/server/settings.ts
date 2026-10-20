@@ -18,6 +18,9 @@ export interface AppSettings {
 	offerFooterContact: string;
 	/** Briefkopf als Bild (Dateiname unter /data/briefkopf) – ohne Bild wird er aus Text gesetzt */
 	letterheadFile: string | null;
+	/** Einleitung und Schlusstext im Auftrags-PDF – für alle Aufträge gleich */
+	orderIntro: string;
+	orderClosing: string;
 	/** Vorlagen für neue Rechnungen – in der einzelnen Rechnung änderbar */
 	invoiceIntro: string;
 	invoiceClosing: string;
@@ -35,6 +38,8 @@ const DEFAULTS: AppSettings = {
 	offerFooterBank: 'AT47 1200 0006 1620 5407\nBKAUATWW',
 	offerFooterContact: 'office@monsipan.com\nTel. 01/706 2006',
 	letterheadFile: null,
+	orderIntro: '',
+	orderClosing: '',
 	invoiceIntro: 'Sehr geehrte Damen und Herren,\nfür die ausgeführten Arbeiten erlauben wir uns, wie folgt in Rechnung zu stellen:',
 	invoiceClosing: 'Wir danken für Ihren Auftrag und freuen uns auf die weitere Zusammenarbeit.',
 	invoicePaymentDays: 30

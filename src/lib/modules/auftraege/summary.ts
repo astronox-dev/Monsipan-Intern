@@ -217,6 +217,8 @@ export interface PricedLine {
 	id: number;
 	kind: 'position' | 'titel';
 	text: string;
+	/** Bemerkung zur Position – geht mit auf die Rechnung */
+	note?: string;
 	quantity: number | null;
 	unit: string;
 	unitPrice: number | null;
@@ -298,6 +300,7 @@ export interface InvoiceLineDraft {
 	ownTitle?: boolean;
 	kind: 'position' | 'titel';
 	text: string;
+	note?: string;
 	quantity: number | null;
 	unit: string;
 	unitPrice: number | null;
@@ -335,7 +338,19 @@ export function invoiceLines(lines: PricedLine[], columns: SummaryColumn[], mapp
 			// Pauschale: die Menge laut Angebot – dazu steht in der Zeile ohnehin „lt. Angebot“
 			quantity = l.quantity;
 		}
-		return { number, offerLineId: l.id, columnKey: null, kind: 'position', text: l.text, quantity, unit: l.unit, unitPrice: l.unitPrice, offerQuantity: l.quantity, source };
+		return {
+			number,
+			offerLineId: l.id,
+			columnKey: null,
+			kind: 'position',
+			text: l.text,
+			...(l.note ? { note: l.note } : {}),
+			quantity,
+			unit: l.unit,
+			unitPrice: l.unitPrice,
+			offerQuantity: l.quantity,
+			source
+		};
 	});
 	if (own.length) {
 		const at = lines.length;

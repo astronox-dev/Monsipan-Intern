@@ -149,7 +149,7 @@ export async function orderDetail(id: number) {
 		.get();
 	if (!order) return null;
 	const lines = await db
-		.select({ id: orderPositions.id, kind: orderPositions.kind, text: orderPositions.text, quantity: orderPositions.quantity, unit: orderPositions.unit })
+		.select({ id: orderPositions.id, kind: orderPositions.kind, text: orderPositions.text, note: orderPositions.note, quantity: orderPositions.quantity, unit: orderPositions.unit })
 		.from(orderPositions)
 		.where(eq(orderPositions.orderId, id))
 		.orderBy(asc(orderPositions.sortOrder), asc(orderPositions.id))
@@ -212,7 +212,7 @@ export async function createOrderFromOffer(offerId: number, partyId: number | nu
 			.orderBy(asc(offerPositions.sortOrder), asc(offerPositions.id))
 			.all();
 		for (const [i, l] of lines.entries()) {
-			await tx.insert(orderPositions).values({ orderId: row.id, sortOrder: i, kind: l.kind, text: l.text, quantity: l.quantity, unit: l.unit });
+			await tx.insert(orderPositions).values({ orderId: row.id, sortOrder: i, kind: l.kind, text: l.text, note: l.note, quantity: l.quantity, unit: l.unit });
 		}
 		return row.id;
 	});

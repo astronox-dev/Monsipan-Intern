@@ -320,6 +320,7 @@ async function createStorno(user: SessionUser, invoice: InvoiceDetail, why: stri
 				number: l.number,
 				kind: l.kind,
 				text: l.text,
+				note: l.note ?? '',
 				quantity: l.kind === 'titel' || l.quantity == null ? l.quantity : -l.quantity,
 				unit: l.unit,
 				unitPrice: l.unitPrice

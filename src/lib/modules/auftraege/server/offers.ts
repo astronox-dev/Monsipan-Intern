@@ -111,6 +111,32 @@ export async function offerCounts() {
 	return out;
 }
 
+/**
+ * Positionen, die schon in Angeboten standen – je Bezeichnung einmal, mit
+ * Bemerkung, Einheit und Einheitspreis vom letzten Mal und wie oft sie
+ * vorkam. Für die Vorschläge beim Schreiben eines Angebots.
+ */
+export async function positionMemory(limit = 500) {
+	const latest = db
+		.select({
+			text: offerPositions.text,
+			uses: sql<number>`count(*)`.as('uses'),
+			last: sql<number>`max(${offerPositions.id})`.as('last')
+		})
+		.from(offerPositions)
+		.where(and(eq(offerPositions.kind, 'position'), sql`trim(${offerPositions.text}) <> ''`))
+		.groupBy(offerPositions.text)
+		.as('latest');
+	const rows = await db
+		.select({ text: offerPositions.text, note: offerPositions.note, unit: offerPositions.unit, unitPrice: offerPositions.unitPrice, uses: latest.uses })
+		.from(offerPositions)
+		.innerJoin(latest, eq(offerPositions.id, latest.last))
+		.orderBy(desc(latest.uses), desc(latest.last))
+		.limit(limit)
+		.all();
+	return rows.map((r) => ({ ...r, uses: Number(r.uses) }));
+}
+
 /** Vorschlag für das nächste Angebot: Nummer und Projektnummer */
 export async function suggestNumbers(year = new Date().getFullYear()) {
 	const rows = await db.select({ n: offers.number, p: offers.projectNumber }).from(offers).all();
@@ -236,6 +262,7 @@ async function loadOffer(where: SQL) {
 				id: offerPositions.id,
 				kind: offerPositions.kind,
 				text: offerPositions.text,
+				note: offerPositions.note,
 				quantity: offerPositions.quantity,
 				unit: offerPositions.unit,
 				unitPrice: offerPositions.unitPrice
@@ -254,7 +281,6 @@ export type OfferDetail = NonNullable<Awaited<ReturnType<typeof offerDetail>>>;
 export interface SaveOffer {
 	head: {
 		number: string;
-		projectNumber: string;
 		date: string;
 		title: string;
 		location: string;
@@ -269,7 +295,7 @@ export interface SaveOffer {
 		closing: string;
 		vatRate: number;
 	};
-	lines: { kind: 'position' | 'titel'; text: string; quantity: string; unit: string; unitPrice: string }[];
+	lines: { kind: 'position' | 'titel'; text: string; note?: string; quantity: string; unit: string; unitPrice: string }[];
 }
 
 const qty = (v: string) => {
@@ -288,7 +314,6 @@ export async function saveOffer(id: number, data: SaveOffer) {
 			.update(offers)
 			.set({
 				number: h.number.slice(0, 30),
-				projectNumber: h.projectNumber.slice(0, 30),
 				date: h.date,
 				title: h.title.slice(0, 300),
 				location: h.location.slice(0, 300),
@@ -317,6 +342,7 @@ export async function saveOffer(id: number, data: SaveOffer) {
 				sortOrder: i,
 				kind: titel ? 'titel' : 'position',
 				text: l.text.slice(0, 4000),
+				note: titel ? '' : (l.note ?? '').trim().slice(0, 2000),
 				quantity: titel ? null : qty(l.quantity),
 				unit: titel ? '' : l.unit.trim().slice(0, 20),
 				unitPrice: titel ? null : price(l.unitPrice)

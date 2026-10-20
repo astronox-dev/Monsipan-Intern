@@ -99,7 +99,7 @@ export interface InvoiceContent {
 	section: string;
 	vatRate: number;
 	reverseCharge: boolean;
-	lines: { number: string; kind: string; text: string; quantity: number | null; unit: string; unitPrice: number | null }[];
+	lines: { number: string; kind: string; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null }[];
 }
 
 export function contentHash(i: InvoiceContent): string {
@@ -126,7 +126,8 @@ export function contentHash(i: InvoiceContent): string {
 			i.section,
 			i.vatRate,
 			i.reverseCharge,
-			i.lines.map((l) => [l.number, l.kind, l.text, l.quantity, l.unit, l.unitPrice]),
+			// Die Bemerkung nur, wenn eine da ist – so bleibt die Prüfsumme älterer Rechnungen gleich
+			i.lines.map((l) => [l.number, l.kind, l.text, l.quantity, l.unit, l.unitPrice, ...(l.note ? [l.note] : [])]),
 			...(i.costCenter ? [i.costCenter] : [])
 		])
 	);
@@ -141,6 +142,7 @@ export async function readContent(tx: Tx, id: number) {
 			number: invoicePositions.number,
 			kind: invoicePositions.kind,
 			text: invoicePositions.text,
+			note: invoicePositions.note,
 			quantity: invoicePositions.quantity,
 			unit: invoicePositions.unit,
 			unitPrice: invoicePositions.unitPrice

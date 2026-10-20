@@ -52,7 +52,7 @@
 		{#if data.filter.year}<input type="hidden" name="jahr" value={data.filter.year} />{/if}
 		<label class="min-w-[12rem] flex-1">
 			<span class="field-label">Suche</span>
-			<SearchInput value={data.filter.q} placeholder="Nummer, BV, Kunde, Projektnummer" />
+			<SearchInput value={data.filter.q} placeholder="Nummer, BV, Kunde" />
 		</label>
 		<label>
 			<span class="field-label">Stand</span>
@@ -127,16 +127,12 @@
 				<span class="field-label">Bauvorhaben (BV)</span>
 				<input class="input" name="titel" maxlength="300" placeholder="z. B. Bodenmarkierungen Werkstättenring Süd / Betriebsgelände" />
 			</label>
-			<div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+			<div class="grid grid-cols-2 gap-4">
 				<label class="block">
 					<span class="field-label">Angebotsnummer *</span>
 					<input class="input num" name="nummer" required maxlength="30" value={data.suggestion.number} />
 				</label>
 				<label class="block">
-					<span class="field-label">Projektnummer</span>
-					<input class="input num" name="projekt" maxlength="30" value={data.suggestion.projectNumber} />
-				</label>
-				<label class="col-span-2 block sm:col-span-1">
 					<span class="field-label">Datum *</span>
 					<input class="input num" type="date" name="datum" required value={data.suggestion.date} />
 				</label>

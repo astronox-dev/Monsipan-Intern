@@ -23,7 +23,11 @@
 	<div class="min-w-0">
 		<h1 class="text-[2rem] leading-tight">{next} zu {spacedNumber(data.order.number)}</h1>
 		<p class="text-ink-2">
-			{data.order.title || 'Ohne BV'}{data.order.status === 'abgeschlossen' ? '' : ' · Auftrag noch in Arbeit – also eine Teilrechnung'}
+			{data.order.title || 'Ohne BV'}{data.order.status === 'abgeschlossen'
+				? ''
+				: data.order.status === 'erstellt'
+					? ' · Auftrag noch nicht begonnen'
+					: ' · Auftrag noch in Arbeit – also eine Teilrechnung'}
 		</p>
 	</div>
 	{#if data.selection.reports.length + data.selection.pending >= 2}
@@ -45,6 +49,10 @@
 		</ul>
 	</section>
 {/if}
+{#if data.notice}
+	<p class="card mb-4 border-warn/50 p-3 text-sm">{data.notice} Die Rechnung entsteht als Entwurf und lässt sich bis zum Ausstellen ändern.</p>
+{/if}
+
 {#if !data.hasPrices}
 	<p class="card mb-4 border-warn/50 p-3 text-sm">Zu diesem Auftrag gibt es kein Angebot mehr – die Einheitspreise bitte selbst eintragen.</p>
 {/if}

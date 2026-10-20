@@ -18,6 +18,7 @@ import {
 	reopenAccepted,
 	saveOffer,
 	withdrawOffer,
+	positionMemory,
 	type SaveOffer
 } from '$lib/modules/auftraege/server/offers';
 import { inquiryForOffer } from '$lib/modules/auftraege/server/inquiries';
@@ -51,6 +52,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		customers: editable ? await listCustomers() : [],
 		// Einheiten zur Auswahl – aus den Stammdaten
 		units: editable ? await unitOptions() : [],
+		// Frühere Positionen als Vorschläge beim Schreiben
+		memory: editable ? await positionMemory() : [],
 		canAddCustomer: editable && can(user.role, 'kunden.erstellen'),
 		canRelease: offer.status === 'entwurf' && can(user.role, 'angebote.freigeben'),
 		canWithdraw: (offer.status === 'freigegeben' || offer.status === 'aenderung') && can(user.role, 'angebote.bearbeiten'),
@@ -97,6 +100,7 @@ function readOffer(form: FormData): SaveOffer | { message: string } {
 		.map((i) => ({
 			kind: s(`z.${i}.art`) === 'titel' ? ('titel' as const) : ('position' as const),
 			text: s(`z.${i}.text`),
+			note: s(`z.${i}.notiz`),
 			quantity: s(`z.${i}.menge`),
 			unit: s(`z.${i}.einheit`),
 			unitPrice: s(`z.${i}.preis`)
@@ -110,7 +114,6 @@ function readOffer(form: FormData): SaveOffer | { message: string } {
 	return {
 		head: {
 			number,
-			projectNumber: s('projekt').trim(),
 			date,
 			title: s('titel').trim(),
 			location: s('ort').trim(),

@@ -6,19 +6,13 @@ import { notifyInvoice } from '$lib/modules/auftraege/server/notify';
 import { unitOptions } from '$lib/server/options';
 import type { Actions, PageServerLoad } from './$types';
 
-/** Auftrag laden und prüfen: sichtbar und (noch) etwas abzurechnen */
+/** Auftrag laden und prüfen: sichtbar – eine Rechnung (als Entwurf) geht aus jedem Stand */
 async function open(url: URL, locals: App.Locals) {
 	const user = requirePermission(locals, 'rechnungen.erstellen');
 	const orderId = Number(url.searchParams.get('auftrag'));
 	if (!Number.isInteger(orderId) || orderId <= 0) redirect(303, '/rechnungen');
 	const draft = await invoiceDraft(orderId);
 	if (!draft || !mayViewOrder(user, draft.order)) error(404, 'Auftrag nicht gefunden');
-	if (draft.blocked) {
-		// Alles abgerechnet: zur letzten Rechnung statt einer Fehlerseite
-		const last = draft.previous.at(-1);
-		if (last && draft.order.status !== 'erstellt') redirect(303, `/rechnungen/${last.id}`);
-		error(400, draft.blocked);
-	}
 	return { user, draft };
 }
 
@@ -30,6 +24,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		paymentDays: draft.paymentDays,
 		units: await unitOptions(),
 		previous: draft.previous,
+		// Ohne neue geprüfte Berichte: Mengen selbst prüfen
+		notice: draft.notice,
 		mapping: { columns: draft.columns, priced: draft.lines, initial: draft.mapping },
 		selection: {
 			reports: draft.reports,

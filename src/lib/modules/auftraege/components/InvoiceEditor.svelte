@@ -10,7 +10,6 @@
 		serviceTo: string;
 		title: string;
 		location: string;
-		projectNumber: string;
 		/** Steht hinter der Rechnungsnummer: „Nummer/Kostenstelle" */
 		costCenter: string;
 		customerName: string;
@@ -29,6 +28,7 @@
 		number: string;
 		kind: 'position' | 'titel';
 		text: string;
+		note?: string;
 		quantity: number | null;
 		unit: string;
 		unitPrice: number | null;
@@ -92,6 +92,7 @@
 		number: string;
 		kind: 'position' | 'titel';
 		text: string;
+		note: string;
 		quantity: string;
 		unit: string;
 		price: string;
@@ -113,6 +114,7 @@
 		number: l.number,
 		kind: l.kind,
 		text: l.text,
+		note: l.note ?? '',
 		quantity: qtyInput(l.quantity),
 		unit: l.unit,
 		price: amountInput(l.unitPrice),
@@ -211,7 +213,7 @@
 	}
 
 	function addLine() {
-		lines.push({ key: nextKey++, number: '', kind: 'position', text: '', quantity: '', unit: '', price: '', offerLineId: null, offerQuantity: null, source: '', columnKey: null, ownTitle: false });
+		lines.push({ key: nextKey++, number: '', kind: 'position', text: '', note: '', quantity: '', unit: '', price: '', offerLineId: null, offerQuantity: null, source: '', columnKey: null, ownTitle: false });
 	}
 	function removeLine(key: number) {
 		lines = lines.filter((l) => l.key !== key);
@@ -379,10 +381,6 @@
 				{#each ['Burgenland', 'Kärnten', 'Niederösterreich', 'Oberösterreich', 'Salzburg', 'Steiermark', 'Tirol', 'Vorarlberg', 'Wien'] as b (b)}<option value={b}></option>{/each}
 			</datalist>
 			<label class="block">
-				<span class="field-label">Projektnummer</span>
-				<input class="input num" name="projekt" maxlength="30" bind:value={head.projectNumber} />
-			</label>
-			<label class="block">
 				<span class="field-label">Kostenstelle</span>
 				<input class="input num" name="kostenstelle" maxlength="30" bind:value={head.costCenter} />
 				<span class="field-hint">Die Rechnungsnummer lautet dann „Nummer/Kostenstelle".</span>
@@ -432,6 +430,16 @@
 						<span class="num pt-2 text-sm">{l.number}</span>
 						<div class="min-w-0">
 							<textarea class="textarea auto min-h-10 py-2 font-medium" name="z.{i}.text" rows="1" maxlength="4000" bind:value={l.text} aria-label="Bezeichnung Zeile {i + 1}"></textarea>
+							<!-- Bemerkung: steht im PDF unter der Bezeichnung, nicht fett -->
+							<textarea
+								class="textarea auto mt-1.5 min-h-8 py-1.5 text-sm"
+								name="z.{i}.notiz"
+								rows="1"
+								maxlength="2000"
+								placeholder="Bemerkung (optional)"
+								bind:value={l.note}
+								aria-label="Bemerkung Zeile {i + 1}"
+							></textarea>
 							{#if l.source || l.offerQuantity != null}
 								<p class="mt-1 text-[0.75rem] text-ink-3">
 									{[l.source && `Menge aus ${l.source}`, l.offerQuantity != null && `lt. Angebot ${quantityLabel(l.offerQuantity)} ${l.unit}`].filter(Boolean).join(' · ')}

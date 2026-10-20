@@ -220,16 +220,16 @@ export async function invoicesForOrder(orderId: number) {
 }
 
 /**
- * Kann zum Auftrag (noch) eine Rechnung geschrieben werden? Die erste geht ab
- * „in Arbeit" (als Teilrechnung) bzw. nach dem Abschluss auch ohne Berichte;
- * jede weitere braucht geprüfte Berichte, die noch auf keiner Rechnung stehen.
- * Gibt null zurück, wenn es geht – sonst den Grund.
+ * Hinweis zur nächsten Rechnung. Gesperrt wird nichts: Ein Entwurf geht aus
+ * jedem Stand des Auftrags – ohne neue geprüfte Berichte stehen dann die Mengen
+ * aus dem Angebot drin, die man selbst prüft. Gibt null zurück, wenn es neue
+ * geprüfte Berichte gibt (oder der Auftrag abgeschlossen ist), sonst den Hinweis.
  */
-export function invoiceBlocker(s: { status: string; previous: number; available: number }): string | null {
-	if (s.status === 'erstellt') return 'Rechnungen gibt es, sobald der Auftrag in Arbeit ist.';
+export function invoiceNotice(s: { status: string; previous: number; available: number }): string | null {
 	if (s.available) return null;
-	if (s.previous) return 'Alle geprüften Tagesberichte sind schon abgerechnet.';
-	if (s.status !== 'abgeschlossen') return 'Für eine Teilrechnung braucht es mindestens einen geprüften Tagesbericht.';
+	if (s.previous) return 'Alle geprüften Tagesberichte sind schon abgerechnet – die Mengen bitte selbst prüfen.';
+	if (s.status === 'erstellt') return 'Der Auftrag hat noch nicht begonnen und es gibt keinen geprüften Tagesbericht – die Mengen bitte selbst prüfen.';
+	if (s.status !== 'abgeschlossen') return 'Noch kein geprüfter Tagesbericht – die Mengen bitte selbst prüfen.';
 	return null;
 }
 
@@ -293,6 +293,7 @@ export async function invoiceDraft(orderId: number) {
 					id: offerPositions.id,
 					kind: offerPositions.kind,
 					text: offerPositions.text,
+					note: offerPositions.note,
 					quantity: offerPositions.quantity,
 					unit: offerPositions.unit,
 					unitPrice: offerPositions.unitPrice
@@ -303,7 +304,7 @@ export async function invoiceDraft(orderId: number) {
 				.all()
 		: (
 				await db
-					.select({ id: orderPositions.id, kind: orderPositions.kind, text: orderPositions.text, quantity: orderPositions.quantity, unit: orderPositions.unit })
+					.select({ id: orderPositions.id, kind: orderPositions.kind, text: orderPositions.text, note: orderPositions.note, quantity: orderPositions.quantity, unit: orderPositions.unit })
 					.from(orderPositions)
 					.where(eq(orderPositions.orderId, orderId))
 					.orderBy(asc(orderPositions.sortOrder), asc(orderPositions.id))
@@ -359,7 +360,7 @@ export async function invoiceDraft(orderId: number) {
 			previous.map((p) => p.id),
 			lines
 		),
-		blocked: invoiceBlocker({ status: order.status, previous: previous.length, available: reports.length }),
+		notice: invoiceNotice({ status: order.status, previous: previous.length, available: reports.length }),
 		mapping: suggestMapping(columns, lines, order.invoiceMapping),
 		head: {
 			kind: suggestKind({ closed: order.status === 'abgeschlossen', previous: previous.length, available: reports.length, selected: reports.length, pending }) as Exclude<InvoiceKind, 'storno'>,
@@ -370,7 +371,6 @@ export async function invoiceDraft(orderId: number) {
 			dueDate: addDays(date, settings.invoicePaymentDays),
 			serviceFrom: period?.from ?? '',
 			serviceTo: period?.to ?? '',
-			projectNumber: order.projectNumber,
 			// Die Kostenstelle wie auf der letzten Rechnung zum Auftrag
 			costCenter: last?.costCenter ?? '',
 			title: order.title,
@@ -410,7 +410,6 @@ export interface SaveInvoice {
 		serviceTo: string | null;
 		title: string;
 		location: string;
-		projectNumber: string;
 		costCenter: string;
 		customerName: string;
 		customerAddition: string;
@@ -423,7 +422,7 @@ export interface SaveInvoice {
 		vatRate: number;
 		reverseCharge: boolean;
 	};
-	lines: { number: string; kind: 'position' | 'titel'; text: string; quantity: number | null; unit: string; unitPrice: number | null }[];
+	lines: { number: string; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null }[];
 }
 
 /**
@@ -469,6 +468,7 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 			number,
 			kind: 'position',
 			text,
+			note: s(`z.${i}.notiz`).replace(/\r\n/g, '\n').trim(),
 			quantity: quantity == null ? null : Math.round(quantity * 1000) / 1000,
 			unit: s(`z.${i}.einheit`).trim(),
 			unitPrice: unitPrice == null ? null : Math.round(unitPrice * 10000) / 10000
@@ -495,7 +495,6 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 			serviceTo: to || null,
 			title: s('titel').trim().slice(0, 300),
 			location: s('ort').trim().slice(0, 300),
-			projectNumber: s('projekt').trim().slice(0, 30),
 			costCenter: s('kostenstelle').replace(/\s+/g, ' ').trim().slice(0, 30),
 			customerName: name.slice(0, 160),
 			customerAddition: s('k_zusatz').trim().slice(0, 160),
@@ -538,6 +537,7 @@ async function writeLines(tx: Tx, invoiceId: number, lines: SaveInvoice['lines']
 			number: l.number,
 			kind: l.kind,
 			text: l.text.slice(0, 4000),
+			note: l.kind === 'titel' ? '' : (l.note ?? '').slice(0, 2000),
 			quantity: l.kind === 'titel' ? null : l.quantity,
 			unit: l.kind === 'titel' ? '' : l.unit.slice(0, 20),
 			unitPrice: l.kind === 'titel' ? null : l.unitPrice
@@ -575,8 +575,6 @@ export async function createInvoice(
 		if (chosen.length !== reportIds.length) return { message: 'Ein gewählter Tagesbericht gehört nicht mehr zu diesem Auftrag – bitte neu laden.' };
 		if (chosen.some((r) => !COUNTED_STATUS.includes(r.status))) return { message: 'Abgerechnet werden nur geprüfte Tagesberichte.' };
 		if (chosen.some((r) => r.invoiceId != null)) return { message: 'Ein gewählter Tagesbericht ist inzwischen abgerechnet – bitte neu laden.' };
-		const blocked = invoiceBlocker({ status: order.status, previous: previous.length, available: chosen.length });
-		if (blocked) return { message: chosen.length || order.status === 'erstellt' ? blocked : 'Bitte mindestens einen Tagesbericht wählen.' };
 		const taken = await tx
 			.select({ number: invoices.number })
 			.from(invoices)
@@ -708,6 +706,7 @@ export async function invoiceDetail(id: number) {
 			number: invoicePositions.number,
 			kind: invoicePositions.kind,
 			text: invoicePositions.text,
+			note: invoicePositions.note,
 			quantity: invoicePositions.quantity,
 			unit: invoicePositions.unit,
 			unitPrice: invoicePositions.unitPrice

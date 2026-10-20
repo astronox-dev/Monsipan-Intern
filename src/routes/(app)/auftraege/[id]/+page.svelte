@@ -132,10 +132,6 @@
 		<dl class="mt-2 grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1 text-sm">
 			<dt class="text-ink-3">Auftragsnummer</dt>
 			<dd class="num">{order.number}</dd>
-			{#if order.projectNumber}
-				<dt class="text-ink-3">Projektnummer</dt>
-				<dd class="num">{order.projectNumber}</dd>
-			{/if}
 			<dt class="text-ink-3">Partie</dt>
 			<dd>{order.partyName ?? 'Nicht zugeteilt'}</dd>
 			<dt class="text-ink-3">Erstellt</dt>
@@ -189,7 +185,10 @@
 			{:else}
 				<li class="flex items-start gap-3 px-4 py-3 lg:px-5">
 					<span class="num w-9 shrink-0 text-sm text-ink-3">{numbers[i]}</span>
-					<span class="min-w-0 flex-1 font-medium whitespace-pre-line">{l.text}</span>
+					<span class="min-w-0 flex-1">
+						<span class="block font-medium whitespace-pre-line">{l.text}</span>
+						{#if l.note}<span class="mt-0.5 block text-sm whitespace-pre-line text-ink-2">{l.note}</span>{/if}
+					</span>
 					<span class="num shrink-0 text-right">{quantityLabel(l.quantity)} <span class="text-ink-3">{l.unit}</span></span>
 				</li>
 			{/if}

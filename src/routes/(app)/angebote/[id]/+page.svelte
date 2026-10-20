@@ -23,6 +23,7 @@
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import CustomerFields from '$lib/modules/auftraege/components/CustomerFields.svelte';
+	import PositionInput, { type PositionMemory } from '$lib/modules/auftraege/components/PositionInput.svelte';
 	import PhotoGallery from '$lib/components/PhotoGallery.svelte';
 	import CaseDocuments from '$lib/modules/auftraege/components/CaseDocuments.svelte';
 	import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '$lib/modules/stunden/signature';
@@ -45,14 +46,13 @@
 	let { data, form } = $props();
 	const offer = $derived(data.offer);
 
-	type Line = { key: number; kind: 'position' | 'titel'; text: string; quantity: string; unit: string; price: string };
+	type Line = { key: number; kind: 'position' | 'titel'; text: string; note: string; quantity: string; unit: string; price: string };
 
 	let nextKey = 1;
 	// Das Angebot wird nur beim Öffnen übernommen – danach gehört der Stand dem Formular
 	// svelte-ignore state_referenced_locally
 	let head = $state({
 		number: data.offer.number,
-		projectNumber: data.offer.projectNumber,
 		date: data.offer.date,
 		title: data.offer.title,
 		location: data.offer.location,
@@ -73,6 +73,7 @@
 			key: nextKey++,
 			kind: l.kind,
 			text: l.text,
+			note: l.note ?? '',
 			quantity: l.quantity == null ? '' : String(l.quantity).replace('.', ','),
 			unit: canonicalUnit(data.units, l.unit),
 			price: amountInput(l.unitPrice)
@@ -109,9 +110,16 @@
 
 	async function addLine(kind: 'position' | 'titel') {
 		if (lines.length >= MAX_OFFER_LINES) return;
-		lines.push({ key: nextKey++, kind, text: '', quantity: kind === 'position' ? '' : '', unit: '', price: '' });
+		lines.push({ key: nextKey++, kind, text: '', note: '', quantity: kind === 'position' ? '' : '', unit: '', price: '' });
 		await tick();
 		listBox?.querySelector<HTMLElement>(`[data-zeile="${lines.length - 1}"]`)?.focus();
+	}
+	/** Frühere Position gewählt: Einheit, Preis und Bemerkung vom letzten Mal – nur, wo noch nichts steht */
+	function pickMemory(i: number, m: PositionMemory) {
+		const l = lines[i];
+		if (!l.unit && m.unit) l.unit = canonicalUnit(data.units, m.unit);
+		if (!l.price.trim() && m.unitPrice != null) l.price = amountInput(m.unitPrice);
+		if (!l.note.trim() && m.note) l.note = m.note;
 	}
 	function removeLine(key: number) {
 		lines = lines.filter((l) => l.key !== key);
@@ -308,7 +316,6 @@
 				<h2 class="text-lg">Angebot</h2>
 				<div class="mt-2 grid grid-cols-2 gap-3">
 					{@render field('Angebotsnummer', 'nummer', head.number, (v) => (head.number = v), { max: 30 })}
-					{@render field('Projektnummer', 'projekt', head.projectNumber, (v) => (head.projectNumber = v), { max: 30 })}
 					<label class="block">
 						<span class="field-label">Angebotsdatum</span>
 						<input class="input num" type="date" name="datum" required bind:value={head.date} />
@@ -359,16 +366,31 @@
 						{:else}
 							<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-2 md:grid-cols-[2.5rem_minmax(0,1fr)_5rem_7.5rem_7rem_7rem_5.5rem] md:items-start">
 								<span class="num pt-2 text-sm">{numbers[i]}</span>
-								<textarea
-									class="textarea auto min-h-10 py-2 font-medium"
-									name="z.{i}.text"
-									rows="1"
-									maxlength="4000"
-									placeholder="Bezeichnung, z. B. Linie 10 – 15 cm, weiß, MSK D refl."
-									data-zeile={i}
-									bind:value={l.text}
-									aria-label="Bezeichnung Zeile {i + 1}"
-								></textarea>
+								<div class="min-w-0">
+									<!-- Beim Tippen: frühere Positionen als Vorschlag -->
+									<PositionInput
+										class="textarea auto min-h-10 py-2 font-medium"
+										name="z.{i}.text"
+										rows={1}
+										maxlength={4000}
+										placeholder="Bezeichnung, z. B. Linie 10 – 15 cm, weiß, MSK D refl."
+										data-zeile={i}
+										bind:value={l.text}
+										memory={data.memory}
+										onpick={(m) => pickMemory(i, m)}
+										aria-label="Bezeichnung Zeile {i + 1}"
+									/>
+									<!-- Bemerkung: steht im PDF unter der Bezeichnung, nicht fett -->
+									<textarea
+										class="textarea auto mt-1.5 min-h-8 py-1.5 text-sm"
+										name="z.{i}.notiz"
+										rows="1"
+										maxlength="2000"
+										placeholder="Bemerkung (optional)"
+										bind:value={l.note}
+										aria-label="Bemerkung Zeile {i + 1}"
+									></textarea>
+								</div>
 								<div class="md:hidden">{@render tools(i, l.key)}</div>
 								<div class="col-span-3 grid grid-cols-4 gap-2 md:contents">
 									<label class="block">
