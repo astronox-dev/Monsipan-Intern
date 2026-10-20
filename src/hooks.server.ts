@@ -4,11 +4,13 @@ import { clearSessionCookie, SESSION_COOKIE, validateSession } from '$lib/server
 import { scheduleMaintenance } from '$lib/server/backup';
 import { ensureDatabase } from '$lib/server/db';
 import { ensurePermissions } from '$lib/server/permissions';
+import { reportTools } from '$lib/server/compress';
 
 export const init: ServerInit = async () => {
 	await ensureDatabase();
 	await ensurePermissions();
 	scheduleMaintenance();
+	void reportTools();
 };
 
 // /bericht/<token>: Tagesbericht für den Kunden – ohne Anmeldung, der Link selbst ist der Schlüssel;

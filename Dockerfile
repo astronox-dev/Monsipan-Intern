@@ -19,7 +19,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 # ---------- Laufzeit ----------
 FROM node:24-alpine
 # tzdata: Monatsauswertungen rechnen in österreichischer Zeit
-RUN apk add --no-cache tzdata && mkdir -p /data && chown node:node /data
+# qpdf und jpegtran (libjpeg-turbo-utils): hochgeladene PDFs und Fotos verlustfrei verkleinern
+RUN apk add --no-cache tzdata qpdf libjpeg-turbo-utils && mkdir -p /data && chown node:node /data
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \

@@ -322,6 +322,7 @@ hochladen. In der Android-App öffnet sich dafür eine Kamera in der Seite (das 
 App-Hülle kommt dort nicht an die Kamera); sie bleibt offen, bis man **Fertig** tippt, und lädt
 jedes Foto gleich hoch. Vor dem Hochladen werden die Bilder am Gerät verkleinert (JPEG, lange
 Seite 2400 Pixel, dazu eine kleine Vorschau) – das schont das Datenvolumen auf der Baustelle.
+Der Server verkleinert sie danach noch verlustfrei (siehe „Speicherplatz“ unter Datensicherung).
 Antippen öffnet ein Foto groß, wischen oder die Pfeiltasten blättern.
 
 **Fotos drucken und laden:** **Drucken** und **PDF** neben den Fotos geben alle Fotos aus – zwei
@@ -1268,6 +1269,17 @@ Ohne SMTP funktioniert alles außer E-Mail; Mails landen dann nur im Log. Den Ve
 testet ein Admin unter **Einstellungen → Test senden**.
 
 ## Datensicherung
+
+**Speicherplatz:** Hochgeladene PDFs und Fotos werden vor dem Ablegen **verlustfrei**
+verkleinert – am Inhalt ändert sich nichts. PDFs (Unterlagen, Pläne, Richtlinien,
+Krankmeldungen) packt `qpdf` dichter (Streams stärker komprimiert, Objekt-Streams); Text,
+Vektoren und Bilder bleiben, wie sie sind. Fotos (JPEG) optimiert `jpegtran` (bessere
+Huffman-Tabellen, progressiv) – jedes Pixel bleibt gleich. Genommen wird das Ergebnis nur,
+wenn es mindestens 2 % kleiner ist. Nie angefasst werden digital signierte PDFs (die Signatur
+wäre sonst ungültig) und Archiv-PDFs (PDF/A). Beide Werkzeuge sind im Docker-Image; fehlen sie
+(etwa lokal unter Windows), werden die Dateien unverändert gespeichert. Beim Start steht im Log,
+ob sie da sind (`[verkleinern] …`), größere PDFs mit Vorher/Nachher. Schon gespeicherte Dateien
+bleiben, wie sie sind.
 
 - Jede Nacht ab 2 Uhr entsteht automatisch eine Sicherung in `/data/backups`
   (Docker-Volume `lager-data`), die letzten 14 bleiben erhalten. Sicherungen werden nie

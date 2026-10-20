@@ -13,6 +13,7 @@ import { DATA_DIR, db } from '$lib/server/db';
 import { sickDocuments } from '$lib/server/db/schema';
 import { tidyFolder } from '$lib/server/documents';
 import { jpegSize } from '$lib/modules/tagesberichte/photos';
+import { compressJpeg, compressPdfBuffer } from '$lib/server/compress';
 
 export const BELEG_DIR = path.join(DATA_DIR, 'krankmeldungen');
 export const MAX_BELEG_BYTES = 20 * 1024 * 1024;
@@ -26,9 +27,11 @@ export const belegFile = (sha256: string, kind: 'jpg' | 'pdf') => path.join(BELE
 export async function storeBeleg(upload: File): Promise<{ sha256: string; kind: 'jpg' | 'pdf'; size: number }> {
 	if (upload.size === 0) throw new BelegError(`„${upload.name}" ist leer.`);
 	if (upload.size > MAX_BELEG_BYTES) throw new BelegError(`„${upload.name}" ist zu groß – erlaubt sind ${MAX_BELEG_BYTES / 1024 / 1024} MB.`);
-	const buf = Buffer.from(await upload.arrayBuffer());
-	const kind = jpegSize(buf) ? 'jpg' : buf.subarray(0, 1024).toString('latin1').includes('%PDF-') ? 'pdf' : null;
+	const original = Buffer.from(await upload.arrayBuffer());
+	const kind = jpegSize(original) ? 'jpg' : original.subarray(0, 1024).toString('latin1').includes('%PDF-') ? 'pdf' : null;
 	if (!kind) throw new BelegError(`„${upload.name}" ist weder ein Foto noch ein PDF.`);
+	// Verlustfrei kleiner (siehe $lib/server/compress)
+	const buf = kind === 'jpg' ? await compressJpeg(original) : await compressPdfBuffer(original, BELEG_DIR);
 	const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
 	await fs.promises.mkdir(BELEG_DIR, { recursive: true });
 	const target = belegFile(sha256, kind);

@@ -13,6 +13,7 @@ import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { DATA_DIR, db } from '$lib/server/db';
 import { dailyReportPhotos, recordPhotos, users } from '$lib/server/db/schema';
 import { tidyFolder } from '$lib/server/documents';
+import { compressJpeg } from '$lib/server/compress';
 import { jpegSize, MAX_PHOTO_BYTES, MAX_PHOTOS, MAX_THUMB_BYTES, PhotoError } from '../photos';
 
 export const PHOTO_DIR = path.join(DATA_DIR, 'fotos');
@@ -24,9 +25,11 @@ export const photoFile = (sha256: string) => path.join(PHOTO_DIR, `${sha256}.jpg
 export async function storePhoto(upload: File, max: number) {
 	if (upload.size === 0) throw new PhotoError('Das Bild ist leer.');
 	if (upload.size > max) throw new PhotoError(`Das Bild ist zu groß – erlaubt sind ${Math.round(max / 1024 / 1024)} MB.`);
-	const buf = Buffer.from(await upload.arrayBuffer());
-	const size = jpegSize(buf);
-	if (!size) throw new PhotoError('Das ist kein lesbares JPG-Bild.');
+	const original = Buffer.from(await upload.arrayBuffer());
+	if (!jpegSize(original)) throw new PhotoError('Das ist kein lesbares JPG-Bild.');
+	// Verlustfrei kleiner – gleiche Pixel (siehe $lib/server/compress)
+	const buf = await compressJpeg(original);
+	const size = jpegSize(buf)!;
 	const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
 	await fs.promises.mkdir(PHOTO_DIR, { recursive: true });
 	const target = photoFile(sha256);

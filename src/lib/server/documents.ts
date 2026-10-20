@@ -17,6 +17,7 @@ import { MAX_DOCUMENT_BYTES } from '$lib/documents';
 import { DATA_DIR, db } from './db';
 import { inquiryDocuments, offerDocuments, orderDocuments, policyDocuments, productDocuments, users } from './db/schema';
 import { appendPart, isWriting, partFile } from './parts';
+import { compressPdf } from './compress';
 
 export const DOC_DIR = path.join(DATA_DIR, 'dokumente');
 
@@ -43,7 +44,7 @@ export async function storeDocument(upload: File, maxBytes: number | null = MAX_
 	const temp = path.join(DOC_DIR, `upload-${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}.tmp`);
 	try {
 		const { sha256, size, head } = await copyChecked(Readable.fromWeb(upload.stream() as Parameters<typeof Readable.fromWeb>[0]), temp, maxBytes);
-		return adopt(temp, sha256, size, head);
+		return await adopt(temp, sha256, size, head);
 	} catch (err) {
 		fs.rmSync(temp, { force: true });
 		throw err;
@@ -69,11 +70,21 @@ async function copyChecked(from: Readable, to: string | null, maxBytes: number |
 	return { sha256: hash.digest('hex'), size, head };
 }
 
-/** Geprüfte Datei unter ihrer Prüfsumme ablegen – liegt sie schon da, bleibt es bei einer */
-function adopt(temp: string, sha256: string, size: number, head: Buffer) {
+/**
+ * Geprüfte Datei unter ihrer Prüfsumme ablegen – liegt sie schon da, bleibt es
+ * bei einer. Vorher wird sie verlustfrei verkleinert, wenn das etwas bringt
+ * (siehe ./compress); Prüfsumme und Größe sind dann die der kleineren Fassung.
+ */
+async function adopt(temp: string, sha256: string, size: number, head: Buffer) {
 	if (size === 0) throw new DocumentError('Die Datei ist leer.');
 	// Die Kennung darf laut PDF-Norm in den ersten 1024 Bytes stehen
 	if (!head.toString('latin1').includes(PDF_MAGIC)) throw new DocumentError('Das ist keine PDF-Datei.');
+	const smaller = await compressPdf(temp);
+	if (smaller) {
+		fs.rmSync(temp, { force: true });
+		temp = smaller;
+		({ sha256, size } = await copyChecked(fs.createReadStream(smaller), null, null));
+	}
 	const target = documentFile(sha256);
 	if (fs.existsSync(target)) fs.rmSync(temp, { force: true });
 	else fs.renameSync(temp, target);
@@ -110,7 +121,7 @@ export async function finishUpload(userId: number, id: string, name: string) {
 	if (!fs.existsSync(file)) throw new DocumentError('Die Datei ist leer.');
 	try {
 		const { sha256, size, head } = await copyChecked(fs.createReadStream(file), null, null);
-		const stored = adopt(file, sha256, size, head);
+		const stored = await adopt(file, sha256, size, head);
 		const now = Date.now();
 		for (const [key, f] of finished) if (now - f.at > FINISHED_TTL) finished.delete(key);
 		finished.set(finishedKey(userId, id), { name: name.trim().slice(0, 200) || 'unterlage.pdf', ...stored, at: now });
