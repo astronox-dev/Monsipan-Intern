@@ -20,12 +20,14 @@
 		/** Schutzweg: Riegel hoch, Randsteine an den Seiten */
 		curbs?: boolean;
 		caption?: string;
+		/** Das Maß am Rand liegt außerhalb der Vorgabe – in Warnfarbe */
+		warn?: boolean;
 	}
-	let { parts, label, curbs = false, caption = '' }: Props = $props();
+	let { parts, label, curbs = false, caption = '', warn = false }: Props = $props();
 </script>
 
 <figure class="mt-4">
-	<div class="strip" class:crossing={curbs} aria-hidden="true">
+	<div class="strip" class:crossing={curbs} class:warn aria-hidden="true">
 		{#if curbs}<span class="curb"></span>{/if}
 		{#each parts as p, i (i)}
 			{#if p.kind === 'break'}
@@ -36,7 +38,7 @@
 		{/each}
 		{#if curbs}<span class="curb"></span>{/if}
 	</div>
-	<figcaption class="num mt-1.5 flex justify-between gap-3 text-sm font-semibold text-info">
+	<figcaption class="num mt-1.5 flex justify-between gap-3 text-sm font-semibold {warn ? 'text-warn' : 'text-info'}">
 		<span>{curbs ? '↤ ' : ''}{label}</span>
 		{#if caption}<span class="text-center font-normal text-ink-3">{caption}</span>{/if}
 		<span>{label}{curbs ? ' ↦' : ''}</span>
@@ -70,6 +72,9 @@
 	}
 	.edge {
 		background: var(--c-info-soft);
+	}
+	.warn .edge {
+		background: var(--c-warn-soft);
 	}
 	.curb {
 		width: 0.5rem;

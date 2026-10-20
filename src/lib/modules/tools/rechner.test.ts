@@ -35,28 +35,25 @@ describe('Parkordnung', () => {
 
 describe('Schutzweg', () => {
 	it('Riegel und Lücken je 50 cm, zum Randstein 25 bis 50 cm', () => {
-		expect(crossingLayout(650).exact).toEqual({ bars: 6, edge: 50, gap: 50 });
-		expect(crossingLayout(600).exact).toEqual({ bars: 6, edge: 25, gap: 50 });
-		expect(crossingLayout(625).exact).toEqual({ bars: 6, edge: 37.5, gap: 50 });
-		expect(crossingLayout(120).exact).toEqual({ bars: 1, edge: 35, gap: 50 });
+		expect(crossingLayout(650).exact).toEqual({ bars: 6, edge: 50, deviation: 0 });
+		expect(crossingLayout(600).exact).toEqual({ bars: 6, edge: 25, deviation: 0 });
+		expect(crossingLayout(625).exact).toEqual({ bars: 6, edge: 37.5, deviation: 0 });
+		expect(crossingLayout(120).exact).toEqual({ bars: 1, edge: 35, deviation: 0 });
 	});
 
-	it('geht es sich mit 50 cm Lücken nicht aus, stehen die Abstände daneben und die angepasste Lücke', () => {
+	it('geht es sich nicht aus, bleibt die Lücke 50 cm – die beiden Einteilungen daneben, die nähere zuerst', () => {
 		const r = crossingLayout(670);
 		expect(r.exact).toBeNull();
-		expect(r.off).toEqual([
-			{ bars: 6, edge: 60, gap: 50 },
-			{ bars: 7, edge: 10, gap: 50 }
+		// 6 Riegel: 60 cm, also 10 cm zu viel – 7 Riegel: 10 cm, also 15 cm zu wenig
+		expect(r.nearest).toEqual([
+			{ bars: 6, edge: 60, deviation: 10 },
+			{ bars: 7, edge: 10, deviation: -15 }
 		]);
-		expect(r.adjusted).toEqual([
-			{ bars: 6, edge: 50, gap: 54 },
-			{ bars: 7, edge: 25, gap: 45 }
-		]);
-		// Angepasst geht es genau auf
-		for (const a of r.adjusted) expect(2 * a.edge + a.bars * 50 + (a.bars - 1) * a.gap).toBeCloseTo(670, 6);
+		expect(crossingLayout(690).nearest.map((n) => n.bars)).toEqual([7, 6]);
+		for (const n of r.nearest) expect(2 * n.edge + n.bars * 50 + (n.bars - 1) * 50).toBeCloseTo(670, 6);
 	});
 
-	it('für jede Breite: entweder genau nach Vorgabe oder mit angepasster Lücke', () => {
+	it('für jede Breite: entweder genau nach Vorgabe oder die Einteilungen daneben', () => {
 		for (let width = 100; width <= 3000; width += 3) {
 			const r = crossingLayout(width);
 			if (r.exact) {
@@ -64,13 +61,14 @@ describe('Schutzweg', () => {
 				expect(r.exact.edge).toBeLessThanOrEqual(50);
 				expect(2 * r.exact.edge + r.exact.bars * 50 + (r.exact.bars - 1) * 50).toBeCloseTo(width, 6);
 			} else {
-				expect(r.off.length, `bei ${width} cm`).toBeGreaterThan(0);
+				expect(r.nearest.length, `bei ${width} cm`).toBeGreaterThan(0);
+				expect(r.nearest.every((n) => n.deviation !== 0)).toBe(true);
 			}
 		}
 	});
 
 	it('zu schmal gibt nichts', () => {
-		expect(crossingLayout(0)).toEqual({ exact: null, off: [], adjusted: [] });
+		expect(crossingLayout(0)).toEqual({ exact: null, nearest: [] });
 		expect(crossingLayout(40).exact).toBeNull();
 	});
 });

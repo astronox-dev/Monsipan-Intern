@@ -45,7 +45,7 @@
 	function crossingParts(c: CrossingLayout): StripPart[] {
 		const parts: StripPart[] = [{ kind: 'edge', len: c.edge }];
 		for (let i = 0; i < c.bars; i++) {
-			if (i) parts.push({ kind: 'gap', len: c.gap });
+			if (i) parts.push({ kind: 'gap', len: CROSSING.gap });
 			parts.push({ kind: 'mark', len: CROSSING.bar });
 		}
 		parts.push({ kind: 'edge', len: c.edge });
@@ -152,7 +152,7 @@
 					{/if}
 				</dl>
 				<LayoutStrip parts={crossingParts(c)} label={cmLabel(c.edge)} curbs caption="Randstein bis Randstein" />
-			{:else if !crossing.adjusted.length && !crossing.off.length}
+			{:else if !crossing.nearest.length}
 				<p class="mt-3 flex items-start gap-2 rounded-xl bg-warn-soft p-3 text-sm text-warn">
 					<TriangleAlert size={18} class="mt-0.5 shrink-0" aria-hidden="true" />
 					Zu schmal – für einen Riegel mit 25 cm zu beiden Randsteinen braucht es mindestens 1 m.
@@ -161,24 +161,23 @@
 				<p class="mt-4 flex items-start gap-2 rounded-xl bg-warn-soft p-3 text-sm text-warn">
 					<TriangleAlert size={18} class="mt-0.5 shrink-0" aria-hidden="true" />
 					<span>
-						Mit genau 50 cm Lücken geht es sich nicht aus:
-						{crossing.off.map((o) => `${o.bars} Riegel → ${cmLabel(o.edge)} zum Randstein`).join(', ')} – erlaubt sind 25 bis 50 cm.
+						Bei dieser Breite geht es sich mit 50 cm Lücken nicht aus – der Abstand zum Randstein liegt immer außerhalb von 25 bis 50 cm.
+						Die beiden Möglichkeiten, die nähere zuerst:
 					</span>
 				</p>
-				{#if crossing.adjusted.length}
-					<p class="mt-4 text-sm font-medium">Mit angepasster Lücke:</p>
-					<div class="mt-2 grid gap-3">
-						{#each crossing.adjusted as c (c.bars)}
-							<div class="rounded-xl border border-line p-3">
-								<p class="num">
-									<span class="font-semibold">{c.bars} Riegel</span> · Lücke <span class="font-semibold">{cmLabel(c.gap)}</span> · je {cmLabel(c.edge)} zum Randstein
-									{#if barArea(c.bars)}<span class="text-ink-2"> · {barArea(c.bars)}</span>{/if}
-								</p>
-								<LayoutStrip parts={crossingParts(c)} label={cmLabel(c.edge)} curbs />
-							</div>
-						{/each}
-					</div>
-				{/if}
+				<div class="mt-3 grid gap-3">
+					{#each crossing.nearest as c, i (c.bars)}
+						<div class="rounded-xl border border-line p-3">
+							<p class="num">
+								<span class="font-semibold">{c.bars} Riegel</span> · je <span class="font-semibold">{cmLabel(c.edge)}</span> zum Randstein
+								<span class="text-warn">({c.deviation > 0 ? `${cmLabel(c.deviation)} zu viel` : `${cmLabel(-c.deviation)} zu wenig`})</span>
+								{#if barArea(c.bars)}<span class="text-ink-2"> · {barArea(c.bars)}</span>{/if}
+							</p>
+							{#if i === 0 && crossing.nearest.length > 1}<p class="text-sm text-ink-3">Näher an der Vorgabe</p>{/if}
+							<LayoutStrip parts={crossingParts(c)} label={cmLabel(c.edge)} curbs warn />
+						</div>
+					{/each}
+				</div>
 			{/if}
 		{/if}
 	</section>

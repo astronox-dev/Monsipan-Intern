@@ -1021,10 +1021,10 @@ darunter, mit maßstäblicher Zeichnung. Gerechnet wird im Browser, gespeichert 
 - **Schutzweg:** Riegel 50 cm, Lücke 50 cm; vom Randstein zum ersten und letzten Riegel
   mindestens 25 cm, höchstens 50 cm. Aus der Fahrbahnbreite (Randstein bis Randstein) kommen
   der Abstand zum Randstein und die Zahl der Riegel; mit der Länge der Riegel (freiwillig) auch
-  die Fläche in m². Geht es sich mit genau 50 cm Lücken nicht aus (z. B. 6,70 m: 60 cm bzw.
-  10 cm zum Randstein), steht das als Hinweis da, und darunter die beiden Möglichkeiten mit
-  angepasster Lücke – 6 Riegel mit 54 cm Lücke und 50 cm Rand oder 7 Riegel mit 45 cm Lücke
-  und 25 cm Rand.
+  die Fläche in m². Die Lücke ist **immer 50 cm**. Geht es sich damit bei einer Breite nicht
+  aus, steht das als Hinweis da, darunter die beiden Möglichkeiten mit dem tatsächlichen
+  Abstand und wie weit er daneben liegt, die nähere zuerst – z. B. 6,70 m: 6 Riegel mit je
+  60 cm zum Randstein (10 cm zu viel) oder 7 Riegel mit je 10 cm (15 cm zu wenig).
 
 Die Rechnung steht in [`src/lib/modules/tools/rechner.ts`](src/lib/modules/tools/rechner.ts)
 (in Zentimetern, mit Tests); ein weiterer Rechner kommt als Abschnitt auf dieselbe Seite.

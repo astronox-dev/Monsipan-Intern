@@ -48,41 +48,37 @@ export interface CrossingLayout {
 	bars: number;
 	/** Abstand Randstein – erster bzw. letzter Riegel, cm */
 	edge: number;
-	/** Lücke zwischen den Riegeln, cm */
-	gap: number;
+	/** Um so viel liegt der Abstand außerhalb von 25–50 cm: zu viel positiv, zu wenig negativ, sonst 0 */
+	deviation: number;
 }
 
 export interface CrossingResult {
 	/** Mit 50 cm Lücken und 25–50 cm zum Randstein – null, wenn es sich so nicht ausgeht */
 	exact: CrossingLayout | null;
 	/**
-	 * Geht es sich nicht aus: mit 50 cm Lücken der nächste Abstand darüber bzw.
-	 * darunter (beide außerhalb der Vorgabe) …
+	 * Geht es sich nicht aus: die beiden Einteilungen daneben, ebenfalls mit
+	 * 50 cm Lücken – die näher an der Vorgabe zuerst
 	 */
-	off: CrossingLayout[];
-	/** … und mit angepasster Lücke, der Abstand zum Randstein auf 50 bzw. 25 cm */
-	adjusted: CrossingLayout[];
+	nearest: CrossingLayout[];
 }
 
-/** Schutzweg über diese Breite (cm, Randstein bis Randstein) einteilen */
+/** Schutzweg über diese Breite (cm, Randstein bis Randstein) einteilen – die Lücke ist immer 50 cm */
 export function crossingLayout(width: number): CrossingResult {
 	const { bar, gap, minEdge, maxEdge } = CROSSING;
-	const result: CrossingResult = { exact: null, off: [], adjusted: [] };
+	const result: CrossingResult = { exact: null, nearest: [] };
 	if (!(width > 0) || width > MAX_LENGTH) return result;
-	const edgeFor = (bars: number) => (width - bars * bar - (bars - 1) * gap) / 2;
+	const layout = (bars: number): CrossingLayout => {
+		const edge = (width - bars * bar - (bars - 1) * gap) / 2;
+		return { bars, edge, deviation: edge > maxEdge ? edge - maxEdge : edge < minEdge ? edge - minEdge : 0 };
+	};
 	// Mit jedem Riegel mehr rückt der Rand um 50 cm näher – höchstens eine Anzahl passt
 	const fewer = Math.floor((width + gap - 2 * minEdge) / (bar + gap));
-	if (fewer >= 1 && edgeFor(fewer) <= maxEdge) {
-		result.exact = { bars: fewer, edge: edgeFor(fewer), gap };
+	if (fewer >= 1 && layout(fewer).deviation === 0) {
+		result.exact = layout(fewer);
 		return result;
 	}
-	const more = fewer + 1;
-	if (fewer >= 1) result.off.push({ bars: fewer, edge: edgeFor(fewer), gap });
-	if (edgeFor(more) > 0) result.off.push({ bars: more, edge: edgeFor(more), gap });
-	// Lücke so wenig wie möglich ändern: Rand ganz außen bzw. ganz innen in der Vorgabe
-	const gapFor = (bars: number, edge: number) => (width - 2 * edge - bars * bar) / (bars - 1);
-	if (fewer >= 2) result.adjusted.push({ bars: fewer, edge: maxEdge, gap: gapFor(fewer, maxEdge) });
-	if (more >= 2 && gapFor(more, minEdge) > 0) result.adjusted.push({ bars: more, edge: minEdge, gap: gapFor(more, minEdge) });
+	const candidates = [fewer, fewer + 1].filter((n) => n >= 1).map(layout);
+	result.nearest = candidates.filter((c) => c.edge > 0).sort((a, b) => Math.abs(a.deviation) - Math.abs(b.deviation));
 	return result;
 }
 
