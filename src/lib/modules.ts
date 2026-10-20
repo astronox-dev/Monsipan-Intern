@@ -127,9 +127,12 @@ export const MODULES: AppModule[] = [
 		href: '/tools/rechner',
 		group: 'betrieb',
 		status: 'aktiv',
-		hint: 'Rechner für die Baustelle',
+		hint: 'Rechner, Richtlinien & Vorschriften',
 		cardsPerItem: true,
-		items: [{ href: '/tools/rechner', label: 'Rechner', icon: Calculator, permission: 'rechner.sehen', hint: 'Parkordnung und Schutzwege einteilen' }]
+		items: [
+			{ href: '/tools/rechner', label: 'Rechner', icon: Calculator, permission: 'rechner.sehen', hint: 'Parkordnung und Schutzwege einteilen' },
+			{ href: '/richtlinien', label: 'Richtlinien & Vorschriften', icon: Scale, permission: 'richtlinien.sehen', hint: 'PDFs in Ordnern, für alle' }
+		]
 	},
 	{
 		key: 'lager',
@@ -149,19 +152,6 @@ export const MODULES: AppModule[] = [
 		]
 	},
 	{ key: 'bestellungen', label: 'Bestellungen', icon: ShoppingCart, href: '/bestellungen', group: 'material', status: 'geplant', items: [] },
-	{
-		key: 'ablage',
-		label: 'Ablage',
-		icon: FolderOpen,
-		href: '/richtlinien',
-		group: 'ablage',
-		status: 'aktiv',
-		hint: 'Richtlinien & Vorschriften',
-		cardsPerItem: true,
-		items: [
-			{ href: '/richtlinien', label: 'Richtlinien & Vorschriften', icon: Scale, permission: 'richtlinien.sehen', hint: 'PDFs in Ordnern, für alle' }
-		]
-	},
 	{ key: 'dokumente', label: 'Dokumente', icon: FolderOpen, href: '/dokumente', group: 'ablage', status: 'geplant', items: [] },
 	{ key: 'auswertungen', label: 'Auswertungen', icon: ChartPie, href: '/auswertungen', group: 'ablage', status: 'geplant', items: [] },
 	{

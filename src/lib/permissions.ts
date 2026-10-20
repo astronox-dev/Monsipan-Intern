@@ -163,7 +163,7 @@ export const DEFAULT_PERMISSIONS = {
 	// Tools und Hilfestellung: der Rechner für die Baustelle – für alle
 	'rechner.sehen': ALL,
 
-	// Ablage: Richtlinien & Vorschriften – lesen alle, pflegen das Büro
+	// Tools und Hilfestellung: Richtlinien & Vorschriften – lesen alle, pflegen das Büro
 	'richtlinien.sehen': ALL,
 	'richtlinien.erstellen': BUERO,
 	'richtlinien.bearbeiten': BUERO,
@@ -311,6 +311,16 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 		view: { all: 'rechner.sehen' }
 	},
 	{
+		key: 'richtlinien',
+		title: 'Richtlinien & Vorschriften',
+		section: 'Tools und Hilfestellung',
+		hint: 'PDFs in Ordnern',
+		view: { all: 'richtlinien.sehen' },
+		create: { key: 'richtlinien.erstellen', label: 'Hochladen', hint: 'PDFs hochladen und Ordner anlegen' },
+		edit: { all: 'richtlinien.bearbeiten', hint: 'Umbenennen und verschieben' },
+		remove: { all: 'richtlinien.loeschen', hint: 'PDFs und Ordner samt Inhalt' }
+	},
+	{
 		key: 'anfragen',
 		title: 'Anfragen',
 		section: 'Auftragsmanagement',
@@ -401,16 +411,6 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 		create: { key: 'krankenstand.melden', label: 'Melden', hint: 'Für sich – wer die Partie bzw. alle sieht, auch für diese' },
 		edit: { all: 'krankenstand.bearbeiten', hint: 'Ende, Belege, löschen' },
 		implies: { 'krankenstand.melden': 'krankenstand.eigene.sehen', 'krankenstand.bearbeiten': 'krankenstand.alle.sehen' }
-	},
-	{
-		key: 'richtlinien',
-		title: 'Richtlinien & Vorschriften',
-		section: 'Ablage',
-		hint: 'PDFs in Ordnern',
-		view: { all: 'richtlinien.sehen' },
-		create: { key: 'richtlinien.erstellen', label: 'Hochladen', hint: 'PDFs hochladen und Ordner anlegen' },
-		edit: { all: 'richtlinien.bearbeiten', hint: 'Umbenennen und verschieben' },
-		remove: { all: 'richtlinien.loeschen', hint: 'PDFs und Ordner samt Inhalt' }
 	},
 	{
 		key: 'stammdaten',

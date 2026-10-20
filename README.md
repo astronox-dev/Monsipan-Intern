@@ -10,11 +10,11 @@ Oberfläche, auf dem Handy wie am PC. Die übrigen Bereiche kommen nach und nach
 | Dokumentation: Stundenzettel | fertig – Lohnwoche je Mitarbeiter, Freigabe und Prüfung |
 | Dokumentation: Tagesberichte | fertig – Leistung je Tag und Baustelle, Freigabe, Prüfung, Unterschrift des Kunden |
 | Tools und Hilfestellung: Rechner | fertig – Parkordnung und Schutzwege einteilen, mit Zeichnung |
+| Tools und Hilfestellung: Richtlinien & Vorschriften | fertig – PDFs in Ordnern wie in einem Dateibrowser, für alle zum Nachlesen |
 | Planung | fertig – Wochenplanung je Partie und Tag mit Notizliste, Urlaubsanträge, Krankenstand mit Krankmeldung |
 | Lagermanagement | fertig – Bestand, Buchen, Inventur, Bewegungen, Bestellliste, Berichte, Artikel |
 | Benutzer | fertig – Zugänge, Gruppen, Berechtigungen |
 | Administration | fertig – Stammdaten, Benachrichtigungen (Glocke, Push, Info-Mail), Import und Export, Einstellungen, Sicherungen |
-| Ablage: Richtlinien & Vorschriften | fertig – PDFs in Ordnern wie in einem Dateibrowser, für alle zum Nachlesen |
 | Partien | geplant |
 | Bestellungen, Dokumente, Auswertungen | geplant |
 
@@ -1034,7 +1034,7 @@ Die Rechnung steht in [`src/lib/modules/tools/rechner.ts`](src/lib/modules/tools
 
 ## Richtlinien & Vorschriften
 
-Unter **Ablage → Richtlinien & Vorschriften** (`/richtlinien`) liegen Vorschriften, Normen,
+Unter **Tools und Hilfestellung → Richtlinien & Vorschriften** (`/richtlinien`) liegen Vorschriften, Normen,
 Betriebsanweisungen und Merkblätter als PDF – in Ordnern, wie in einem Dateibrowser.
 
 - **Lesen** dürfen von Haus aus alle, auch die Partien am Handy. Ein PDF öffnet sich in der
@@ -1051,7 +1051,7 @@ Betriebsanweisungen und Merkblätter als PDF – in Ordnern, wie in einem Dateib
   auch auf einen Ordner oder auf den Weg oben **ziehen**.
 - **Suche** über alle Ordner (Namen und Dateinamen), jeder Treffer mit seinem Ort; die Suche
   oben im Portal findet Ordner und PDFs ebenso.
-- **Rechte** unter Verwaltung → Berechtigungen, Abschnitt „Ablage“: Sehen, Hochladen (auch Ordner
+- **Rechte** unter Verwaltung → Berechtigungen, Abschnitt „Tools und Hilfestellung“: Sehen, Hochladen (auch Ordner
   anlegen), Bearbeiten (umbenennen, verschieben) und Löschen – Sehen von Haus aus für alle, der
   Rest fürs Büro (Admin, Geschäftsführer, Bauleiter, Buchhaltung).
 - Die Dateien liegen wie alle PDFs unter `/data/dokumente` und sind in der Komplettsicherung;
