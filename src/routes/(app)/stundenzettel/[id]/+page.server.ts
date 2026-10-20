@@ -3,12 +3,14 @@ import { can, type Role } from '$lib/permissions';
 import { requireUser } from '$lib/server/guard';
 import {
 	deleteSheet,
+	guestEditDays,
 	handBackWeek,
 	mayEdit,
 	mayRecordFor,
-	mayView,
+	mayViewSheet,
 	recentSites,
 	saveSheet,
+	saveSheetDays,
 	setStatus,
 	sheetDetail,
 	totals,
@@ -24,7 +26,7 @@ async function load_(id: number, locals: App.Locals) {
 	if (!Number.isInteger(id)) error(404, 'Stundenzettel nicht gefunden');
 	const sheet = await sheetDetail(id);
 	if (!sheet) error(404, 'Stundenzettel nicht gefunden');
-	if (!mayView(user, sheet)) error(403, 'Diesen Stundenzettel darfst du nicht ansehen.');
+	if (!(await mayViewSheet(user, sheet))) error(403, 'Diesen Stundenzettel darfst du nicht ansehen.');
 	return { user, sheet };
 }
 
@@ -35,6 +37,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		totals: totals(sheet.days),
 		sites: await recentSites(),
 		editable: mayEdit(user, sheet),
+		// Laut Wochenplanung bei der eigenen Partie: diese Tage einträgt man selbst, den Rest die schreibende Partie
+		guestDays: await guestEditDays(user, sheet),
+		guestPartyId: user.partyId,
 		canDelete: sheet.status === 'entwurf' && mayEdit(user, sheet) && can(user.role, 'stunden.loeschen'),
 		canRelease: can(user.role, 'stunden.freigeben'),
 		canCheck: can(user.role, 'stunden.pruefen'),
@@ -90,7 +95,13 @@ function readHead(form: FormData) {
 export const actions: Actions = {
 	save: async ({ params, request, locals }) => {
 		const { user, sheet } = await load_(Number(params.id), locals);
-		if (!mayEdit(user, sheet)) return fail(403, { message: 'Diese Woche ist nicht (mehr) änderbar.' });
+		if (!mayEdit(user, sheet)) {
+			// Aushilfe laut Wochenplanung: nur die eigenen Tage, Kopf und Freigabe bleiben bei der schreibenden Partie
+			const days = await guestEditDays(user, sheet);
+			if (!days.length) return fail(403, { message: 'Diese Woche ist nicht (mehr) änderbar.' });
+			await saveSheetDays(sheet.id, readDays(await request.formData(), days));
+			return { saved: true };
+		}
 		const form = await request.formData();
 		await saveSheet(
 			sheet.id,

@@ -121,6 +121,8 @@
 		{ key: 'sickHours', name: 'efzg', label: 'Efzg', short: 'Efzg' }
 	] as const;
 
+	/** Zeile bearbeitbar: der ganze Zettel – oder als Aushilfe laut Wochenplanung dieser Tag */
+	const dayEditable = (date: string) => data.editable || data.guestDays.includes(date);
 	/** Kurzes Datum für die Tageszeile am Handy */
 	const dayShort = (iso: string) => {
 		const [, m, d] = iso.split('-');
@@ -215,6 +217,18 @@
 	</section>
 {/if}
 
+{#if data.guestDays.length}
+	<!-- Laut Wochenplanung an diesen Tagen bei der eigenen Partie – die trägt man selbst ein -->
+	<section class="card mb-4 flex flex-wrap items-center gap-3 border-info/40 p-4">
+		<UserPlus size={20} class="shrink-0 text-info" aria-hidden="true" />
+		<p class="min-w-0 flex-1 text-sm text-ink-2">
+			<span class="font-medium text-ink">Laut Wochenplanung bei euch:</span>
+			{fullName(sheet)} ist {data.guestDays.length === sheet.days.length ? 'diese Woche' : data.guestDays.map(dayShort).join(', ')} bei deiner Partie eingeteilt.
+			Diese Tage trägst du ein; den Rest, Auslöse und die Freigabe macht {sheet.writingPartyName ?? sheet.partyName ?? 'die eigene Partie'}.
+		</p>
+	</section>
+{/if}
+
 {#snippet signed(label: string, signature: string | null, who: string, at: Date)}
 	<div class="flex flex-wrap items-center gap-4">
 		{#if signature}
@@ -280,7 +294,7 @@
 	<!-- Außerhalb des fieldset, damit sie auch bei gesperrter Woche nicht stört -->
 	<input type="hidden" name="unterschrift" value={signature} />
 
-	<fieldset disabled={!data.editable} class="contents">
+	<fieldset disabled={!data.editable && !data.guestDays.length} class="contents">
 		<div class="card lg:overflow-x-auto">
 			<!--
 				Am Handy ist jeder Tag eine kleine Karte: Baustelle breit, darunter
@@ -298,7 +312,13 @@
 
 			{#each rows as row, i (row.date)}
 				{@const day = WEEKDAY_LABELS[weekdayIndex(row.date)]}
-				<div class="grid gap-2 border-b border-line px-3 py-3 last:border-0 lg:min-w-[66rem] {GRID} lg:items-center lg:gap-1.5 lg:py-2">
+				<div
+					class="grid gap-2 border-b border-line px-3 py-3 last:border-0 lg:min-w-[66rem] {GRID} lg:items-center lg:gap-1.5 lg:py-2 {dayEditable(row.date)
+						? ''
+						: 'opacity-60'}"
+				>
+					<!-- Aushilfe: nur die eigenen Tage sind offen -->
+					<fieldset disabled={!dayEditable(row.date)} class="contents">
 					<div class="flex items-baseline justify-between gap-2 lg:block">
 						<span class="font-semibold lg:text-[0.9375rem] lg:font-medium">{day}</span>
 						<span class="num text-sm text-ink-3 lg:hidden">
@@ -342,7 +362,7 @@
 										value={t.to}
 										onchange={(v) => setTime(i, j, 'to', v)}
 									/>
-									{#if data.editable}
+									{#if dayEditable(row.date)}
 										<button
 											type="button"
 											class="grid size-7 shrink-0 place-items-center rounded-lg text-ink-3 hover:bg-surface-2 hover:text-ink disabled:opacity-30"
@@ -355,7 +375,7 @@
 									{/if}
 								</div>
 							{/each}
-							{#if data.editable && row.times.length < 12}
+							{#if dayEditable(row.date) && row.times.length < 12}
 								<button
 									type="button"
 									class="inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[0.8125rem] font-medium text-ink-2 hover:bg-surface-2 hover:text-ink"
@@ -383,6 +403,7 @@
 					</div>
 
 					<span class="num hidden text-right font-semibold lg:block lg:text-[0.9375rem]">{hoursLabel(rowTotal(row)) || '–'}</span>
+					</fieldset>
 				</div>
 			{/each}
 
@@ -404,7 +425,8 @@
 			{#each data.sites as s (s)}<option value={s}></option>{/each}
 		</datalist>
 
-		<div class="mt-4 grid gap-4 lg:grid-cols-3">
+		<!-- Auslöse, VAZ und Notiz schreibt die Partie, die den Zettel schreibt – nicht die Aushilfe -->
+		<fieldset disabled={!data.editable} class="mt-4 grid gap-4 lg:grid-cols-3">
 			<section class="card space-y-3 p-4 lg:p-5">
 				<h2 class="text-lg">Auslöse</h2>
 				<div class="grid grid-cols-2 gap-3">
@@ -435,13 +457,13 @@
 				<h2 class="text-lg">Notiz</h2>
 				<textarea class="textarea mt-2" name="notiz" rows="3" maxlength="2000" bind:value={note}></textarea>
 			</section>
-		</div>
+		</fieldset>
 	</fieldset>
 
-	{#if data.editable}
+	{#if data.editable || data.guestDays.length}
 		<div class="card sticky bottom-24 mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
-			{#if sheet.status === 'entwurf' && data.canRelease}
+			{#if sheet.status === 'entwurf' && data.canRelease && data.editable}
 				<button type="button" class="btn btn-secondary" disabled={busy} onclick={() => (signOpen = true)}>
 					<Lock size={18} aria-hidden="true" />Freigeben
 				</button>

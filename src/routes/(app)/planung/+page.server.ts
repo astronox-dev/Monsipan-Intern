@@ -5,6 +5,8 @@ import {
 	addEntry,
 	addNote,
 	claimOrder,
+	crewWeek,
+	notifyCrewChange,
 	syncWorkOrderPlan,
 	deleteEntry,
 	deleteNote,
@@ -124,26 +126,33 @@ export const actions: Actions = {
 		const week = String(form.get('woche') ?? '');
 		const day = String(form.get('tag') ?? '');
 		if (!Number.isInteger(userId) || !Number.isInteger(partyId)) return fail(400, { message: 'Person oder Partie fehlt.' });
+		const monday = mondayOf(isValidIsoDate(day) ? day : week);
+		// Wie die Person vorher eingeteilt war – zum Vergleich für ihre Benachrichtigung
+		const before = isValidIsoDate(monday) ? await crewWeek(userId, monday) : null;
 		const problem = isValidIsoDate(day)
 			? await setCrew(user, { userId, partyId, date: day })
 			: isValidIsoDate(week)
 				? await setCrew(user, { userId, partyId, weekStart: mondayOf(week) })
 				: 'Woche oder Tag fehlt.';
 		if (problem) return fail(400, { message: problem });
+		if (before) await notifyCrewChange(user, userId, before, monday);
 		return { crew: true };
 	},
 
 	/** Abweichung aufheben – Woche bzw. Tag */
 	crewReset: async ({ request, locals }) => {
-		requirePermission(locals, 'planung.bearbeiten');
+		const user = requirePermission(locals, 'planung.bearbeiten');
 		const form = await request.formData();
 		const userId = Number(form.get('person'));
 		const week = String(form.get('woche') ?? '');
 		const day = String(form.get('tag') ?? '');
 		if (!Number.isInteger(userId)) return fail(400, { message: 'Person fehlt.' });
+		if (!isValidIsoDate(day) && !isValidIsoDate(week)) return fail(400, { message: 'Woche oder Tag fehlt.' });
+		const monday = mondayOf(isValidIsoDate(day) ? day : week);
+		const before = await crewWeek(userId, monday);
 		if (isValidIsoDate(day)) await resetCrew({ userId, date: day });
-		else if (isValidIsoDate(week)) await resetCrew({ userId, weekStart: mondayOf(week) });
-		else return fail(400, { message: 'Woche oder Tag fehlt.' });
+		else await resetCrew({ userId, weekStart: monday });
+		await notifyCrewChange(user, userId, before, monday);
 		return { crew: true };
 	},
 

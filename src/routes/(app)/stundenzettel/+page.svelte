@@ -18,10 +18,14 @@
 
 	type Row = (typeof data.rows)[number];
 
+	const dayFmt = new Intl.DateTimeFormat('de-AT', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
+	const dayShort = (iso: string) => dayFmt.format(new Date(`${iso}T12:00:00Z`));
+
 	/** Zusatz unter dem Namen: Aushilfe, Auslöse, Ausnahme – die Partie steht schon in der Überschrift */
 	function details(row: Row): string {
 		return [
 			row.writingPartyId ? `Aushilfe aus ${row.user.partyName ?? 'keiner Partie'}` : '',
+			row.guestDays.length ? `laut Planung hier: ${row.guestDays.map(dayShort).join(', ')} (aus ${row.user.partyName ?? 'keiner Partie'})` : '',
 			row.allowanceDays ? `Auslöse ${hoursLabel(row.allowanceDays)} Tage` : '',
 			row.user.timesheetExempt ? 'sonst keine Stundenzettel' : ''
 		]
@@ -37,8 +41,10 @@
 	function byParty(rows: Row[]) {
 		const groups = new Map<number, { id: number; name: string; rows: Row[] }>();
 		for (const r of rows) {
-			const id = r.writingPartyId ?? r.user.partyId ?? 0;
-			const name = r.writingPartyId ? (r.writingPartyName ?? 'Andere Partie') : (r.user.partyName ?? 'Ohne Partie');
+			// Wer laut Planung hier aushilft, steht bei der eigenen Partie
+			const guest = !r.writingPartyId && r.guestDays.length > 0;
+			const id = r.writingPartyId ?? (guest ? (data.ownPartyId ?? 0) : (r.user.partyId ?? 0));
+			const name = r.writingPartyId ? (r.writingPartyName ?? 'Andere Partie') : guest ? (data.ownPartyName ?? 'Eigene Partie') : (r.user.partyName ?? 'Ohne Partie');
 			const group = groups.get(id) ?? { id, name, rows: [] };
 			group.rows.push(r);
 			groups.set(id, group);

@@ -9,7 +9,7 @@ import {
 	deleteOrder,
 	insertOrderDocument,
 	mayDeleteOrder,
-	mayViewOrder,
+	mayOpenOrder,
 	maySetOrderStatus,
 	orderDetail,
 	seesWholeOrder,
@@ -30,7 +30,7 @@ async function open(id: number, locals: App.Locals) {
 	const user = requireUser(locals);
 	const order = await orderDetail(id);
 	// Fremde Aufträge gibt es für die Partie nicht – auch nicht als „verboten"
-	if (!order || !mayViewOrder(user, order)) error(404, 'Auftrag nicht gefunden');
+	if (!order || !(await mayOpenOrder(user, order))) error(404, 'Auftrag nicht gefunden');
 	return { user, order };
 }
 

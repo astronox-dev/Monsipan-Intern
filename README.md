@@ -252,6 +252,13 @@ zurückgeben** wieder abgeben. Wer übernehmen darf, regelt das Recht **Aushilfe
 übernehmen** (standardmäßig Partieführer, Bauleitung und Admin, jeweils mit eigener
 Partie).
 
+**Eingeteilt in der Wochenplanung:** Ist ein Arbeiter laut Wochenplanung an einzelnen Tagen
+(oder die ganze Woche) bei einer anderen Partie, sieht deren Partieführer seinen Zettel von
+selbst – in der Wochenliste bei der eigenen Partie mit „laut Planung hier: Mi., 21.10.“ – und
+trägt genau diese Tage ein; die anderen Tage sind für ihn gesperrt. Auslöse, VAZ, Notiz und
+die Freigabe bleiben bei der Partie, die den Zettel schreibt. Wird die Einteilung in der
+Planung zurückgenommen, endet auch der Zugriff.
+
 **Ablauf:** In Arbeit → freigegeben → geprüft.
 
 - Der **Partieführer** erfasst die Woche und gibt sie frei. Beim Freigeben unterschreibt er
@@ -275,6 +282,9 @@ Standardmäßig haben sie Admin, Bauleitung und Buchhaltung.
 liegen als Linienzug vor und bleiben in jeder Größe scharf.
 
 ## Tagesberichte
+
+Die **Liste** ist nach Tagen gegliedert, neueste zuerst: je Tag ein Block mit Überschrift
+(„Dienstag, 20.10.2026“, dazu „Heute“ bzw. „Gestern“ und die Anzahl), darin die Berichte.
 
 Ein Bericht je Tag und Baustelle, wie der Block im Auto: Nummer, Datum, Bundesstraße,
 Baustelle und Kostenstelle im Kopf, darunter beliebig viele LB-Positionen mit Einheit
@@ -396,6 +406,12 @@ kurz halten, dann ziehen):
   wieder sie. Urlaub und Krankenstand stehen bei der Partie der Woche, „Heute laut Plan“ auf
   der Übersicht zeigt den Tag der Partie, bei der jemand heute ist, und die Partie sieht in
   ihrer Liste, wer diese Woche dabei ist und wer an einem Tag aushilft.
+- **Wer woanders eingeteilt ist**, bekommt Bescheid („Bei einer anderen Partie eingeteilt“ –
+  mit Partie und Tagen; ebenso, wenn es zurückgenommen wird). Er sieht in seiner Planung an
+  diesen Tagen die Einträge der anderen Partie („Du bist bei … eingeteilt“) und die Aufträge,
+  die dort an diesen Tagen stehen – samt Arbeitsauftrag, Plänen und Fotos, nur lesend. Den
+  Stand des Auftrags setzt weiter dessen Partie. Der Partieführer der anderen Partie trägt
+  für diese Tage seine Stunden ein (siehe Stundenzettel).
 
 **PDF und Drucken:** Die Woche gibt es als PDF (A4 quer, wie der Zettel – die Zeilen wachsen mit
 dem Inhalt, die Notizen stehen darunter) und als Druckansicht. Jeder bekommt dabei genau das,

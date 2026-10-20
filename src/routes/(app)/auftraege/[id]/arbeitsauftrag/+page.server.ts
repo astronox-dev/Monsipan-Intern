@@ -3,7 +3,7 @@ import { can } from '$lib/permissions';
 import { requireUser } from '$lib/server/guard';
 import { ORDER_STATUS, type OrderStatus } from '$lib/server/db/schema';
 import { isValidSignature } from '$lib/modules/stunden/signature';
-import { mayViewOrder, maySetOrderStatus, orderDetail, seesWholeOrder, setOrderStatus } from '$lib/modules/auftraege/server/orders';
+import { mayOpenOrder, maySetOrderStatus, orderDetail, seesWholeOrder, setOrderStatus } from '$lib/modules/auftraege/server/orders';
 import { notifyOrderStatus } from '$lib/modules/auftraege/server/notify';
 import { listReports } from '$lib/modules/tagesberichte/server/reports';
 import {
@@ -26,7 +26,7 @@ async function open(id: number, locals: App.Locals) {
 	const user = requireUser(locals);
 	const order = await orderDetail(id);
 	// Fremde Aufträge gibt es für die Partie nicht – auch nicht als „verboten"
-	if (!order || !mayViewOrder(user, order)) error(404, 'Auftrag nicht gefunden');
+	if (!order || !(await mayOpenOrder(user, order))) error(404, 'Auftrag nicht gefunden');
 	const work = await getWorkOrder(order.id);
 	if (!work) {
 		if (!seesWholeOrder(user)) error(404, 'Zu diesem Auftrag gibt es noch keinen Arbeitsauftrag.');

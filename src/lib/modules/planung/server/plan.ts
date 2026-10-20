@@ -85,10 +85,69 @@ export async function weekCrew(weekStart: string) {
 	return { persons, dayMoves };
 }
 
+/**
+ * Wo eine Person an den Tagen einer Woche eingeteilt ist: ihre feste Partie,
+ * darüber die der Woche, darüber einzelne Tage – wie in der Wochenplanung.
+ */
+export async function crewWeek(userId: number, weekStart: string): Promise<{ home: number | null; days: { date: string; partyId: number | null }[] }> {
+	const monday = mondayOf(weekStart);
+	const days = weekDays(monday);
+	const [person, week, dayRows] = await Promise.all([
+		db.select({ partyId: users.partyId }).from(users).where(eq(users.id, userId)).get(),
+		db
+			.select({ partyId: planCrewWeeks.partyId })
+			.from(planCrewWeeks)
+			.where(and(eq(planCrewWeeks.weekStart, monday), eq(planCrewWeeks.userId, userId)))
+			.get(),
+		db
+			.select({ date: planCrewDays.date, partyId: planCrewDays.partyId })
+			.from(planCrewDays)
+			.where(and(eq(planCrewDays.userId, userId), gte(planCrewDays.date, days[0]), lte(planCrewDays.date, days[6])))
+			.all()
+	]);
+	const home = person?.partyId ?? null;
+	const onDay = new Map(dayRows.map((r) => [r.date, r.partyId]));
+	return { home, days: days.map((date) => ({ date, partyId: onDay.get(date) ?? week?.partyId ?? home })) };
+}
+
+/** Die Tage der Woche, an denen die Person laut Planung bei dieser Partie aushilft – leer bei ihrer festen */
+export async function guestDaysAt(userId: number, weekStart: string, partyId: number | null): Promise<string[]> {
+	if (!partyId) return [];
+	const c = await crewWeek(userId, weekStart);
+	if (c.home === partyId) return [];
+	return c.days.filter((d) => d.partyId === partyId).map((d) => d.date);
+}
+
+/** Wer in dieser Woche laut Planung bei dieser Partie aushilft (feste Partie woanders) – je Person die Tage */
+export async function guestsOfParty(partyId: number, weekStart: string): Promise<Map<number, string[]>> {
+	const monday = mondayOf(weekStart);
+	const days = weekDays(monday);
+	const [weekRows, dayRows] = await Promise.all([
+		db.select({ userId: planCrewWeeks.userId }).from(planCrewWeeks).where(and(eq(planCrewWeeks.weekStart, monday), eq(planCrewWeeks.partyId, partyId))).all(),
+		db
+			.select({ userId: planCrewDays.userId })
+			.from(planCrewDays)
+			.where(and(eq(planCrewDays.partyId, partyId), gte(planCrewDays.date, days[0]), lte(planCrewDays.date, days[6])))
+			.all()
+	]);
+	const out = new Map<number, string[]>();
+	for (const id of new Set([...weekRows, ...dayRows].map((r) => r.userId))) {
+		const guest = await guestDaysAt(id, monday, partyId);
+		if (guest.length) out.set(id, guest);
+	}
+	return out;
+}
+
 /** Alles für eine Woche – so weit dieser Benutzer es sehen darf */
 export async function planWeek(user: SessionUser, weekStart: string) {
 	const days = weekDays(weekStart);
 	const all = seesAllPlans(user);
+	// Wer bei einer anderen Partie aushilft, sieht deren Spalte – an den Tagen, an denen er dort ist
+	const guestDays: Record<number, string[]> = {};
+	if (!all) {
+		const mine = await crewWeek(user.id, weekStart);
+		for (const d of mine.days) if (d.partyId && d.partyId !== mine.home) (guestDays[d.partyId] ??= []).push(d.date);
+	}
 	// Alle Partien mit Namen – auch für „aus …" bei Leuten, die aus einer anderen kommen
 	const allParties = await db
 		.select({ id: parties.id, name: parties.name, active: parties.active })
@@ -96,7 +155,7 @@ export async function planWeek(user: SessionUser, weekStart: string) {
 		.orderBy(sql`${parties.planOrder} is null`, asc(parties.planOrder), asc(parties.name))
 		.all();
 	const partyName = new Map(allParties.map((p) => [p.id, p.name]));
-	const partyRows = allParties.filter((p) => (all ? p.active : p.id === user.partyId)).map((p) => ({ id: p.id, name: p.name }));
+	const partyRows = allParties.filter((p) => (all ? p.active : p.id === user.partyId || p.id in guestDays)).map((p) => ({ id: p.id, name: p.name }));
 	const ids = partyRows.map((p) => p.id);
 	const [crew, entries] = ids.length
 		? await Promise.all([
@@ -118,6 +177,8 @@ export async function planWeek(user: SessionUser, weekStart: string) {
 					.where(and(inArray(planEntries.partyId, ids), gte(planEntries.date, days[0]), lte(planEntries.date, days[6])))
 					.orderBy(asc(planEntries.date), asc(planEntries.sortOrder), asc(planEntries.id))
 					.all()
+					// Bei einer Partie, wo man nur aushilft, nur die eigenen Tage
+					.then((rows) => rows.filter((e) => !(e.partyId in guestDays) || guestDays[e.partyId].includes(e.date)))
 			])
 		: [{ persons: [], dayMoves: [] }, []];
 
@@ -165,6 +226,8 @@ export async function planWeek(user: SessionUser, weekStart: string) {
 		})),
 		dayMoves,
 		entries,
+		/** Partien, bei denen man nur aushilft – mit den Tagen, die man dort sieht */
+		guestDays,
 		absences,
 		notes: all ? await listNotes() : [],
 		unassigned: all ? await unassignedOrders() : []
@@ -426,6 +489,35 @@ export async function setPartyOrder(ids: number[]) {
  * nur einen Tag (`date`). Zurück auf die eigene (Woche: die feste Partie, Tag:
  * die der Woche) löscht die Abweichung. Die feste Partie im Konto bleibt.
  */
+const dayFmt = new Intl.DateTimeFormat('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+const dayName = (iso: string) => dayFmt.format(new Date(`${iso}T12:00:00Z`));
+
+/**
+ * Hat sich die Einteilung einer Person in einer Woche geändert, bekommt sie
+ * Bescheid: wo sie jetzt woanders ist – oder dass sie wieder ganz bei ihrer
+ * Partie ist. `before` ist crewWeek vor der Änderung.
+ */
+export async function notifyCrewChange(actor: SessionUser | null, userId: number, before: Awaited<ReturnType<typeof crewWeek>>, weekStart: string) {
+	const after = await crewWeek(userId, weekStart);
+	if (after.days.every((d, i) => d.partyId === before.days[i].partyId)) return;
+	const names = new Map((await db.select({ id: parties.id, name: parties.name }).from(parties).all()).map((p) => [p.id, p.name]));
+	const away = new Map<number, string[]>();
+	for (const d of after.days) if (d.partyId && d.partyId !== after.home) away.set(d.partyId, [...(away.get(d.partyId) ?? []), d.date]);
+	const { week } = isoWeek(weekStart);
+	const homeName = after.home ? (names.get(after.home) ?? 'deiner Partie') : 'deiner Partie';
+	const body = away.size
+		? [...away].map(([party, days]) => `${names.get(party) ?? 'Andere Partie'}: ${days.length === 7 ? 'die ganze Woche' : days.map(dayName).join(', ')}`).join(' · ')
+		: `Wieder die ganze Woche bei ${homeName}`;
+	notify({
+		event: 'planung.einteilung',
+		title: away.size ? `KW ${week}: bei einer anderen Partie eingeteilt` : `KW ${week}: wieder bei ${homeName}`,
+		body,
+		url: `/planung?woche=${mondayOf(weekStart)}`,
+		userIds: [userId],
+		actorId: actor?.id ?? null
+	});
+}
+
 export async function setCrew(
 	user: SessionUser,
 	input: { userId: number; partyId: number } & ({ weekStart: string; date?: undefined } | { date: string; weekStart?: undefined })

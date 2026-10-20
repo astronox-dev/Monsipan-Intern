@@ -169,6 +169,13 @@ export const NOTIFICATION_EVENTS = {
 		all: 'stunden.alle.sehen',
 		defaults: ['partiefuehrer']
 	},
+	'planung.einteilung': {
+		label: 'Bei einer anderen Partie eingeteilt',
+		section: 'Planung',
+		hint: 'Geht an die Person, die in der Wochenplanung (für eine Woche oder einzelne Tage) zu einer anderen Partie kommt – oder wieder zurück',
+		requires: 'planung.sehen',
+		defaults: []
+	},
 	'planung.woche': {
 		label: 'Wochenplan an die Partie geschickt',
 		section: 'Planung',

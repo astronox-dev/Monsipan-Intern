@@ -8,11 +8,26 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import Dialog from '$lib/components/Dialog.svelte';
-	import { dayLabel } from '$lib/modules/stunden/week';
+	import { addDays, today } from '$lib/modules/stunden/week';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
 	import { spacedNumber } from '$lib/modules/auftraege/offer';
 
 	let { data, form } = $props();
+
+	type Report = (typeof data.reports)[number];
+	/** Je Tag ein Block – die Liste kommt schon nach Datum sortiert, neueste zuerst */
+	const byDay = $derived.by(() => {
+		const out: { date: string; reports: Report[] }[] = [];
+		for (const r of data.reports) {
+			const last = out.at(-1);
+			if (last?.date === r.date) last.reports.push(r);
+			else out.push({ date: r.date, reports: [r] });
+		}
+		return out;
+	});
+	const longDay = new Intl.DateTimeFormat('de-AT', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
+	const dayHeading = (iso: string) => longDay.format(new Date(`${iso}T12:00:00Z`));
+	const todayIso = today();
 
 	// Vom Auftrag aus kommt man mit ?auftrag=… – dann gleich mit diesem Auftrag anlegen
 	// svelte-ignore state_referenced_locally
@@ -94,36 +109,51 @@
 	{/if}
 </form>
 
-<div class="card overflow-hidden">
-	<ul>
-		{#each data.reports as r (r.id)}
-			<li class="border-b border-line last:border-0">
-				<a href="/tagesberichte/{r.id}" class="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
-					<span class="num w-24 shrink-0 font-display text-lg font-semibold">{r.number || '–'}</span>
-					<span class="min-w-0 flex-1">
-						<span class="block truncate font-medium">{r.road || r.site || 'Ohne Bezeichnung'}</span>
-						<span class="block truncate text-[0.8125rem] text-ink-3">
-							{r.dateTo ? reportDateLabel(r.date, r.dateTo) : dayLabel(r.date)}{r.site && r.road ? ` · ${r.site}` : ''}{r.partyName ? ` · ${r.partyName}` : ''}{r.orderNumber
-								? ` · Auftrag ${spacedNumber(r.orderNumber)}`
-								: ''}
-						</span>
-					</span>
-					{#if r.dailyOutput}<span class="hidden truncate text-sm text-ink-2 sm:block">{r.dailyOutput}</span>{/if}
-					<span class="badge {(STATUS[r.status] ?? STATUS.entwurf).tone}">
-						{#if r.status === 'abgeschlossen'}<CircleCheck size={13} aria-hidden="true" />{/if}{(STATUS[r.status] ?? STATUS.entwurf).label}
-					</span>
-					<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
-				</a>
-			</li>
-		{:else}
-			<li class="p-10 text-center">
-				<p class="font-medium">Noch kein Tagesbericht</p>
-				<p class="mt-1 text-sm text-ink-3">
-					{data.canCreate ? 'Mit „Neuer Bericht" den ersten anlegen.' : 'Sobald die Partien Berichte anlegen, stehen sie hier.'}
-				</p>
-			</li>
-		{/each}
-	</ul>
+<!-- Je Tag ein Block mit Überschrift – statt einer langen Liste -->
+<div class="space-y-4">
+	{#each byDay as day (day.date)}
+		<section class="card overflow-hidden" aria-labelledby="tag-{day.date}">
+			<h2 id="tag-{day.date}" class="flex flex-wrap items-baseline gap-x-2 border-b border-line bg-surface-2 px-4 py-2 text-base">
+				<span class="font-display font-semibold">{dayHeading(day.date)}</span>
+				{#if day.date === todayIso}<span class="badge badge-info">Heute</span>{:else if day.date === addDays(todayIso, -1)}<span class="badge">Gestern</span>{/if}
+				<span class="num ml-auto text-sm font-normal text-ink-3">{day.reports.length === 1 ? '1 Bericht' : `${day.reports.length} Berichte`}</span>
+			</h2>
+			<ul>
+				{#each day.reports as r (r.id)}
+					<li class="border-b border-line last:border-0">
+						<a href="/tagesberichte/{r.id}" class="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
+							<span class="num w-24 shrink-0 font-display text-lg font-semibold">{r.number || '–'}</span>
+							<span class="min-w-0 flex-1">
+								<span class="block truncate font-medium">{r.road || r.site || 'Ohne Bezeichnung'}</span>
+								<span class="block truncate text-[0.8125rem] text-ink-3">
+									{[
+										r.dateTo ? reportDateLabel(r.date, r.dateTo) : '',
+										r.site && r.road ? r.site : '',
+										r.partyName,
+										r.orderNumber ? `Auftrag ${spacedNumber(r.orderNumber)}` : ''
+									]
+										.filter(Boolean)
+										.join(' · ')}
+								</span>
+							</span>
+							{#if r.dailyOutput}<span class="hidden truncate text-sm text-ink-2 sm:block">{r.dailyOutput}</span>{/if}
+							<span class="badge {(STATUS[r.status] ?? STATUS.entwurf).tone}">
+								{#if r.status === 'abgeschlossen'}<CircleCheck size={13} aria-hidden="true" />{/if}{(STATUS[r.status] ?? STATUS.entwurf).label}
+							</span>
+							<ChevronRight size={18} class="shrink-0 text-ink-3" aria-hidden="true" />
+						</a>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{:else}
+		<div class="card p-10 text-center">
+			<p class="font-medium">Noch kein Tagesbericht</p>
+			<p class="mt-1 text-sm text-ink-3">
+				{data.canCreate ? 'Mit „Neuer Bericht" den ersten anlegen.' : 'Sobald die Partien Berichte anlegen, stehen sie hier.'}
+			</p>
+		</div>
+	{/each}
 </div>
 
 <Dialog bind:open={newOpen} title="Neuer Tagesbericht">

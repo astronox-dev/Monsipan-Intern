@@ -290,38 +290,58 @@
 		<p class="font-medium">Keine Partie</p>
 		<p class="mt-1 text-sm text-ink-3">{data.all ? 'Unter Stammdaten → Partien anlegen.' : 'Du bist keiner Partie zugeordnet – die Planung sieht man über die eigene Partie.'}</p>
 	</div>
-{:else if !data.all && data.parties.length === 1}
-	<!-- Eigene Partie: die Woche als Liste -->
-	{@const p = data.parties[0]}
-	{#if p.members.length}
-		<p class="mb-3 text-sm text-ink-2">
-			Diese Woche: {p.members.map((m) => (m.fromName ? `${m.name} (aus ${m.fromName})` : m.name)).join(' · ')}
-		</p>
-	{/if}
-	<ul class="space-y-2">
+{:else if !data.all}
+	<!--
+		Eigene Partie: die Woche als Liste. Wer laut Planung bei einer anderen
+		Partie aushilft, sieht deren Einträge an genau diesen Tagen dazu.
+	-->
+	{@const multi = data.parties.length > 1}
+	{#each data.parties as p (p.id)}
+		{#if p.members.length}
+			<p class="mb-1.5 text-sm text-ink-2">
+				{multi ? `${p.name}: ` : 'Diese Woche: '}{p.members.map((m) => (m.fromName ? `${m.name} (aus ${m.fromName})` : m.name)).join(' · ')}
+			</p>
+		{/if}
+	{/each}
+	<ul class="mt-3 space-y-2">
 		{#each data.days as day, i (day)}
-			{@const items = cell(p.id, day)}
-			{@const off = away(p.id, day)}
 			{@const holiday = holidayName(day)}
-			{@const help = guests(p.id, day)}
-			{@const gone = elsewhere(p.id, day)}
-			<li class="card p-3 {day === data.today ? 'border-ink' : ''} {i >= 5 && !items.length ? 'opacity-70' : ''}">
+			{@const filled = (pid: number) => !!(cell(pid, day).length || away(pid, day).length || guests(pid, day).length || elsewhere(pid, day).length)}
+			<!-- Die eigene Partie, wenn dort etwas steht; die Partie, bei der man aushilft, an ihren Tagen immer -->
+			{@const here = data.parties.filter((p) => (p.id in data.guestDays ? data.guestDays[p.id].includes(day) : filled(p.id)))}
+			{@const empty = !here.length}
+			<li class="card p-3 {day === data.today ? 'border-ink' : ''} {i >= 5 && empty ? 'opacity-70' : ''}">
 				<div class="flex items-baseline gap-2">
 					<span class="font-display text-lg font-semibold">{DAY[i]}</span>
 					<span class="num text-ink-2">{short(day)}</span>
 					{#if day === data.today}<span class="badge badge-info">Heute</span>{/if}
 					{#if holiday}<span class="text-sm text-danger">{holiday}</span>{/if}
 				</div>
-				{#if items.length || off.length || help.length || gone.length}
-					<div class="mt-2 flex flex-wrap gap-1.5">
-						{#each items as e (e.id)}{@render entryChip(e)}{/each}
-						{#each off as a, n (n)}{@render absence(a)}{/each}
-						{#each help as m (m.userId)}<span class="person guest"><ArrowRightLeft size={12} aria-hidden="true" />{m.name} (aus {m.fromPartyName})</span>{/each}
-						{#each gone as m (m.userId)}<span class="person gone">{m.name} bei {m.partyName}</span>{/each}
-					</div>
+				{#each here as p (p.id)}
+					{@const items = cell(p.id, day)}
+					{@const off = away(p.id, day)}
+					{@const help = guests(p.id, day)}
+					{@const gone = elsewhere(p.id, day)}
+					{#if p.id in data.guestDays}
+						<p class="mt-2 flex items-center gap-1.5 text-[0.8125rem] font-semibold text-info">
+							<ArrowRightLeft size={13} aria-hidden="true" />Du bist bei {p.name} eingeteilt
+						</p>
+					{:else if multi}
+						<p class="mt-2 text-[0.8125rem] font-medium text-ink-2">{p.name}</p>
+					{/if}
+					{#if items.length || off.length || help.length || gone.length}
+						<div class="mt-1.5 flex flex-wrap gap-1.5">
+							{#each items as e (e.id)}{@render entryChip(e)}{/each}
+							{#each off as a, n (n)}{@render absence(a)}{/each}
+							{#each help as m (m.userId)}<span class="person guest"><ArrowRightLeft size={12} aria-hidden="true" />{m.name} (aus {m.fromPartyName})</span>{/each}
+							{#each gone as m (m.userId)}<span class="person gone">{m.name} bei {m.partyName}</span>{/each}
+						</div>
+					{:else}
+						<p class="mt-1 text-sm text-ink-3">Nichts eingeplant</p>
+					{/if}
 				{:else}
 					<p class="mt-1 text-sm text-ink-3">Nichts eingeplant</p>
-				{/if}
+				{/each}
 			</li>
 		{/each}
 	</ul>

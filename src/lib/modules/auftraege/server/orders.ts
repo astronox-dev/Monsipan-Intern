@@ -25,13 +25,30 @@ import { caseDocuments, chainFor, findCaseDocument, parseRef } from './case-file
 const creator = alias(users, 'creator');
 const statusUser = alias(users, 'status_user');
 
+/**
+ * Aushilfe laut Wochenplanung: Der Auftrag steht an einem Tag bei einer Partie,
+ * bei der diese Person an dem Tag eingeteilt ist (einzelner Tag oder die Woche,
+ * wenn nicht ein einzelner Tag woanders hinzeigt).
+ */
+const guestOrder = (userId: number) => sql`exists (
+	select 1 from plan_entries pe where pe.order_id = ${orders.id} and (
+		exists (select 1 from plan_crew_days d where d.user_id = ${userId} and d.date = pe.date and d.party_id = pe.party_id)
+		or exists (
+			select 1 from plan_crew_weeks w where w.user_id = ${userId} and w.party_id = pe.party_id
+				and pe.date between w.week_start and date(w.week_start, '+6 days')
+				and not exists (select 1 from plan_crew_days d2 where d2.user_id = ${userId} and d2.date = pe.date)
+		)
+	)
+)`;
+
 function scope(user: SessionUser): SQL | undefined {
 	if (can(user.role, 'auftraege.alle.sehen')) return undefined;
-	// Ohne Recht oder ohne Partie gibt es nichts zu sehen
-	if (!can(user.role, 'auftraege.sehen') || !user.partyId) return eq(orders.id, -1);
-	// Die Partie kennt einen Auftrag erst, wenn es den Arbeitsauftrag gibt
+	// Ohne Recht gibt es nichts zu sehen
+	if (!can(user.role, 'auftraege.sehen')) return eq(orders.id, -1);
+	// Die eigene Partie – und wo man laut Wochenplanung aushilft, an diesen Tagen.
+	// Die Partie kennt einen Auftrag erst, wenn es den Arbeitsauftrag gibt.
 	return and(
-		eq(orders.partyId, user.partyId),
+		or(user.partyId ? eq(orders.partyId, user.partyId) : undefined, guestOrder(user.id)),
 		sql`exists (select 1 from ${workOrders} where ${col(workOrders.orderId)} = ${col(orders.id)})`
 	);
 }
@@ -343,6 +360,16 @@ export function mayDeleteOrder(user: SessionUser, order: { status: string }): bo
 export function mayViewOrder(user: SessionUser, order: { partyId: number | null }): boolean {
 	if (can(user.role, 'auftraege.alle.sehen')) return true;
 	return can(user.role, 'auftraege.sehen') && !!user.partyId && user.partyId === order.partyId;
+}
+
+/**
+ * Darf diese Person den Auftrag öffnen? Wie mayViewOrder – dazu, wer laut
+ * Wochenplanung bei der Partie aushilft, an einem Tag, an dem der Auftrag dort steht.
+ */
+export async function mayOpenOrder(user: SessionUser, order: { id: number; partyId: number | null }): Promise<boolean> {
+	if (mayViewOrder(user, order)) return true;
+	if (!can(user.role, 'auftraege.sehen')) return false;
+	return !!(await db.select({ id: orders.id }).from(orders).where(and(eq(orders.id, order.id), guestOrder(user.id))).get());
 }
 
 /**

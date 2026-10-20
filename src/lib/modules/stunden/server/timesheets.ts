@@ -11,6 +11,11 @@
  * Aushilfe: War ein Arbeiter diese Woche mehr Tage bei einer anderen Partie,
  * übernimmt deren Partieführer die Woche und schreibt den ganzen Zettel
  * (writingPartyId). Die eigene Partie sieht ihn dann nur noch.
+ *
+ * Einteilung in der Wochenplanung: Ist ein Arbeiter laut Planung an einzelnen
+ * Tagen (oder die ganze Woche) bei einer anderen Partie, sieht deren
+ * Partieführer seinen Zettel von selbst und trägt genau diese Tage ein. Kopf
+ * (Auslöse, VAZ, Notiz) und Freigabe bleiben bei der schreibenden Partie.
  */
 import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
@@ -21,6 +26,7 @@ import { parties, timesheetDays, timesheets, users } from '$lib/server/db/schema
 import type { SessionUser } from '$lib/server/auth';
 import type { InkPages } from '$lib/ink';
 import { mondayOf, monthsOfWeek, normalizeRanges, parseHours, weekDaysInMonth, type TimeRange, type WEEKDAY_LABELS } from '../week';
+import { guestDaysAt, guestsOfParty } from '$lib/modules/planung/server/plan';
 
 /** Darf andere Partien sehen – wer andere bearbeiten darf, darf sie auch sehen */
 const seesAll = (user: SessionUser) => can(user.role, 'stunden.alle.sehen') || can(user.role, 'stunden.alle.bearbeiten');
@@ -90,14 +96,28 @@ export interface WeekRow {
 	status: 'entwurf' | 'freigegeben' | 'geprueft' | null;
 	total: number;
 	allowanceDays: number | null;
+	/** Laut Wochenplanung bei der eigenen Partie eingeteilt (feste Partie woanders): diese Tage */
+	guestDays: string[];
 }
 
 /**
  * Übersicht einer Woche: je Mitarbeiter ein Eintrag pro Monat, in den die Woche fällt.
- * Dazu kommen Aushilfen, die die eigene Partie diese Woche übernommen hat.
+ * Dazu kommen Aushilfen, die die eigene Partie diese Woche übernommen hat, und
+ * wer laut Wochenplanung an einzelnen Tagen bei ihr eingeteilt ist.
  */
 export async function weekOverview(user: SessionUser, weekStart: string): Promise<WeekRow[]> {
 	const staff = await staffFor(user);
+	// Laut Wochenplanung bei der eigenen Partie eingeteilt – der Partieführer trägt diese Tage ein
+	const guests = seesParty(user) && !seesAll(user) ? await guestsOfParty(user.partyId!, weekStart) : new Map<number, string[]>();
+	if (guests.size) {
+		const extra = await db
+			.select(staffFields)
+			.from(users)
+			.leftJoin(parties, eq(parties.id, users.partyId))
+			.where(and(activeUser, inArray(users.id, [...guests.keys()])))
+			.all();
+		for (const g of extra) if (!staff.some((s) => s.id === g.id)) staff.push(g);
+	}
 	// Aushilfen, die die eigene Partie schreibt – nur für die, die ihre Partie sehen
 	if (seesParty(user)) {
 		const borrowed = await db
@@ -146,7 +166,8 @@ export async function weekOverview(user: SessionUser, weekStart: string): Promis
 				sheetId: sheet?.id ?? null,
 				status: sheet?.status ?? null,
 				total: Number(sheet?.total ?? 0),
-				allowanceDays: sheet?.allowanceDays ?? null
+				allowanceDays: sheet?.allowanceDays ?? null,
+				guestDays: (guests.get(s.id) ?? []).filter((d) => d.slice(0, 7) === month)
 			});
 		}
 	}
@@ -291,26 +312,37 @@ export async function saveSheet(id: number, head: HeadInput, days: DayInput[]) {
 				updatedAt: new Date()
 			})
 			.where(eq(timesheets.id, id));
-
-		for (const d of days) {
-			await tx
-				.update(timesheetDays)
-				.set({
-					costCenter: String(d.costCenter ?? '').slice(0, 60),
-					site: String(d.site ?? '').slice(0, 200),
-					// Mehr als 12 Zeiträume am Tag sind ein Tippfehler, keine Arbeitszeit
-					times: normalizeRanges(d.times).slice(0, 12),
-					normalHours: parseHours(d.normalHours),
-					overtime50: parseHours(d.overtime50),
-					overtime100: parseHours(d.overtime100),
-					vacationHours: parseHours(d.vacationHours),
-					holidayHours: parseHours(d.holidayHours),
-					rainHours: parseHours(d.rainHours),
-					sickHours: parseHours(d.sickHours)
-				})
-				.where(and(eq(timesheetDays.timesheetId, id), eq(timesheetDays.date, d.date)));
-		}
+		await writeDays(tx, id, days);
 	});
+}
+
+/** Nur Tageszeilen – für die Partie, bei der der Arbeiter laut Planung an diesen Tagen war */
+export async function saveSheetDays(id: number, days: DayInput[]) {
+	await db.transaction(async (tx) => {
+		await tx.update(timesheets).set({ updatedAt: new Date() }).where(eq(timesheets.id, id));
+		await writeDays(tx, id, days);
+	});
+}
+
+async function writeDays(tx: Tx, id: number, days: DayInput[]) {
+	for (const d of days) {
+		await tx
+			.update(timesheetDays)
+			.set({
+				costCenter: String(d.costCenter ?? '').slice(0, 60),
+				site: String(d.site ?? '').slice(0, 200),
+				// Mehr als 12 Zeiträume am Tag sind ein Tippfehler, keine Arbeitszeit
+				times: normalizeRanges(d.times).slice(0, 12),
+				normalHours: parseHours(d.normalHours),
+				overtime50: parseHours(d.overtime50),
+				overtime100: parseHours(d.overtime100),
+				vacationHours: parseHours(d.vacationHours),
+				holidayHours: parseHours(d.holidayHours),
+				rainHours: parseHours(d.rainHours),
+				sickHours: parseHours(d.sickHours)
+			})
+			.where(and(eq(timesheetDays.timesheetId, id), eq(timesheetDays.date, d.date)));
+	}
 }
 
 /**
@@ -370,6 +402,29 @@ export function mayView(user: SessionUser, sheet: SheetParties & { userId: numbe
 	if (sheet.userId === user.id && seesOwn(user)) return true;
 	if (seesAll(user)) return true;
 	return seesParty(user) && (samePartyAs(user, sheet.partyId) || samePartyAs(user, sheet.writingPartyId));
+}
+
+/** Wie mayView – dazu der Partieführer, bei dessen Partie der Arbeiter laut Wochenplanung in dieser Woche eingeteilt ist */
+export async function mayViewSheet(user: SessionUser, sheet: SheetParties & { userId: number; weekStart: string }): Promise<boolean> {
+	if (mayView(user, sheet)) return true;
+	return seesParty(user) && (await guestDaysAt(sheet.userId, sheet.weekStart, user.partyId)).length > 0;
+}
+
+/**
+ * Tage dieses Zettels, an denen der Arbeiter laut Wochenplanung bei der Partie
+ * dieser Person war – die darf sie eintragen, solange die Woche in Arbeit ist.
+ * Leer, wer ohnehin den ganzen Zettel bearbeitet (mayEdit) oder nichts darf.
+ */
+export async function guestEditDays(user: SessionUser, sheet: SheetParties & { userId: number; weekStart: string; status: string; days: { date: string }[] }): Promise<string[]> {
+	if (mayEdit(user, sheet) || sheet.status !== 'entwurf' || !can(user.role, 'stunden.bearbeiten') || !user.partyId) return [];
+	const own = new Set(sheet.days.map((d) => d.date));
+	return (await guestDaysAt(sheet.userId, sheet.weekStart, user.partyId)).filter((d) => own.has(d));
+}
+
+/** Name einer Partie – für die Überschrift der eigenen in der Wochenliste */
+export async function partyName(id: number | null): Promise<string | null> {
+	if (!id) return null;
+	return (await db.select({ name: parties.name }).from(parties).where(eq(parties.id, id)).get())?.name ?? null;
 }
 
 /** Darf die Stundenzettel überhaupt öffnen – mindestens den eigenen */

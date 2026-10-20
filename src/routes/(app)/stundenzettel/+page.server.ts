@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
 import { requireUser } from '$lib/server/guard';
-import { borrowCandidates, borrowWeek, mayRecordFor, maySeeTimesheets, openSheet, weekOverview } from '$lib/modules/stunden/server/timesheets';
+import { borrowCandidates, borrowWeek, mayRecordFor, maySeeTimesheets, openSheet, partyName, weekOverview } from '$lib/modules/stunden/server/timesheets';
 import { isValidIsoDate, mondayOf, today } from '$lib/modules/stunden/week';
 import { notifySheet } from '$lib/modules/stunden/server/notify';
 import type { Actions, PageServerLoad } from './$types';
@@ -18,6 +18,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		weekStart,
 		rows,
 		ownPartyId: user.partyId,
+		ownPartyName: await partyName(user.partyId),
 		candidates: (await borrowCandidates(user)).filter((c) => !taken.has(c.id)),
 		canCreate: can(user.role, 'stunden.erstellen'),
 		canCheck: can(user.role, 'stunden.pruefen')
@@ -38,8 +39,10 @@ export const actions: Actions = {
 		const allowed = await weekOverview(user, weekStart);
 		const row = allowed.find((r) => r.user.id === userId && r.month === month);
 		if (!row) error(403, 'Für diese Person darfst du keine Stunden erfassen.');
-		// Ansehen reicht zum Öffnen; anlegen darf nur, wer erstellen und für diese Partie eintragen darf
-		if (!row.sheetId && (!can(user.role, 'stunden.erstellen') || !mayRecordFor(user, { partyId: row.user.partyId, writingPartyId: row.writingPartyId }))) {
+		// Ansehen reicht zum Öffnen; anlegen darf nur, wer erstellen und für diese Partie eintragen darf –
+		// oder bei wessen Partie der Arbeiter laut Wochenplanung an Tagen dieser Woche eingeteilt ist
+		const mayRecord = mayRecordFor(user, { partyId: row.user.partyId, writingPartyId: row.writingPartyId }) || row.guestDays.length > 0;
+		if (!row.sheetId && (!can(user.role, 'stunden.erstellen') || !mayRecord)) {
 			error(403, 'Für diese Person darfst du keinen Stundenzettel anlegen – sie gehört zu einer anderen Partie.');
 		}
 
