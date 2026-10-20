@@ -160,6 +160,9 @@ export const DEFAULT_PERMISSIONS = {
 	'krankenstand.melden': ['admin', 'geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer', 'arbeiter'],
 	'krankenstand.bearbeiten': BUERO,
 
+	// Tools und Hilfestellung: der Rechner für die Baustelle – für alle
+	'rechner.sehen': ALL,
+
 	// Ablage: Richtlinien & Vorschriften – lesen alle, pflegen das Büro
 	'richtlinien.sehen': ALL,
 	'richtlinien.erstellen': BUERO,
@@ -299,6 +302,13 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 			{ key: 'tagesberichte.oeffnen.abgeschlossen', label: 'Vom Kunden unterschriebene öffnen' }
 		],
 		remove: { all: 'tagesberichte.loeschen', hint: 'Berichte in Arbeit' }
+	},
+	{
+		key: 'rechner',
+		title: 'Rechner',
+		section: 'Tools und Hilfestellung',
+		hint: 'Parkordnung und Schutzwege einteilen',
+		view: { all: 'rechner.sehen' }
 	},
 	{
 		key: 'anfragen',

@@ -9,6 +9,7 @@ Oberfläche, auf dem Handy wie am PC. Die übrigen Bereiche kommen nach und nach
 | Auftragsmanagement | fertig – Anfragen, Angebote mit Kundenlink, Aufträge (Partie freiwillig), Summenblatt, Rechnungen (archiviert, PAdES-signiert, mit Prüfcode), Kunden |
 | Dokumentation: Stundenzettel | fertig – Lohnwoche je Mitarbeiter, Freigabe und Prüfung |
 | Dokumentation: Tagesberichte | fertig – Leistung je Tag und Baustelle, Freigabe, Prüfung, Unterschrift des Kunden |
+| Tools und Hilfestellung: Rechner | fertig – Parkordnung und Schutzwege einteilen, mit Zeichnung |
 | Planung | fertig – Wochenplanung je Partie und Tag mit Notizliste, Urlaubsanträge, Krankenstand mit Krankmeldung |
 | Lagermanagement | fertig – Bestand, Buchen, Inventur, Bewegungen, Bestellliste, Berichte, Artikel |
 | Benutzer | fertig – Zugänge, Gruppen, Berechtigungen |
@@ -78,6 +79,7 @@ Inventur-Buchung festgehalten, auch wenn sie stimmt.
 2. [Stundenzettel](#stundenzettel)
 3. [Tagesberichte](#tagesberichte)
 4. [Auftragsmanagement](#auftragsmanagement)
+4. [Rechner](#rechner)
 4. [Richtlinien & Vorschriften](#richtlinien--vorschriften)
 5. [Benachrichtigungen](#benachrichtigungen)
 5. [Lokale Entwicklung](#lokale-entwicklung)
@@ -102,6 +104,7 @@ Administration unter `/verwaltung/…`:
 | Übersicht | `/` |
 | Stundenzettel | `/stundenzettel` |
 | Tagesberichte | `/tagesberichte` |
+| Rechner (Tools und Hilfestellung) | `/tools/rechner` |
 | Wochenplanung, Urlaub, Krankenstand | `/planung` (`?woche=JJJJ-MM-TT`), `/urlaub`, `/krankenstand` |
 | Richtlinien & Vorschriften | `/richtlinien` (`?ordner=<id>`, `?suche=…`), ein PDF unter `/richtlinien/<id>` |
 | Tagesbericht für den Kunden (ohne Anmeldung) | `/bericht/<link>` |
@@ -1002,6 +1005,30 @@ regelmäßige Nachstempeln selbst ist noch nicht eingebaut. Wird eine ältere Si
 eingespielt, fehlen danach die später ausgestellten Rechnungen in der Datenbank – ihre
 Dateien bleiben im Archiv, der Stand davor steckt in der „-vor-restore“-Sicherung.
 
+## Rechner
+
+Unter **Tools und Hilfestellung → Rechner** (`/tools/rechner`) rechnet die App Einteilungen
+für die Baustelle aus – Maß in Metern eintippen (Komma oder Punkt), das Ergebnis steht gleich
+darunter, mit maßstäblicher Zeichnung. Gerechnet wird im Browser, gespeichert wird nichts.
+Öffnen dürfen ihn von Haus aus alle (Recht „Rechner“ unter Berechtigungen).
+
+- **Parkordnung:** Strich 2 m, Lücke 1 m; Anfangs- und Endstrich sind gleich lang, mindestens
+  50 cm und höchstens 2 m. Aus der Länge kommen die Länge von Anfangs- und Endstrich, die
+  Striche dazwischen, die Lücken, die markierte Länge (für die Abrechnung) und die Folge zum
+  Abmessen, z. B. 23,40 m → „Strich 0,70 m · Lücke 1 m · 7 × (Strich 2 m · Lücke 1 m) · Strich
+  0,70 m“. Ab 2 m gibt es immer eine Einteilung; liegt ein Ende genau auf 50 cm bzw. 2 m, steht
+  die zweite darunter. Bei vielen Strichen zeigt die Zeichnung Anfang und Ende.
+- **Schutzweg:** Riegel 50 cm, Lücke 50 cm; vom Randstein zum ersten und letzten Riegel
+  mindestens 25 cm, höchstens 50 cm. Aus der Fahrbahnbreite (Randstein bis Randstein) kommen
+  der Abstand zum Randstein und die Zahl der Riegel; mit der Länge der Riegel (freiwillig) auch
+  die Fläche in m². Geht es sich mit genau 50 cm Lücken nicht aus (z. B. 6,70 m: 60 cm bzw.
+  10 cm zum Randstein), steht das als Hinweis da, und darunter die beiden Möglichkeiten mit
+  angepasster Lücke – 6 Riegel mit 54 cm Lücke und 50 cm Rand oder 7 Riegel mit 45 cm Lücke
+  und 25 cm Rand.
+
+Die Rechnung steht in [`src/lib/modules/tools/rechner.ts`](src/lib/modules/tools/rechner.ts)
+(in Zentimetern, mit Tests); ein weiterer Rechner kommt als Abschnitt auf dieselbe Seite.
+
 ## Richtlinien & Vorschriften
 
 Unter **Ablage → Richtlinien & Vorschriften** (`/richtlinien`) liegen Vorschriften, Normen,
@@ -1624,6 +1651,7 @@ src/
     server/db/schema/   core.ts (Benutzer, Partien, Einstellungen) + je Bereich eine Datei
     modules/
       ablage/      Richtlinien & Vorschriften: server/richtlinien.ts (Ordner, PDFs, Suche)
+      tools/       Rechner: rechner.ts (Parkordnung, Schutzweg), components/ (Zeichnung)
       auftraege/   Auftragsmanagement: offer.ts (Beträge, Summen, Nummern), inquiry.ts
                    (E-Mail auslesen), summary.ts (Summenblatt, Zuordnung zur Rechnung),
                    server/ (Kunden, Anfragen, Angebote, Aufträge, Rechnungen, PDF), components/,

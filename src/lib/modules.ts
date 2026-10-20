@@ -20,6 +20,8 @@ import Users from '@lucide/svelte/icons/users';
 import Clock from '@lucide/svelte/icons/clock';
 import NotebookPen from '@lucide/svelte/icons/notebook-pen';
 import FileText from '@lucide/svelte/icons/file-text';
+import Wrench from '@lucide/svelte/icons/wrench';
+import Calculator from '@lucide/svelte/icons/calculator';
 import Boxes from '@lucide/svelte/icons/boxes';
 import ScanLine from '@lucide/svelte/icons/scan-line';
 import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
@@ -117,6 +119,17 @@ export const MODULES: AppModule[] = [
 			{ href: '/stundenzettel', label: 'Stundenzettel', icon: Clock, permission: 'stunden.eigene.sehen', hint: 'Lohnwoche je Mitarbeiter' },
 			{ href: '/tagesberichte', label: 'Tagesberichte', icon: NotebookPen, permission: 'tagesberichte.sehen', hint: 'Leistung je Tag und Baustelle' }
 		]
+	},
+	{
+		key: 'tools',
+		label: 'Tools und Hilfestellung',
+		icon: Wrench,
+		href: '/tools/rechner',
+		group: 'betrieb',
+		status: 'aktiv',
+		hint: 'Rechner für die Baustelle',
+		cardsPerItem: true,
+		items: [{ href: '/tools/rechner', label: 'Rechner', icon: Calculator, permission: 'rechner.sehen', hint: 'Parkordnung und Schutzwege einteilen' }]
 	},
 	{
 		key: 'lager',
