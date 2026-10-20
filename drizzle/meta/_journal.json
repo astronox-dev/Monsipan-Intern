@@ -330,6 +330,13 @@
       "when": 1792499099151,
       "tag": "0046_bemerkung",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1792507438031,
+      "tag": "0047_skonto_alternativ",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ import { getSettings } from '$lib/server/settings';
 import { letterheadPath } from '$lib/server/letterhead';
 import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '$lib/modules/stunden/signature';
 import { LETTERHEAD, reportDateLabel } from '$lib/modules/tagesberichte/sheet';
+import { addDays } from '$lib/modules/stunden/week';
 import {
 	addressLines,
 	invoiceLabel,
@@ -23,10 +24,13 @@ import {
 	lineTotal,
 	money,
 	offerTotals,
+	paymentTermsText,
 	priceLabel,
 	quantityLabel,
 	REVERSE_CHARGE_NOTE,
-	spacedNumber
+	shownTotal,
+	spacedNumber,
+	vatLabel
 } from '../offer';
 import type { SummaryColumn, SummaryReport } from '../summary';
 import { isLegacy } from '../signature';
@@ -120,8 +124,12 @@ interface Row {
 	text: string;
 	/** Bemerkung – unter dem Text, nicht fett */
 	note?: string;
+	/** Kennzeichen unter allem, schräg und grau – etwa „Alternativposition" */
+	remark?: string;
 	cells: string[];
 }
+
+const ALTERNATIVE_REMARK = 'Alternativposition – nicht im Gesamtbetrag enthalten';
 
 /**
  * Positionstabelle mit Kopf. Reicht der Platz nicht, geht es auf der nächsten
@@ -149,7 +157,10 @@ function table(doc: Doc, y: number, columns: Column[], rows: Row[], continued: s
 		const note = !titel && row.note?.trim() ? row.note.trim() : '';
 		doc.font('Helvetica').fontSize(9);
 		const noteH = note ? doc.heightOfString(note, { width: textW, lineGap: 1 }) + 2 : 0;
-		const height = Math.max(12, textH + noteH) + (titel ? 10 : 8);
+		const remark = !titel && row.remark ? row.remark : '';
+		doc.font('Helvetica-Oblique').fontSize(8.5);
+		const remarkH = remark ? doc.heightOfString(remark, { width: textW, lineGap: 1 }) + 2 : 0;
+		const height = Math.max(12, textH + noteH + remarkH) + (titel ? 10 : 8);
 		if (y + height > FOOTER_TOP - 6 * MM) {
 			doc.addPage();
 			doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text(continued, LEFT, 15 * MM, { width: WIDTH, lineBreak: false });
@@ -160,6 +171,8 @@ function table(doc: Doc, y: number, columns: Column[], rows: Row[], continued: s
 		doc.text(row.nr, columns[0].x, top + (titel ? 0 : 0.5), { width: columns[0].w, lineBreak: false });
 		doc.font('Helvetica-Bold').fontSize(titel ? 10.5 : 9.5).text(row.text, textCol.x, top, { width: textW, lineGap: 1 });
 		if (note) doc.font('Helvetica').fontSize(9).fillColor(INK).text(note, textCol.x, top + textH + 2, { width: textW, lineGap: 1 });
+		if (remark) doc.font('Helvetica-Oblique').fontSize(8.5).fillColor(MUTED).text(remark, textCol.x, top + textH + noteH + 2, { width: textW, lineGap: 1 });
+		doc.fillColor(INK);
 		if (!titel) {
 			doc.font('Helvetica').fontSize(9.5);
 			columns.slice(2).forEach((c, i) => {
@@ -294,7 +307,8 @@ export async function offerPdf(offer: OfferDetail, { forCustomer = false } = {})
 		nr: numbers[i],
 		text: l.text,
 		note: l.note,
-		cells: [quantityLabel(l.quantity), l.unit, priceLabel(l.unitPrice), money(lineTotal(l))]
+		remark: l.alternative ? ALTERNATIVE_REMARK : undefined,
+		cells: [quantityLabel(l.quantity), l.unit, priceLabel(l.unitPrice), money(shownTotal(l))]
 	}));
 	y = table(
 		doc,
@@ -311,14 +325,23 @@ export async function offerPdf(offer: OfferDetail, { forCustomer = false } = {})
 		`${title} – Fortsetzung`
 	);
 
-	const totals = offerTotals(offer.lines, offer.vatRate);
+	const totals = offerTotals(offer.lines, offer.vatRate, offer.reverseCharge);
 	y = sumsBlock(doc, y, [
 		['Gesamt Netto', money(totals.net), false],
-		[`${String(offer.vatRate).replace('.', ',')} % Umsatzsteuer`, money(totals.vat), false],
+		...(offer.reverseCharge ? [] : ([[vatLabel(offer.vatRate, false), money(totals.vat), false]] as [string, string, boolean][])),
 		['Gesamtbetrag', money(totals.gross), true]
 	]);
 
-	y = paragraph(doc, offer.closing, y + 6 * MM);
+	y += 6 * MM;
+	if (offer.reverseCharge) {
+		y = paragraph(doc, `${REVERSE_CHARGE_NOTE}${offer.customerUid ? `\nUID-Nummer des Leistungsempfängers: ${offer.customerUid}` : ''}`, y) + 3 * MM;
+	}
+	// Zahlungsbedingungen – ältere Angebote haben keine
+	if (offer.paymentDays != null) {
+		const terms = paymentTermsText({ paymentDays: offer.paymentDays, skontoPercent: offer.skontoPercent, skontoDays: offer.skontoDays }, totals.gross);
+		y = paragraph(doc, terms.join('\n'), y) + 3 * MM;
+	}
+	y = paragraph(doc, offer.closing, y);
 
 	// Angenommen: Name, Tag und Unterschrift des Kunden
 	if (offer.acceptedAt && offer.acceptedSignature) {
@@ -389,7 +412,14 @@ export async function orderPdf(order: OrderDetail): Promise<Response> {
 			{ label: 'Menge', x: 150 * MM, w: 18 * MM, align: 'right' },
 			{ label: 'Einheit', x: 172 * MM, w: RIGHT - 172 * MM }
 		],
-		order.lines.map((l, i) => ({ kind: l.kind, nr: numbers[i], text: l.text, note: l.note, cells: [quantityLabel(l.quantity), l.unit] })),
+		order.lines.map((l, i) => ({
+			kind: l.kind,
+			nr: numbers[i],
+			text: l.text,
+			note: l.note,
+			remark: l.alternative ? 'Alternativposition – nur ausführen, wenn beauftragt' : undefined,
+			cells: [quantityLabel(l.quantity), l.unit]
+		})),
 		`${title} – Fortsetzung`
 	);
 
@@ -565,8 +595,10 @@ export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }
 		y = 20 * MM;
 	}
 	if (!isStorno) {
-		doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text(`Zahlbar bis ${isoDate(invoice.dueDate)} ohne Abzug.`, LEFT, y, { width: WIDTH, lineBreak: false });
+		const [due, ...skonto] = paymentTermsText({ paymentDays: 0, skontoPercent: invoice.skontoPercent, skontoDays: invoice.skontoDays }, totals.gross, { due: isoDate(invoice.dueDate), skonto: isoDate(addDays(invoice.date, invoice.skontoDays)) });
+		doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text(due, LEFT, y, { width: WIDTH, lineBreak: false });
 		y += 16;
+		if (skonto.length) y = paragraph(doc, skonto.join('\n'), y - 2, 10) + 3;
 	}
 	y = paragraph(doc, invoice.closing, y + 3 * MM);
 

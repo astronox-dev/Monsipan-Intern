@@ -96,7 +96,7 @@ export interface WorkOrderSource {
 	location: string;
 	customerContact: string;
 	customerPhone: string;
-	lines: { kind: string; text: string; quantity: number | null; unit: string }[];
+	lines: { kind: string; text: string; quantity: number | null; unit: string; alternative?: boolean }[];
 }
 
 /**
@@ -117,7 +117,7 @@ export async function prefill(source: WorkOrderSource, defaults?: Awaited<Return
 	form.lines = source.lines
 		.filter((l) => l.kind === 'position' && l.text.trim())
 		.slice(0, MAX_WORK_LINES)
-		.map((l) => ({ text: lineTitle(l.text), ...guessLine(l.text), quantity: l.quantity, unit: l.unit, done: null }));
+		.map((l) => ({ text: `${l.alternative ? 'Alternativ: ' : ''}${lineTitle(l.text)}`, ...guessLine(l.text), quantity: l.quantity, unit: l.unit, done: null }));
 	if (last) {
 		// Pläne hängen am einzelnen Auftrag – das Häkchen setzt erst, wer welche hochlädt
 		form.attachments = { ...last.attachments, plans: false };
@@ -196,7 +196,9 @@ const LOCKED = 'Der Auftraggeber hat schon unterschrieben – zum Ändern zuerst
  */
 export async function saveWorkOrderForm(orderId: number, form: WorkOrderForm, scope: WorkScope, userId: number, foil?: unknown) {
 	const problem = await change(orderId, userId, (c) => {
-		if (c.signatures.auftraggeber) return LOCKED;
+		// Nach dem Auftraggeber ist alles fest – nur die Vorarbeiter-Checkliste lässt sich noch abhaken,
+		// sonst ließe sich der Auftrag ohne sie nie abschließen
+		if (c.signatures.auftraggeber) return scope.site ? { ...c, checklist: form.checklist } : LOCKED;
 		const next: WorkOrderContent = { ...c, ...mergeForm(c, form, scope) };
 		if (scope.site && foil !== undefined && next.foilProtocol === 'ja') next.foil = { ...sanitizeFoil(foil), signatures: c.foil.signatures };
 		if (next.foilProtocol === 'ja' && isPristineFoil(next.foil)) next.foil = { ...prefillFoil(next), signatures: c.foil.signatures };

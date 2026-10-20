@@ -24,6 +24,8 @@
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import CustomerFields from '$lib/modules/auftraege/components/CustomerFields.svelte';
 	import PositionInput, { type PositionMemory } from '$lib/modules/auftraege/components/PositionInput.svelte';
+	import TaxSelect from '$lib/modules/auftraege/components/TaxSelect.svelte';
+	import PaymentTermsFields from '$lib/modules/auftraege/components/PaymentTermsFields.svelte';
 	import PhotoGallery from '$lib/components/PhotoGallery.svelte';
 	import CaseDocuments from '$lib/modules/auftraege/components/CaseDocuments.svelte';
 	import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '$lib/modules/stunden/signature';
@@ -37,7 +39,9 @@
 		offerState,
 		offerTotals,
 		parseAmount,
-		spacedNumber
+		shownTotal,
+		spacedNumber,
+		vatLabel
 	} from '$lib/modules/auftraege/offer';
 	import { date as dateLabel, dateTime } from '$lib/format';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -46,7 +50,7 @@
 	let { data, form } = $props();
 	const offer = $derived(data.offer);
 
-	type Line = { key: number; kind: 'position' | 'titel'; text: string; note: string; quantity: string; unit: string; price: string };
+	type Line = { key: number; kind: 'position' | 'titel'; text: string; note: string; quantity: string; unit: string; price: string; alternative: boolean };
 
 	let nextKey = 1;
 	// Das Angebot wird nur beim Öffnen übernommen – danach gehört der Stand dem Formular
@@ -65,7 +69,11 @@
 		uid: data.offer.customerUid,
 		intro: data.offer.intro,
 		closing: data.offer.closing,
-		vat: String(data.offer.vatRate).replace('.', ',')
+		vat: String(data.offer.vatRate).replace('.', ','),
+		reverse: data.offer.reverseCharge,
+		days: String(data.offer.paymentDays ?? data.defaultPaymentDays),
+		skonto: data.offer.skontoPercent ? String(data.offer.skontoPercent).replace('.', ',') : '',
+		skontoDays: data.offer.skontoDays ? String(data.offer.skontoDays) : ''
 	});
 	// svelte-ignore state_referenced_locally
 	let lines = $state<Line[]>(
@@ -76,13 +84,15 @@
 			note: l.note ?? '',
 			quantity: l.quantity == null ? '' : String(l.quantity).replace('.', ','),
 			unit: canonicalUnit(data.units, l.unit),
-			price: amountInput(l.unitPrice)
+			price: amountInput(l.unitPrice),
+			alternative: l.alternative
 		}))
 	);
 
 	const numbers = $derived(lineNumbers(lines));
-	const parsed = $derived(lines.map((l) => ({ kind: l.kind, quantity: parseAmount(l.quantity), unitPrice: parseAmount(l.price) })));
-	const totals = $derived(offerTotals(parsed, parseAmount(head.vat) ?? 0));
+	const parsed = $derived(lines.map((l) => ({ kind: l.kind, quantity: parseAmount(l.quantity), unitPrice: parseAmount(l.price), alternative: l.alternative })));
+	const totals = $derived(offerTotals(parsed, parseAmount(head.vat) ?? 0, head.reverse));
+	const alternatives = $derived(lines.filter((l) => l.kind === 'position' && l.alternative).length);
 	const st = $derived(OFFER_STATUS_LABELS[offerState(offer)] ?? OFFER_STATUS_LABELS.entwurf);
 
 	let busy = $state(false);
@@ -106,11 +116,13 @@
 		head.zip = c.zip;
 		head.city = c.city;
 		head.uid = c.uid;
+		// Bauunternehmen: ohne Umsatzsteuer (Übergang der Steuerschuld)
+		head.reverse = c.reverseCharge;
 	}
 
 	async function addLine(kind: 'position' | 'titel') {
 		if (lines.length >= MAX_OFFER_LINES) return;
-		lines.push({ key: nextKey++, kind, text: '', note: '', quantity: kind === 'position' ? '' : '', unit: '', price: '' });
+		lines.push({ key: nextKey++, kind, text: '', note: '', quantity: '', unit: '', price: '', alternative: false });
 		await tick();
 		listBox?.querySelector<HTMLElement>(`[data-zeile="${lines.length - 1}"]`)?.focus();
 	}
@@ -308,7 +320,10 @@
 					{@render field('Straße bzw. Postfach', 'k_strasse', head.street, (v) => (head.street = v), { cls: 'col-span-6' })}
 					{@render field('PLZ', 'k_plz', head.zip, (v) => (head.zip = v), { cls: 'col-span-2', max: 12 })}
 					{@render field('Ort', 'k_ort', head.city, (v) => (head.city = v), { cls: 'col-span-4', max: 120 })}
-					{@render field('Kunden UID-Nummer', 'k_uid', head.uid, (v) => (head.uid = v), { cls: 'col-span-6', max: 30 })}
+					{@render field(head.reverse ? 'Kunden UID-Nummer * (Übergang der Steuerschuld)' : 'Kunden UID-Nummer', 'k_uid', head.uid, (v) => (head.uid = v), {
+						cls: 'col-span-6',
+						max: 30
+					})}
 				</div>
 			</section>
 
@@ -320,7 +335,7 @@
 						<span class="field-label">Angebotsdatum</span>
 						<input class="input num" type="date" name="datum" required bind:value={head.date} />
 					</label>
-					{@render field('Umsatzsteuer in %', 'ust', head.vat, (v) => (head.vat = v), { max: 6, mode: 'decimal' })}
+					<TaxSelect bind:vat={head.vat} bind:reverse={head.reverse} class="col-span-2" />
 					<label class="col-span-2 block">
 						<span class="field-label">Bauvorhaben (BV)</span>
 						<textarea class="textarea auto" name="titel" rows="2" maxlength="300" bind:value={head.title}></textarea>
@@ -342,12 +357,12 @@
 
 		<section class="card mt-4 p-4 lg:p-5" bind:this={listBox}>
 			<h2 class="text-lg">Positionen</h2>
-			<div class="mt-3 hidden gap-2 text-[0.8125rem] text-ink-3 md:grid md:grid-cols-[2.5rem_minmax(0,1fr)_5rem_7.5rem_7rem_7rem_5.5rem]">
+			<div class="mt-3 hidden gap-2 text-[0.8125rem] text-ink-3 xl:grid xl:grid-cols-[2.5rem_minmax(0,1fr)_5rem_7.5rem_7rem_7rem_5.5rem]">
 				<span>Nr.</span><span>Bezeichnung</span><span class="text-right">Menge</span><span>Einheit</span><span class="text-right">EP in €</span><span class="text-right">GP</span><span></span>
 			</div>
 			<ul class="mt-1 divide-y divide-line">
 				{#each lines as l, i (l.key)}
-					<li class="py-2.5">
+					<li class="py-2.5 {l.alternative ? 'alt' : ''}">
 						<input type="hidden" name="z.{i}.art" value={l.kind} />
 						{#if l.kind === 'titel'}
 							<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-2">
@@ -364,8 +379,10 @@
 								{@render tools(i, l.key)}
 							</div>
 						{:else}
-							<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-2 md:grid-cols-[2.5rem_minmax(0,1fr)_5rem_7.5rem_7rem_7rem_5.5rem] md:items-start">
-								<span class="num pt-2 text-sm">{numbers[i]}</span>
+							<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-2 xl:grid-cols-[2.5rem_minmax(0,1fr)_5rem_7.5rem_7rem_7rem_5.5rem] xl:items-start">
+								<span class="num pt-2 text-sm">
+									{numbers[i]}{#if l.alternative}<span class="block text-[0.6875rem] font-semibold text-ink-3 uppercase">Alt.</span>{/if}
+								</span>
 								<div class="min-w-0">
 									<!-- Beim Tippen: frühere Positionen als Vorschlag -->
 									<PositionInput
@@ -390,30 +407,38 @@
 										bind:value={l.note}
 										aria-label="Bemerkung Zeile {i + 1}"
 									></textarea>
+									<!-- Alternativposition: Menge und Preis stehen da, der GP ist 0 und zählt nicht zur Summe -->
+									<label class="mt-1.5 inline-flex cursor-pointer items-center gap-2 text-sm text-ink-2">
+										<input type="checkbox" class="size-4 accent-[var(--c-ink)]" name="z.{i}.alternativ" bind:checked={l.alternative} />
+										Alternativposition – nicht im Gesamtbetrag
+									</label>
 								</div>
-								<div class="md:hidden">{@render tools(i, l.key)}</div>
-								<div class="col-span-3 grid grid-cols-4 gap-2 md:contents">
+								<div class="xl:hidden">{@render tools(i, l.key)}</div>
+								<div class="col-span-3 grid grid-cols-4 gap-2 xl:contents">
 									<label class="block">
-										<span class="field-label md:sr-only">Menge</span>
+										<span class="field-label xl:sr-only">Menge</span>
 										<input class="input num text-right" name="z.{i}.menge" inputmode="decimal" maxlength="14" bind:value={l.quantity} />
 									</label>
 									<label class="block">
-										<span class="field-label md:sr-only">Einheit</span>
+										<span class="field-label xl:sr-only">Einheit</span>
 										<select class="select" name="z.{i}.einheit" bind:value={l.unit}>
 											<option value="">–</option>
 											{#each unitChoices(data.units, l.unit) as u (u)}<option value={u}>{u}</option>{/each}
 										</select>
 									</label>
 									<label class="block">
-										<span class="field-label md:sr-only">EP in €</span>
+										<span class="field-label xl:sr-only">EP in €</span>
 										<input class="input num text-right" name="z.{i}.preis" inputmode="decimal" maxlength="14" bind:value={l.price} />
 									</label>
 									<div class="block">
-										<span class="field-label md:sr-only">GP</span>
-										<p class="num py-2 text-right font-medium">{money(lineTotal(parsed[i])) || '–'}</p>
+										<span class="field-label xl:sr-only">GP</span>
+										<p class="num py-2 text-right font-medium">
+											{money(shownTotal(parsed[i])) || '–'}
+											{#if l.alternative && lineTotal(parsed[i])}<span class="block text-[0.75rem] font-normal text-ink-3">alternativ {money(lineTotal(parsed[i]))}</span>{/if}
+										</p>
 									</div>
 								</div>
-								<div class="hidden md:block">{@render tools(i, l.key)}</div>
+								<div class="hidden xl:block">{@render tools(i, l.key)}</div>
 							</div>
 						{/if}
 					</li>
@@ -435,12 +460,20 @@
 			<dl class="num mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 border-t border-line pt-3">
 				<dt>Gesamt Netto</dt>
 				<dd class="text-right">{money(totals.net)}</dd>
-				<dt>{head.vat || '0'} % Umsatzsteuer</dt>
-				<dd class="text-right">{money(totals.vat)}</dd>
+				{#if !head.reverse}
+					<dt>{vatLabel(parseAmount(head.vat) ?? 0, false)}</dt>
+					<dd class="text-right">{money(totals.vat)}</dd>
+				{/if}
 				<dt class="border-t border-ink pt-1.5 text-lg font-semibold">Gesamtbetrag</dt>
 				<dd class="border-t border-ink pt-1.5 text-right text-lg font-semibold">{money(totals.gross)}</dd>
 			</dl>
+			{#if head.reverse}<p class="mt-2 text-right text-sm text-ink-2">Ohne Umsatzsteuer – Übergang der Steuerschuld (§ 19 Abs. 1a UStG).</p>{/if}
+			{#if alternatives}
+				<p class="mt-1 text-right text-sm text-ink-3">{alternatives === 1 ? 'Die Alternativposition ist' : `${alternatives} Alternativpositionen sind`} nicht enthalten.</p>
+			{/if}
 		</section>
+
+		<PaymentTermsFields bind:days={head.days} bind:percent={head.skonto} bind:skontoDays={head.skontoDays} gross={totals.gross} />
 
 		<section class="card mt-4 p-4 lg:p-5">
 			<label class="block">
@@ -672,5 +705,10 @@
 	}
 	.tool:disabled {
 		opacity: 0.3;
+	}
+	/* Alternativposition: am Rand markiert */
+	.alt {
+		box-shadow: inset 3px 0 0 var(--c-line-strong);
+		padding-left: 0.5rem;
 	}
 </style>

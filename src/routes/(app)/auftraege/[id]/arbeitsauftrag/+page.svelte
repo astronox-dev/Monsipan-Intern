@@ -41,6 +41,8 @@
 	const office = $derived(data.scope.office && !data.locked);
 	const site = $derived(data.scope.site && !data.locked);
 	const editable = $derived(office || site);
+	/** Die Checkliste lässt sich auch nach der Unterschrift des Auftraggebers noch abhaken – bis der Auftrag abgeschlossen ist */
+	const checklistOpen = $derived(data.scope.site && data.order.status !== 'abgeschlossen');
 	const st = $derived(ORDER_STATUS_LABELS[data.order.status] ?? ORDER_STATUS_LABELS.erstellt);
 
 	/** Das Formular gehört nach dem Öffnen der Seite – die ausgeführte Menge als Text zum Tippen */
@@ -164,8 +166,15 @@
 	<p class="card mb-4 flex items-start gap-3 p-4 text-sm text-ink-2">
 		<Lock size={18} class="mt-0.5 shrink-0" aria-hidden="true" />
 		<span>
-			Der Auftraggeber hat am {dateTime(saved.signatures.auftraggeber.at)} unterschrieben – der Arbeitsauftrag ist abgeschlossen. Zum Ändern
-			zuerst seine Unterschrift entfernen (unten bei „Abschluss“).
+			Der Auftraggeber hat am {dateTime(saved.signatures.auftraggeber.at)} unterschrieben – der Arbeitsauftrag ist damit gesperrt.
+			{#if data.order.status !== 'abgeschlossen'}
+				<!-- Unterschrieben heißt nicht abgeschlossen: ohne Checkliste oder ohne Recht dazu bleibt der Stand -->
+				<!-- Wer den Stand setzen darf, sieht darunter, was fehlt – die anderen hier -->
+				<span class="font-medium text-ink">
+					Der Auftrag selbst ist noch nicht abgeschlossen{data.canStatus ? '.' : blocker ? ` – ${blocker}` : ' – das macht die Partie.'}
+				</span>
+			{/if}
+			Zum Ändern zuerst seine Unterschrift entfernen (unten bei „Abschluss“){checklistOpen ? ' – die Vorarbeiter-Checkliste lässt sich auch so noch abhaken' : ''}.
 		</span>
 	</p>
 {:else if !editable}
@@ -188,7 +197,7 @@
 			};
 		}}
 	>
-		{#if editable}<input type="hidden" name="inhalt" value={payload} />{/if}
+		{#if editable || checklistOpen}<input type="hidden" name="inhalt" value={payload} />{/if}
 		<p class="min-w-[12rem] flex-1 text-ink-2">
 			{data.order.status === 'erstellt' ? 'Sobald ihr anfangt, auf „In Arbeit" setzen.' : 'Fertig? Dann auf „Abgeschlossen" setzen.'}
 			{#if blocker}
@@ -329,15 +338,17 @@
 
 		<section id="checkliste" class="card scroll-mt-20 border-ok/40 p-4 lg:p-5">
 			<h2 class="text-lg text-ok">Vorarbeiter-Checkliste</h2>
-			<p class="mt-0.5 text-sm text-ink-3">Alle drei abhaken – vorher lässt sich der Auftrag nicht abschließen.</p>
-			<fieldset disabled={!site} class="mt-3 space-y-4">
-				<div class="flex flex-wrap gap-x-6 gap-y-2">
-					{#each CHECKLIST as k (k.key)}
-						<label class="flex items-center gap-2.5">
-							<input type="checkbox" class="size-5 accent-[var(--c-ok)]" bind:checked={f.checklist[k.key]} />{k.label}: ok
-						</label>
-					{/each}
-				</div>
+			<p class="mt-0.5 text-sm text-ink-3">
+				Alle drei abhaken – vorher lässt sich der Auftrag nicht abschließen.{data.locked && checklistOpen ? ' Geht auch noch nach der Unterschrift des Auftraggebers – danach oben „Abgeschlossen“.' : ''}
+			</p>
+			<fieldset disabled={!site && !checklistOpen} class="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+				{#each CHECKLIST as k (k.key)}
+					<label class="flex items-center gap-2.5">
+						<input type="checkbox" class="size-5 accent-[var(--c-ok)]" bind:checked={f.checklist[k.key]} />{k.label}: ok
+					</label>
+				{/each}
+			</fieldset>
+			<fieldset disabled={!site} class="mt-4 space-y-4">
 				<div>
 					<p class="field-label text-danger">Nur bei Auffälligkeiten auszufüllen</p>
 					<div class="space-y-2">

@@ -19,9 +19,11 @@ export interface CustomerInput {
 	phone: string;
 	contact: string;
 	note: string;
+	/** Bauunternehmen: Angebote und Rechnungen ohne Umsatzsteuer (Übergang der Steuerschuld) */
+	reverseCharge: boolean;
 }
 
-const LIMITS: Record<keyof CustomerInput, number> = {
+const LIMITS: Record<Exclude<keyof CustomerInput, 'reverseCharge'>, number> = {
 	name: 160,
 	addition: 160,
 	street: 160,
@@ -36,8 +38,8 @@ const LIMITS: Record<keyof CustomerInput, number> = {
 
 /** Formular auslesen und kürzen */
 export function readCustomer(form: FormData): CustomerInput {
-	const out = {} as CustomerInput;
-	for (const [key, max] of Object.entries(LIMITS) as [keyof CustomerInput, number][]) {
+	const out = { reverseCharge: form.get('baufirma') === 'on' } as CustomerInput;
+	for (const [key, max] of Object.entries(LIMITS) as [Exclude<keyof CustomerInput, 'reverseCharge'>, number][]) {
 		out[key] = String(form.get(key) ?? '')
 			.trim()
 			.slice(0, max);
@@ -64,6 +66,7 @@ const customerFields = {
 	phone: customers.phone,
 	contact: customers.contact,
 	note: customers.note,
+	reverseCharge: customers.reverseCharge,
 	active: customers.active
 };
 

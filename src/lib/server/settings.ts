@@ -24,8 +24,11 @@ export interface AppSettings {
 	/** Vorlagen für neue Rechnungen – in der einzelnen Rechnung änderbar */
 	invoiceIntro: string;
 	invoiceClosing: string;
-	/** Zahlungsziel in Tagen ab Rechnungsdatum */
+	/** Zahlungsziel in Tagen ab Rechnungsdatum – Vorgabe für neue Angebote und Rechnungen */
 	invoicePaymentDays: number;
+	/** Skonto in Prozent und innerhalb wie vieler Tage – 0 % heißt ohne */
+	skontoPercent: number;
+	skontoDays: number;
 }
 
 const DEFAULTS: AppSettings = {
@@ -42,7 +45,9 @@ const DEFAULTS: AppSettings = {
 	orderClosing: '',
 	invoiceIntro: 'Sehr geehrte Damen und Herren,\nfür die ausgeführten Arbeiten erlauben wir uns, wie folgt in Rechnung zu stellen:',
 	invoiceClosing: 'Wir danken für Ihren Auftrag und freuen uns auf die weitere Zusammenarbeit.',
-	invoicePaymentDays: 30
+	invoicePaymentDays: 30,
+	skontoPercent: 0,
+	skontoDays: 0
 };
 
 let cache: AppSettings | null = null;

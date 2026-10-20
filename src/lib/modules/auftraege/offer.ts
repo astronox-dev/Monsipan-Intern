@@ -82,6 +82,8 @@ export interface OfferLine {
 	kind: 'position' | 'titel';
 	quantity: number | null;
 	unitPrice?: number | null;
+	/** Alternativposition: angeboten, aber nicht im Gesamtbetrag */
+	alternative?: boolean;
 }
 
 /** Gesamtpreis einer Position, auf Cent gerundet */
@@ -90,15 +92,86 @@ export function lineTotal(line: { quantity: number | null; unitPrice?: number | 
 	return round2(line.quantity * line.unitPrice);
 }
 
-export function offerTotals(lines: OfferLine[], vatRate: number) {
-	const net = round2(lines.reduce((s, l) => s + (l.kind === 'position' ? (lineTotal(l) ?? 0) : 0), 0));
-	const vat = round2((net * vatRate) / 100);
+/** GP, wie er im Angebot steht: bei einer Alternativposition 0 – sie zählt nicht zum Gesamtbetrag */
+export function shownTotal(line: { quantity: number | null; unitPrice?: number | null; alternative?: boolean }): number | null {
+	const total = lineTotal(line);
+	return line.alternative && total != null ? 0 : total;
+}
+
+/** Netto, Umsatzsteuer und Gesamtbetrag – bei Übergang der Steuerschuld ohne Umsatzsteuer */
+export function offerTotals(lines: OfferLine[], vatRate: number, reverseCharge = false) {
+	const net = round2(lines.reduce((s, l) => s + (l.kind === 'position' ? (shownTotal(l) ?? 0) : 0), 0));
+	const vat = reverseCharge ? 0 : round2((net * vatRate) / 100);
 	return { net, vat, gross: round2(net + vat) };
 }
 
-/** Rechnung: wie beim Angebot – bei Übergang der Steuerschuld ohne Umsatzsteuer */
+/** Rechnung: wie beim Angebot */
 export function invoiceTotals(lines: OfferLine[], vatRate: number, reverseCharge: boolean) {
-	return offerTotals(lines, reverseCharge ? 0 : vatRate);
+	return offerTotals(lines, vatRate, reverseCharge);
+}
+
+/** Zur Wahl bei der Umsatzsteuer – dazu „Übergang der Steuerschuld" (0 %) */
+export const VAT_RATES = [20, 13, 10] as const;
+
+/** „20 % Umsatzsteuer" bzw. „Übergang der Steuerschuld" – für Summen und Listen */
+export const vatLabel = (vatRate: number, reverseCharge: boolean) =>
+	reverseCharge ? '0 % – Übergang der Steuerschuld (§ 19 Abs. 1a UStG)' : `${String(vatRate).replace('.', ',')} % Umsatzsteuer`;
+
+/* -------------------------------------------------- Zahlungsbedingungen */
+
+export interface PaymentTerms {
+	/** Zahlungsziel in Tagen ab Rechnungsdatum */
+	paymentDays: number;
+	/** Skonto in Prozent bei Zahlung innerhalb von skontoDays Tagen – 0 heißt ohne */
+	skontoPercent: number;
+	skontoDays: number;
+}
+
+/** Skonto gilt nur mit Prozent und Frist */
+export const hasSkonto = (t: Pick<PaymentTerms, 'skontoPercent' | 'skontoDays'>) => t.skontoPercent > 0 && t.skontoDays > 0;
+
+/** Was nach Abzug des Skontos zu zahlen ist */
+export const afterSkonto = (gross: number, percent: number) => round2(gross * (1 - percent / 100));
+
+const percentLabel = (p: number) => `${String(p).replace('.', ',')} %`;
+const daysLabel = (d: number) => (d === 1 ? '1 Tag' : `${d} Tagen`);
+
+/**
+ * Zahlungsbedingungen als Sätze. Mit Daten (Rechnung): „Zahlbar bis … ohne
+ * Abzug." und „Bei Zahlung bis … 3 % Skonto – zu zahlen sind dann …"; ohne
+ * (Angebot) mit der Frist in Tagen ab Rechnungsdatum.
+ */
+export function paymentTermsText(t: PaymentTerms, gross: number, dates?: { due: string; skonto: string }): string[] {
+	const out = [
+		dates
+			? `Zahlbar bis ${dates.due} ohne Abzug.`
+			: t.paymentDays > 0
+				? `Zahlbar innerhalb von ${daysLabel(t.paymentDays)} ab Rechnungsdatum ohne Abzug.`
+				: 'Zahlbar sofort nach Erhalt der Rechnung ohne Abzug.'
+	];
+	if (hasSkonto(t)) {
+		const net = money(afterSkonto(gross, t.skontoPercent));
+		out.push(
+			dates
+				? `Bei Zahlung bis ${dates.skonto} gewähren wir ${percentLabel(t.skontoPercent)} Skonto – zu zahlen sind dann ${net}.`
+				: `Bei Zahlung innerhalb von ${daysLabel(t.skontoDays)} ab Rechnungsdatum gewähren wir ${percentLabel(t.skontoPercent)} Skonto – das sind ${net}.`
+		);
+	}
+	return out;
+}
+
+/** Zahlungsbedingungen aus dem Formular (ziel, skonto, skontotage) – oder eine Meldung */
+export function readPaymentTerms(get: (key: string) => string): PaymentTerms | { message: string } {
+	const days = Number(get('ziel').trim() || 0);
+	if (!Number.isInteger(days) || days < 0 || days > 365) return { message: 'Das Zahlungsziel muss zwischen 0 und 365 Tagen liegen.' };
+	const percent = parseAmount(get('skonto')) ?? 0;
+	if (percent < 0 || percent > 20) return { message: 'Das Skonto muss zwischen 0 und 20 % liegen.' };
+	const skontoDays = Number(get('skontotage').trim() || 0);
+	if (!Number.isInteger(skontoDays) || skontoDays < 0 || skontoDays > 365) return { message: 'Die Frist fürs Skonto muss zwischen 0 und 365 Tagen liegen.' };
+	if (percent > 0 && !skontoDays) return { message: 'Bitte eintragen, innerhalb wie vieler Tage das Skonto gilt.' };
+	if (percent > 0 && skontoDays > days) return { message: 'Die Frist fürs Skonto ist länger als das Zahlungsziel.' };
+	// Ohne Prozent kein Skonto – die Frist wäre sonst ein Überbleibsel
+	return { paymentDays: days, skontoPercent: percent > 0 ? Math.round(percent * 100) / 100 : 0, skontoDays: percent > 0 ? skontoDays : 0 };
 }
 
 /**

@@ -222,6 +222,8 @@ export interface PricedLine {
 	quantity: number | null;
 	unit: string;
 	unitPrice: number | null;
+	/** Alternativposition im Angebot – kommt nur, wenn sie gemacht wurde */
+	alternative?: boolean;
 }
 
 /** Zuordnung „eigene Position": steht nicht im Auftrag, kommt mit Menge aus den Berichten und eigenem Preis */
@@ -301,6 +303,8 @@ export interface InvoiceLineDraft {
 	kind: 'position' | 'titel';
 	text: string;
 	note?: string;
+	/** Im Angebot eine Alternativposition */
+	alternative?: boolean;
 	quantity: number | null;
 	unit: string;
 	unitPrice: number | null;
@@ -334,7 +338,7 @@ export function invoiceLines(lines: PricedLine[], columns: SummaryColumn[], mapp
 		if (mapped.length) {
 			quantity = round3(mapped.reduce((s, c) => s + c.total, 0));
 			source = mapped.map((c) => `${columnLabel(c)} (${c.unit || 'ohne Einheit'})`).join(', ');
-		} else if (unitFamily(l.unit) === 'pauschal' && !flatBilled.includes(l.id)) {
+		} else if (unitFamily(l.unit) === 'pauschal' && !flatBilled.includes(l.id) && !l.alternative) {
 			// Pauschale: die Menge laut Angebot – dazu steht in der Zeile ohnehin „lt. Angebot“
 			quantity = l.quantity;
 		}
@@ -345,6 +349,7 @@ export function invoiceLines(lines: PricedLine[], columns: SummaryColumn[], mapp
 			kind: 'position',
 			text: l.text,
 			...(l.note ? { note: l.note } : {}),
+			...(l.alternative ? { alternative: true } : {}),
 			quantity,
 			unit: l.unit,
 			unitPrice: l.unitPrice,

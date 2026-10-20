@@ -22,6 +22,8 @@
 		closing: string;
 		vatRate: number;
 		reverseCharge: boolean;
+		skontoPercent: number;
+		skontoDays: number;
 	}
 
 	export interface EditorLine {
@@ -38,6 +40,8 @@
 		/** Eigene Position aus den Berichten (nicht im Auftrag) */
 		columnKey?: string | null;
 		ownTitle?: boolean;
+		/** Im Angebot eine Alternativposition – kommt nur mit Menge auf die Rechnung */
+		alternative?: boolean;
 	}
 </script>
 
@@ -54,9 +58,12 @@
 	import X from '@lucide/svelte/icons/x';
 	import Plus from '@lucide/svelte/icons/plus';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
-	import { addDays, isValidIsoDate } from '$lib/modules/stunden/week';
+	import { addDays, daysBetween, isValidIsoDate } from '$lib/modules/stunden/week';
+	import { date as dateLabel } from '$lib/format';
+	import TaxSelect from './TaxSelect.svelte';
+	import PaymentTermsFields from './PaymentTermsFields.svelte';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
-	import { amountInput, INVOICE_KIND_LABELS, invoiceTotals, lineTotal, money, parseAmount, quantityLabel, REVERSE_CHARGE_NOTE } from '../offer';
+	import { amountInput, INVOICE_KIND_LABELS, invoiceTotals, lineTotal, money, parseAmount, quantityLabel, vatLabel } from '../offer';
 	import {
 		columnLabel,
 		invoiceLines,
@@ -74,6 +81,7 @@
 	interface Props {
 		head: EditorHead;
 		lines: EditorLine[];
+		/** Zahlungsziel einer neuen Rechnung – eine bestehende hat ihres über „zahlbar bis" */
 		paymentDays: number;
 		/** Vorschläge für die Einheit – aus den Stammdaten; frei eintippen geht weiter */
 		units?: string[];
@@ -101,13 +109,21 @@
 		source: string;
 		columnKey: string | null;
 		ownTitle: boolean;
+		alternative: boolean;
 	};
 
 	let nextKey = 1;
 	const qtyInput = (v: number | null) => (v == null ? '' : String(v).replace('.', ','));
 	// Die Vorgaben werden nur beim Öffnen übernommen – danach gehört der Stand dem Formular
 	// svelte-ignore state_referenced_locally
-	let head = $state({ ...initialHead, vat: String(initialHead.vatRate).replace('.', ',') });
+	let head = $state({
+		...initialHead,
+		vat: String(initialHead.vatRate).replace('.', ','),
+		// Zahlungsziel in Tagen – bei einer bestehenden Rechnung aus „zahlbar bis"
+		days: String(isValidIsoDate(initialHead.dueDate) && isValidIsoDate(initialHead.date) ? Math.max(0, daysBetween(initialHead.date, initialHead.dueDate)) : paymentDays),
+		skonto: initialHead.skontoPercent ? String(initialHead.skontoPercent).replace('.', ',') : '',
+		skontoDays: initialHead.skontoDays ? String(initialHead.skontoDays) : ''
+	});
 	// svelte-ignore state_referenced_locally
 	const toLine = (l: EditorLine | InvoiceLineDraft): Line => ({
 		key: nextKey++,
@@ -122,7 +138,8 @@
 		offerQuantity: l.offerQuantity ?? null,
 		source: l.source ?? '',
 		columnKey: l.columnKey ?? null,
-		ownTitle: !!l.ownTitle
+		ownTitle: !!l.ownTitle,
+		alternative: !!l.alternative
 	});
 	// svelte-ignore state_referenced_locally
 	let lines = $state<Line[]>(initialLines.map(toLine));
@@ -135,8 +152,6 @@
 			})
 		)
 	);
-	/** Zahlbar bis folgt dem Rechnungsdatum, bis es jemand selbst ändert */
-	let dueTouched = $state(false);
 	/** Art und Leistungszeitraum folgen der Auswahl der Berichte, bis jemand sie selbst ändert */
 	let kindTouched = $state(false);
 	let periodTouched = $state(false);
@@ -150,9 +165,12 @@
 	const totals = $derived(invoiceTotals(parsed, parseAmount(head.vat) ?? 0, head.reverseCharge));
 	const openColumns = $derived(columns.filter((c) => !assigned[c.key]).length);
 
-	function onDate() {
-		if (!dueTouched && isValidIsoDate(head.date)) head.dueDate = addDays(head.date, paymentDays);
-	}
+	/** „Zahlbar bis" und „Skonto bis" folgen Rechnungsdatum und Zahlungsbedingungen */
+	const dates = $derived.by(() => {
+		if (!isValidIsoDate(head.date)) return null;
+		const at = (d: string) => dateLabel(addDays(head.date, Math.max(0, Math.trunc(Number(d) || 0))));
+		return { due: at(head.days), skonto: at(head.skontoDays) };
+	});
 
 	/**
 	 * Mengen neu: bei geänderter Zuordnung nur die betroffenen Positionen, bei
@@ -213,13 +231,28 @@
 	}
 
 	function addLine() {
-		lines.push({ key: nextKey++, number: '', kind: 'position', text: '', note: '', quantity: '', unit: '', price: '', offerLineId: null, offerQuantity: null, source: '', columnKey: null, ownTitle: false });
+		lines.push({
+			key: nextKey++,
+			number: '',
+			kind: 'position',
+			text: '',
+			note: '',
+			quantity: '',
+			unit: '',
+			price: '',
+			offerLineId: null,
+			offerQuantity: null,
+			source: '',
+			columnKey: null,
+			ownTitle: false,
+			alternative: false
+		});
 	}
 	function removeLine(key: number) {
 		lines = lines.filter((l) => l.key !== key);
 	}
 
-	const positionLabel = (p: PricedLine, nr: string) => `${nr} ${p.text.split('\n')[0].slice(0, 60)}${p.unit ? ` (${p.unit})` : ''}`;
+	const positionLabel = (p: PricedLine, nr: string) => `${nr} ${p.text.split('\n')[0].slice(0, 60)}${p.unit ? ` (${p.unit})` : ''}${p.alternative ? ' – Alternativposition' : ''}`;
 	const pricedNumbers = $derived.by(() => {
 		const map = new Map<number, string>();
 		for (const l of initialLines) if (l.offerLineId != null) map.set(l.offerLineId, l.number);
@@ -347,12 +380,13 @@
 			</label>
 			<label class="block">
 				<span class="field-label">Rechnungsdatum *</span>
-				<input class="input num" type="date" name="datum" required bind:value={head.date} oninput={onDate} />
+				<input class="input num" type="date" name="datum" required bind:value={head.date} />
 			</label>
-			<label class="block">
-				<span class="field-label">Zahlbar bis *</span>
-				<input class="input num" type="date" name="faellig" required bind:value={head.dueDate} oninput={() => (dueTouched = true)} />
-			</label>
+			<div class="block">
+				<span class="field-label">Zahlbar bis</span>
+				<p class="num py-2 font-medium">{dates?.due ?? '–'}</p>
+				<span class="field-hint">Aus dem Zahlungsziel – unten bei den Zahlungsbedingungen.</span>
+			</div>
 			<label class="block">
 				<span class="field-label">Leistung von</span>
 				<input class="input num" type="date" name="von" bind:value={head.serviceFrom} oninput={() => (periodTouched = true)} />
@@ -385,18 +419,7 @@
 				<input class="input num" name="kostenstelle" maxlength="30" bind:value={head.costCenter} />
 				<span class="field-hint">Die Rechnungsnummer lautet dann „Nummer/Kostenstelle".</span>
 			</label>
-			<label class="block">
-				<span class="field-label">Umsatzsteuer in %</span>
-				<input class="input num" name="ust" inputmode="decimal" maxlength="6" required bind:value={head.vat} disabled={head.reverseCharge} />
-				{#if head.reverseCharge}<input type="hidden" name="ust" value={head.vat} />{/if}
-			</label>
-			<label class="col-span-2 flex items-start gap-2.5 rounded-xl bg-surface-2 p-3">
-				<input type="checkbox" class="mt-0.5 size-5 shrink-0 accent-[var(--c-ink)]" name="reverse" bind:checked={head.reverseCharge} />
-				<span>
-					<span class="block font-medium">Übergang der Steuerschuld (Reverse Charge)</span>
-					<span class="block text-[0.8125rem] text-ink-3">Bauleistung an ein Bauunternehmen – ohne Umsatzsteuer, mit Hinweis und UID des Kunden: „{REVERSE_CHARGE_NOTE}"</span>
-				</span>
-			</label>
+			<TaxSelect bind:vat={head.vat} bind:reverse={head.reverseCharge} class="col-span-2" />
 		</div>
 	</section>
 </div>
@@ -442,7 +465,13 @@
 							></textarea>
 							{#if l.source || l.offerQuantity != null}
 								<p class="mt-1 text-[0.75rem] text-ink-3">
-									{[l.source && `Menge aus ${l.source}`, l.offerQuantity != null && `lt. Angebot ${quantityLabel(l.offerQuantity)} ${l.unit}`].filter(Boolean).join(' · ')}
+									{[
+									l.source && `Menge aus ${l.source}`,
+									l.offerQuantity != null && `lt. Angebot ${quantityLabel(l.offerQuantity)} ${l.unit}`,
+									l.alternative && 'im Angebot Alternativposition'
+								]
+									.filter(Boolean)
+									.join(' · ')}
 									{#if l.columnKey}
 										· <span class={parsed[i].unitPrice == null ? 'font-medium text-warn' : ''}>nicht im Auftrag{parsed[i].unitPrice == null ? ' – bitte Einheitspreis eintragen' : ''}</span>
 									{/if}
@@ -485,20 +514,23 @@
 		<dt>Gesamt Netto</dt>
 		<dd class="text-right">{money(totals.net)}</dd>
 		{#if !head.reverseCharge}
-			<dt>{head.vat || '0'} % Umsatzsteuer</dt>
+			<dt>{vatLabel(parseAmount(head.vat) ?? 0, false)}</dt>
 			<dd class="text-right">{money(totals.vat)}</dd>
 		{/if}
 		<dt class="border-t border-ink pt-1.5 text-lg font-semibold">Gesamtbetrag</dt>
 		<dd class="border-t border-ink pt-1.5 text-right text-lg font-semibold">{money(totals.gross)}</dd>
 	</dl>
+	{#if head.reverseCharge}<p class="mt-2 text-right text-sm text-ink-2">Ohne Umsatzsteuer – Übergang der Steuerschuld (§ 19 Abs. 1a UStG).</p>{/if}
 </section>
+
+<PaymentTermsFields bind:days={head.days} bind:percent={head.skonto} bind:skontoDays={head.skontoDays} gross={totals.gross} {dates} />
 
 <section class="card mt-4 p-4 lg:p-5">
 	<label class="block">
 		<span class="field-label">Schlusstext</span>
 		<textarea class="textarea auto" name="schluss" rows="2" maxlength="5000" bind:value={head.closing}></textarea>
 	</label>
-	<p class="mt-2 text-[0.8125rem] text-ink-3">Darüber steht auf der Rechnung „Zahlbar bis … ohne Abzug"; die Bankverbindung steht in der Fußzeile.</p>
+	<p class="mt-2 text-[0.8125rem] text-ink-3">Darüber stehen auf der Rechnung die Zahlungsbedingungen; die Bankverbindung steht in der Fußzeile.</p>
 </section>
 
 <div class="card sticky bottom-24 mt-4 flex flex-wrap items-center gap-3 p-3 lg:bottom-6">

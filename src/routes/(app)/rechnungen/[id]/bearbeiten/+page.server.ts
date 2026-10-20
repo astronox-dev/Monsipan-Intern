@@ -41,7 +41,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			intro: invoice.intro,
 			closing: invoice.closing,
 			vatRate: invoice.vatRate,
-			reverseCharge: invoice.reverseCharge
+			reverseCharge: invoice.reverseCharge,
+			skontoPercent: invoice.skontoPercent,
+			skontoDays: invoice.skontoDays
 		},
 		lines: invoice.lines,
 		paymentDays: settings.invoicePaymentDays,

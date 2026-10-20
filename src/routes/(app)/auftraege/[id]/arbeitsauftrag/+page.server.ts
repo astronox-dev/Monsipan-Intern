@@ -98,7 +98,8 @@ export const actions: Actions = {
 		if (!ORDER_STATUS.includes(status) || status === 'erstellt') return fail(400, { message: 'Unbekannter Stand' });
 		if (!maySetOrderStatus(user, order)) return fail(403, { message: 'Den Stand setzt die Partie, der der Auftrag gehört.' });
 		// Was im Formular steht (etwa die Haken der Checkliste), gilt – vorher speichern
-		if (form.has('inhalt') && (scope.office || scope.site) && !work.content.signatures.auftraggeber) {
+		// Nach der Unterschrift des Auftraggebers zählt davon nur noch die Checkliste
+		if (form.has('inhalt') && (work.content.signatures.auftraggeber ? scope.site : scope.office || scope.site)) {
 			const problem = await saveForm(form, order.id, scope, user.id);
 			if (problem) return fail(400, { message: problem });
 		}

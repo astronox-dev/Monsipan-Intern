@@ -14,6 +14,7 @@ import { mailInfo, sendMail, testMail } from '$lib/server/mail';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { letterheadPath, LetterheadError, storeLetterhead } from '$lib/server/letterhead';
 import { disconnectWebsite, newWebsiteKey, websiteLink } from '$lib/modules/auftraege/server/website';
+import { readPaymentTerms } from '$lib/modules/auftraege/offer';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -93,15 +94,22 @@ export const actions: Actions = {
 		});
 		return { saved: 'footerTexts' };
 	},
-	/** Vorlagen für Rechnungen: Einleitung, Schlusstext, Zahlungsziel */
+	/** Vorlagen für Rechnungen: Einleitung und Schlusstext */
 	invoiceTexts: async ({ request, locals }) => {
 		requirePermission(locals, 'einstellungen.bearbeiten');
 		const f = await request.formData();
 		const text = (key: string, max: number) => String(f.get(key) ?? '').replace(/\r\n/g, '\n').trim().slice(0, max);
-		const days = Number(f.get('days'));
-		if (!Number.isInteger(days) || days < 0 || days > 365) return fail(400, { message: 'Das Zahlungsziel muss zwischen 0 und 365 Tagen liegen.' });
-		await updateSettings({ invoiceIntro: text('intro', 3000), invoiceClosing: text('closing', 5000), invoicePaymentDays: days });
+		await updateSettings({ invoiceIntro: text('intro', 3000), invoiceClosing: text('closing', 5000) });
 		return { saved: 'invoiceTexts' };
+	},
+	/** Zahlungsbedingungen für neue Angebote und Rechnungen: Zahlungsziel und Skonto */
+	paymentTerms: async ({ request, locals }) => {
+		requirePermission(locals, 'einstellungen.bearbeiten');
+		const f = await request.formData();
+		const terms = readPaymentTerms((k) => String(f.get(k) ?? ''));
+		if ('message' in terms) return fail(400, { message: terms.message });
+		await updateSettings({ invoicePaymentDays: terms.paymentDays, skontoPercent: terms.skontoPercent, skontoDays: terms.skontoDays });
+		return { saved: 'paymentTerms' };
 	},
 	letterhead: async ({ request, locals }) => {
 		requirePermission(locals, 'einstellungen.bearbeiten');

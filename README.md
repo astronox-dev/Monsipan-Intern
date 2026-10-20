@@ -519,6 +519,9 @@ ganz. Bewerbungen gehen nur per E-Mail.
 **Kunden** (`/kunden`): Anschrift, UID-Nummer, E-Mail, Ansprechpartner und Telefon – einmal
 anlegen, im Angebot auswählen. Ein neuer Kunde lässt sich auch direkt beim Schreiben eines
 Angebots anlegen. Kunden, die schon in Angeboten stehen, werden ausgeblendet statt gelöscht.
+Mit dem Haken **Bauunternehmen – ohne Umsatzsteuer** (in der Liste „Bauunternehmen · § 19“)
+bekommen neue Angebote für den Kunden gleich 0 % mit Übergang der Steuerschuld – und von dort
+die Rechnungen.
 
 **Listen:** Bei Kunden, Angeboten und Rechnungen bleibt die Leiste mit Suche und Filter beim
 Scrollen oben stehen, darunter wird geblättert (Kunden 50, Angebote und Rechnungen 100 je
@@ -534,10 +537,10 @@ Das Suchfeld ist [`SearchInput`](src/lib/components/SearchInput.svelte), das Abs
 [`liveSubmit`](src/lib/live-search.ts).
 
 **Angebote** (`/angebote`) sehen aus wie die bisherigen aus dem Büro: Briefkopf, Anschrift
-links, rechts Angebotsdatum, Kunden-UID, Projektnummer und Angebotsnummer, darunter
+links, rechts Angebotsdatum, Kunden-UID und Angebotsnummer, darunter
 „Angebot Nr. 26 659 / BV: …“, die Einleitung, die Positionen mit **Nr., Bezeichnung, Menge,
 Einheit, Einheitspreis (EP) und Gesamtpreis (GP)**, darunter Gesamt Netto, Umsatzsteuer
-(20 %, je Angebot änderbar) und Gesamtbetrag, der Schlusstext und unten Anschrift,
+und Gesamtbetrag, die Zahlungsbedingungen, der Schlusstext und unten Anschrift,
 Bankverbindung und Kontakt. Die Einheit wählt man aus der Liste unter
 **Stammdaten → Einheiten**; in Rechnungen stehen dieselben Einheiten als Vorschlag, dort
 bleibt sie frei eintippbar.
@@ -546,11 +549,34 @@ bleibt sie frei eintippbar.
   den Auftrag über.
 - Positionen werden 1.1, 1.2 … nummeriert; eine **Überschrift** beginnt eine neue Gruppe (2,
   2.1, 2.2 …). Positionen lassen sich verschieben und entfernen.
+- **Bemerkung** zu jeder Position: steht im PDF unter der fetten Bezeichnung, in normaler
+  Schrift, und geht mit in Auftrag und Rechnung.
+- **Vorschläge:** Beim Tippen der Bezeichnung erscheinen Positionen aus früheren Angeboten (alle
+  getippten Wörter müssen vorkommen, die häufigsten zuerst). Pfeiltasten und Enter oder
+  antippen übernimmt sie – Einheit, Einheitspreis und Bemerkung vom letzten Mal kommen mit,
+  wo noch nichts steht.
+- **Alternativposition** (Haken an der Position, z. B. „optional Vortrocknen“): Menge und
+  Einheitspreis stehen da, der **GP ist 0** und sie zählt **nicht zum Gesamtbetrag**; im PDF
+  steht darunter „Alternativposition – nicht im Gesamtbetrag enthalten“. Im Auftrag und im
+  Arbeitsauftrag ist sie als Alternative gekennzeichnet; auf die Rechnung kommt sie nur mit
+  Menge (eine Pauschale als Alternative nicht von selbst).
+- **Umsatzsteuer:** 20 %, 13 % oder 10 % – oder **0 % – Übergang der Steuerschuld (§ 19 Abs. 1a
+  UStG)** für Bauleistungen an ein Bauunternehmen: ohne Umsatzsteuer, mit dem Hinweis und der
+  UID des Kunden (ohne UID lässt es sich nicht freigeben). Bei einem Kunden mit Haken
+  „Bauunternehmen“ ist das gleich eingestellt.
+- **Zahlungsbedingungen:** Zahlungsziel in Tagen, dazu auf Wunsch **Skonto** (Prozent und
+  innerhalb wie vieler Tage). Darunter steht gleich der **Gesamtbetrag nach Skonto** und der
+  Satz, wie er im PDF steht (z. B. „Bei Zahlung innerhalb von 14 Tagen ab Rechnungsdatum
+  gewähren wir 3 % Skonto – das sind € 22.083,41.“). Vorgabe für neue Angebote unter
+  **Einstellungen → Zahlungsbedingungen**; sie gehen in die Rechnung über. Ältere Angebote
+  ohne Zahlungsziel zeigen keines.
 - **Angebotsnummer:** zwei Stellen fürs Jahr, dann die laufende Nummer – „26001“ ist das erste
   Angebot 2026, „26002“ das zweite; im neuen Jahr beginnt die Zählung wieder („27001“). Die App
-  schlägt die nächste vor, die Projektnummer ebenso; beide bleiben frei änderbar.
+  schlägt die nächste vor; sie bleibt frei änderbar. (Eine Projektnummer gibt es nicht mehr –
+  ältere Angebote behalten sie in der Datenbank, sie steht nur nirgends mehr.)
 - Einleitung und Schlusstext kommen aus der Vorlage unter **Einstellungen → Angebote,
-  Aufträge und Rechnungen** und lassen sich im einzelnen Angebot ändern. Dort stehen auch die drei Spalten
+  Aufträge und Rechnungen** – je Art eine eigene; die für Aufträge stehen im Auftrags-PDF,
+  leer bleibt dort nichts stehen – und lassen sich im einzelnen Angebot ändern. Dort stehen auch die drei Spalten
   der Fußzeile und der **Briefkopf**: als hochgeladenes Bild (PNG/JPG, oben mittig
   eingepasst) oder – ohne Bild – aus dem Logo mit Firma und Anschrift darunter.
 - **Logo:** Alle PDFs (Angebot, Auftrag, Rechnung, Summenblatt, Tagesbericht, Lohnzettel)
@@ -564,7 +590,7 @@ bleibt sie frei eintippbar.
 
 **Ablauf:**
 
-1. **In Arbeit:** Angebot schreiben, Vorschau über **PDF**.
+1. **In Arbeit:** Angebot schreiben; **Vorschau** zeigt das PDF gleich auf der Seite.
 2. **Freigeben** (Admin, Geschäftsführung, Bauleitung): Das Angebot ist dann **ausstehend**,
    und es gibt den **Link für den Kunden** – kopieren, am Handy teilen oder per E-Mail
    schicken (der Vorschlag ist die E-Mail aus dem Kundenstamm).
@@ -670,7 +696,10 @@ nur, wer alle Aufträge sieht – die Partien nicht.
     Punkte abgehakt sind (PSA, Baustelle abgesichert, Ausrüstung in Ordnung), lässt sich der
     Auftrag nicht auf „Abgeschlossen“ setzen – weder im Arbeitsauftrag noch am Auftrag oder mit
     der Unterschrift des Auftraggebers; dort steht, was fehlt. Die Haken werden beim
-    Abschließen gleich mitgespeichert.
+    Abschließen gleich mitgespeichert. Hat der Auftraggeber schon unterschrieben, bevor die
+    Checkliste abgehakt war, lässt sie sich trotzdem noch abhaken (nur sie) – danach geht
+    „Abgeschlossen“. Oben steht dann, dass der Arbeitsauftrag gesperrt, der Auftrag aber noch
+    nicht abgeschlossen ist.
   - **3M-Verlegeprotokoll** (bei Folienverlegeprotokoll „ja“): ein Abschnitt im Arbeitsauftrag,
     gespeichert mit ihm zusammen und von der Partie ausgefüllt – Straße (Ort, Abschnitt,
     Fahrbahndecke, Spurbreite, Zustand, Vorarbeiten), Wetter um 8, 11, 14 und 18 Uhr, letzter
@@ -686,7 +715,8 @@ nur, wer alle Aufträge sieht – die Partien nicht.
 
   Unterschreiben speichert vorher, was im Formular steht. Nach der Unterschrift des
   Auftraggebers ist der Arbeitsauftrag samt Verlegeprotokoll gesperrt, bis sie wieder
-  entfernt wird. Das **PDF** ist im Aufbau des Vordrucks gezeichnet (Seite 1 Auftrag und
+  entfernt wird – nur die Vorarbeiter-Checkliste bleibt abhakbar, bis der Auftrag
+  abgeschlossen ist. Das **PDF** ist im Aufbau des Vordrucks gezeichnet (Seite 1 Auftrag und
   Checkliste, Seite 2 Besonderheiten und Unterweisung); mehr als 13 Leistungen oder 6
   Unterweisungen machen die Zeilen enger bzw. die Tabelle länger. Gibt es ein
   3M-Verlegeprotokoll (Folienverlegeprotokoll „ja“), hängt es als dritte Seite an. **Drucken**
@@ -723,13 +753,13 @@ Rechnung** (nur deren Berichte, Rechnungsnummer, Bundesland und Abschnitt ausgef
 **Rechnungen** (`/rechnungen`): Entweder **eine Rechnung** über alles oder nach und nach
 **Teilrechnungen** – jeder geprüfte Tagesbericht wird genau **einmal** abgerechnet. Die erste
 Rechnung trägt die **Nummer** von Angebot und Auftrag, weitere zum selben Auftrag „-2“, „-3“ …
-Teilrechnungen gehen schon, während der Auftrag **in Arbeit** ist (sobald es geprüfte Berichte
-gibt); eine Rechnung ohne Berichte nur nach dem Abschluss. Oben in der Liste stehen die
+Eine Rechnung (als **Entwurf**) lässt sich aus **jedem Stand** des Auftrags erstellen – auch
+bevor er begonnen hat und ohne geprüfte Berichte. Dann steht oben ein Hinweis, die Mengen
+selbst zu prüfen, statt einer Sperre. Oben in der Liste stehen die
 abgeschlossenen Aufträge, bei denen noch etwas abzurechnen ist („Bereit zur Rechnung“),
 darunter die Reiter **Offen**, **Bezahlt** und **Alle**; überfällige sind rot markiert.
 
-**Kostenstelle:** Jede Rechnung hat ein Feld **Kostenstelle** (im Entwurf, neben der
-Projektnummer). Ist eine eingetragen, lautet die Rechnungsnummer **Nummer/Kostenstelle**, etwa
+**Kostenstelle:** Jede Rechnung hat ein Feld **Kostenstelle** (im Entwurf). Ist eine eingetragen, lautet die Rechnungsnummer **Nummer/Kostenstelle**, etwa
 „42 041/9526053“ – so steht sie im PDF (Überschrift und „Rechnungsnummer“), in der Liste, auf
 der Prüfseite, im Summenblatt und in den Benachrichtigungen. Weitere Rechnungen zum selben
 Auftrag übernehmen die Kostenstelle der letzten; eine Stornorechnung die der stornierten. Die
@@ -759,18 +789,28 @@ alles andere auf der Rechnung.
   unterschrieben); den **Einheitspreis trägt man selbst ein**, ohne ihn lässt sich die Rechnung
   nicht erstellen. Auch das merkt sich der Auftrag für die nächste Teilrechnung.
 - Darunter die Positionen des Angebots mit den übernommenen Mengen; **Pauschalen** kommen mit
-  der Menge aus dem Angebot – aber nur auf die erste Rechnung, auf der sie stehen. Mengen, Preise und Texte lassen sich ändern, eigene Positionen
+  der Menge aus dem Angebot – aber nur auf die erste Rechnung, auf der sie stehen, und nicht,
+  wenn sie im Angebot eine Alternativposition waren. Mengen, Preise und Texte lassen sich ändern, eigene Positionen
   dazunehmen. Positionen ohne Menge kommen nicht auf die Rechnung; die **Nummern bleiben wie
   im Angebot** (1.3 bleibt 1.3).
-- Kopf: Rechnungsdatum, **zahlbar bis** (Rechnungsdatum plus Zahlungsziel), **Leistungszeitraum**
+- Kopf: Rechnungsdatum, **zahlbar bis** (Rechnungsdatum plus Zahlungsziel unten bei den
+  Zahlungsbedingungen), **Leistungszeitraum**
   (aus den gewählten Berichten), BV, Ausführungsort, Anschrift und UID des Kunden aus dem
   Angebot, dazu **Bundesland** und **Abschnitt** fürs Summenblatt (von der letzten Rechnung zum
   Auftrag übernommen).
-- **Übergang der Steuerschuld (Reverse Charge)** für Bauleistungen an Bauunternehmen: ohne
-  Umsatzsteuer, mit Hinweis auf § 19 Abs. 1a UStG und der UID des Kunden (dann Pflicht).
-- Das PDF sieht aus wie das Angebot: Briefkopf, Rechnungsdatum, UID, Projekt- und
-  Rechnungsnummer, zahlbar bis, die abgerechneten Tagesberichte, Positionen mit EP und GP,
-  Summen, „Zahlbar bis … ohne Abzug“, Schlusstext und Fußzeile mit Bankverbindung. Die
+- **Umsatzsteuer** wie im Angebot zur Wahl, darunter **0 % – Übergang der Steuerschuld
+  (Reverse Charge)** für Bauleistungen an Bauunternehmen: ohne Umsatzsteuer, mit Hinweis auf
+  § 19 Abs. 1a UStG und der UID des Kunden (dann Pflicht). Kommt von selbst, wenn das Angebot
+  so war oder der Kunde als Bauunternehmen eingetragen ist.
+- **Zahlungsbedingungen:** Zahlungsziel und **Skonto** (Prozent, innerhalb wie vieler Tage) wie
+  im Angebot vereinbart – ältere Angebote ohne: die Vorgaben aus den Einstellungen. Darunter
+  gleich der Gesamtbetrag nach Skonto und die Sätze mit Datum: „Zahlbar bis 19.11.2026 ohne
+  Abzug.“ und „Bei Zahlung bis 03.11.2026 gewähren wir 3 % Skonto – zu zahlen sind dann
+  € 22.083,41.“ Die Rechnung zeigt es ebenso; nach dem Ausstellen ist das Skonto gesperrt wie
+  alles andere.
+- Das PDF sieht aus wie das Angebot: Briefkopf, Rechnungsdatum, UID, Rechnungsnummer, zahlbar
+  bis, die abgerechneten Tagesberichte, Positionen mit EP und GP (Bemerkung darunter), Summen,
+  die Zahlungsbedingungen, Schlusstext und Fußzeile mit Bankverbindung. Die
   Rechnung zeigt ihre Tagesberichte und hat ein eigenes **Summenblatt**.
 - Eine neue Rechnung ist ein **Entwurf** (PDF mit „ENTWURF“) – nur Entwürfe lassen sich
   **bearbeiten** und löschen (löschen: Admin, Geschäftsführung). Wird ein Entwurf gelöscht,
@@ -786,8 +826,9 @@ alles andere auf der Rechnung.
   Rechnung lässt sich nicht löschen.
 - Rechnungen von vor den Teilrechnungen: Die Berichte, die beim Erstellen schon geprüft waren,
   gelten als mit ihnen abgerechnet.
-- Einleitung, Schlusstext und **Zahlungsziel** (von Haus aus 30 Tage) stehen unter
-  **Einstellungen → Angebote, Aufträge und Rechnungen**.
+- Einleitung und Schlusstext stehen unter **Einstellungen → Angebote, Aufträge und
+  Rechnungen**, **Zahlungsziel** (von Haus aus 30 Tage) und **Skonto** (von Haus aus keines)
+  unter **Einstellungen → Zahlungsbedingungen**.
 
 **Löschen** hat bei Angeboten und Aufträgen zwei Stufen: *In Arbeit* bzw. *Nur neue* (noch
 nicht begonnen) – von Haus aus das Büro – oder *Alle*, also auch freigegebene, angenommene,
@@ -1023,7 +1064,8 @@ bisherigen Programm:
   „Nummer/Kostenstelle“).
 - **Angebote, Aufträge und Rechnungen** haben je Zeile eine Position; Zeilen mit gleicher Nummer – oder
   ohne Nummer direkt darunter – gehören zum selben Beleg. „Titel“ in der Positionsart (oder
-  eine Zeile nur mit Text) wird zur Zwischenüberschrift. Eine Rechnung ohne Positionen braucht
+  eine Zeile nur mit Text) wird zur Zwischenüberschrift, „Alternativ“ (auch Eventual- oder
+  Wahlposition) zur Alternativposition – so steht es auch im Export. Eine Rechnung ohne Positionen braucht
   „Netto gesamt“ – das wird dann eine Position.
 - **Werte:** Datum als Excel-Datum, „12.10.2026“, „12.10.26“ oder „2026-10-12“; Zahlen mit
   Komma oder Punkt; ja/nein auch als x, 1, wahr. Der Stand eines Auftrags wird aus Wörtern wie
@@ -1363,6 +1405,9 @@ sonst hilft der Knopf auf der Seite.
   Mindestbestand“. Ganz rechts ist eine leere Spalte **gezählt** zum Eintragen bei der Inventur.
 - **Bewegungen:** Zeitpunkt, Art, Artikel, Menge mit Vorzeichen, Von/Nach und wer gebucht
   hat. Stornierte Buchungen sind durchgestrichen. Nur für Rollen, die Bewegungen sehen dürfen.
+
+**Vorschau:** Neben jedem Knopf **PDF** steht **Vorschau** – das PDF öffnet sich groß in einem
+Fenster auf der Seite (blättern, vergrößern) und lässt sich von dort auch herunterladen.
 
 **Als PDF herunterladen:** Überall, wo es Drucken oder CSV gibt, gibt es auch **PDF**. Die
 Datei entsteht am Server (pdfkit, keine Browser-Druckfunktion nötig), übernimmt die

@@ -270,7 +270,7 @@
 
 			<form method="POST" action="?/invoiceTexts" class="flex flex-col gap-3" use:enhance={done('invoiceTexts', () => 'Vorlagen für Rechnungen gespeichert')}>
 				<h3 class="font-display text-lg font-semibold">Rechnungen</h3>
-				<p class="text-sm text-ink-2">Kommt mit dem Zahlungsziel in jede neue Rechnung und lässt sich dort ändern.</p>
+				<p class="text-sm text-ink-2">Kommt in jede neue Rechnung und lässt sich dort ändern.</p>
 				<label class="block">
 					<span class="field-label">Einleitung</span>
 					<textarea class="textarea" name="intro" rows="3" maxlength="3000">{data.settings.invoiceIntro}</textarea>
@@ -279,13 +279,32 @@
 					<span class="field-label">Schlusstext</span>
 					<textarea class="textarea" name="closing" rows="3" maxlength="5000">{data.settings.invoiceClosing}</textarea>
 				</label>
-				<label class="block">
-					<span class="field-label">Zahlungsziel</span>
-					<span class="flex items-center gap-2"><input class="input num w-28" type="number" name="days" min="0" max="365" required value={data.settings.invoicePaymentDays} />Tage</span>
-				</label>
 				<button class="btn btn-secondary mt-auto self-start" disabled={busy === 'invoiceTexts'}>Speichern</button>
 			</form>
 		</div>
+
+		<!-- Zahlungsziel und Skonto – für neue Angebote und Rechnungen, dort änderbar -->
+		<form method="POST" action="?/paymentTerms" class="mt-6 border-t border-line pt-5" use:enhance={done('paymentTerms', () => 'Zahlungsbedingungen gespeichert')}>
+			<h3 class="font-display text-lg font-semibold">Zahlungsbedingungen</h3>
+			<p class="text-sm text-ink-2">Kommen in jedes neue Angebot und von dort in die Rechnung – im einzelnen Angebot bzw. in der Rechnung änderbar. Ohne Skonto: 0 %.</p>
+			<div class="mt-3 flex flex-wrap items-end gap-3">
+				<label class="block">
+					<span class="field-label">Zahlungsziel</span>
+					<span class="flex items-center gap-2"><input class="input num w-24 text-right" type="number" name="ziel" min="0" max="365" required value={data.settings.invoicePaymentDays} />Tage</span>
+				</label>
+				<label class="block">
+					<span class="field-label">Skonto</span>
+					<span class="flex items-center gap-2"><input class="input num w-20 text-right" name="skonto" inputmode="decimal" maxlength="5" value={String(data.settings.skontoPercent).replace('.', ',')} />%</span>
+				</label>
+				<label class="block">
+					<span class="field-label">innerhalb von</span>
+					<span class="flex items-center gap-2">
+						<input class="input num w-24 text-right" type="number" name="skontotage" min="0" max="365" value={data.settings.skontoDays || ''} placeholder="–" />Tagen
+					</span>
+				</label>
+				<button class="btn btn-secondary" disabled={busy === 'paymentTerms'}>Speichern</button>
+			</div>
+		</form>
 
 		<div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
 			<div class="min-w-0">

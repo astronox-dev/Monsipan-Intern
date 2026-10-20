@@ -71,7 +71,7 @@
 				<button type="button" class="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-surface-2" onclick={() => edit(c)}>
 					<span class="min-w-0 flex-1">
 						<span class="flex flex-wrap items-center gap-2 font-medium">
-							{c.name}{#if !c.active}<span class="badge">ausgeblendet</span>{/if}
+							{c.name}{#if !c.active}<span class="badge">ausgeblendet</span>{/if}{#if c.reverseCharge}<span class="badge">Bauunternehmen · § 19</span>{/if}
 						</span>
 						<span class="block truncate text-[0.8125rem] text-ink-3">{addressLines(c).slice(1).join(' · ') || 'Keine Anschrift'}</span>
 						{#if c.contact || c.email || c.phone}

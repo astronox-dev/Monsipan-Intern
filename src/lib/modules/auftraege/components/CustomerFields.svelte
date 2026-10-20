@@ -11,9 +11,10 @@
 		phone: string;
 		contact: string;
 		note: string;
+		reverseCharge: boolean;
 	}
 	let { customer }: { customer?: Partial<Customer> | null } = $props();
-	const v = (k: keyof Customer) => customer?.[k] ?? '';
+	const v = (k: Exclude<keyof Customer, 'reverseCharge'>) => customer?.[k] ?? '';
 </script>
 
 <div class="grid gap-3 sm:grid-cols-6">
@@ -52,6 +53,13 @@
 	<label class="block sm:col-span-3">
 		<span class="field-label">Telefon</span>
 		<input class="input" type="tel" name="phone" maxlength="60" value={v('phone')} autocomplete="tel" />
+	</label>
+	<label class="flex items-start gap-2.5 rounded-xl bg-surface-2 p-3 sm:col-span-6">
+		<input type="checkbox" class="mt-0.5 size-5 shrink-0 accent-[var(--c-ink)]" name="baufirma" checked={!!customer?.reverseCharge} />
+		<span>
+			<span class="block font-medium">Bauunternehmen – ohne Umsatzsteuer</span>
+			<span class="block text-[0.8125rem] text-ink-3">Bauleistungen mit Übergang der Steuerschuld (§ 19 Abs. 1a UStG): neue Angebote und Rechnungen bekommen 0 % und den Hinweis. Dafür braucht es die UID-Nummer.</span>
+		</span>
 	</label>
 	<label class="block sm:col-span-6">
 		<span class="field-label">Notiz</span>

@@ -341,7 +341,9 @@ function readPositions(data: Row[], rows: number[], mapping: TransferMapping, is
 			text: limit(text, 4000),
 			quantity: titel || quantity == null ? null : Math.round(quantity * 1000) / 1000,
 			unit: titel ? '' : unit,
-			unitPrice: titel || price == null ? null : Math.round(price * 10000) / 10000
+			unitPrice: titel || price == null ? null : Math.round(price * 10000) / 10000,
+			// „Alternativ" (auch Eventual- bzw. Wahlposition) in der Spalte Art
+			alternative: !titel && /alternativ|eventual|wahlpos/i.test(kindText)
 		});
 	});
 	return { positions: out, bad };
@@ -654,7 +656,15 @@ async function writePositions(tx: Tx, table: 'order' | 'invoice', id: number, po
 		if (table === 'order') {
 			await tx
 				.insert(orderPositions)
-				.values({ orderId: id, sortOrder: i, kind: l.kind as 'position', text: String(l.text), quantity: l.quantity as number | null, unit: String(l.unit) });
+				.values({
+					orderId: id,
+					sortOrder: i,
+					kind: l.kind as 'position',
+					text: String(l.text),
+					quantity: l.quantity as number | null,
+					unit: String(l.unit),
+					alternative: !!l.alternative
+				});
 		} else {
 			await tx.insert(invoicePositions).values({
 				invoiceId: id,
@@ -702,7 +712,8 @@ async function insertItem(tx: Tx, kind: TransferKind, item: Item, user: SessionU
 				text: String(l.text),
 				quantity: l.quantity as number | null,
 				unit: String(l.unit),
-				unitPrice: l.unitPrice as number | null
+				unitPrice: l.unitPrice as number | null,
+				alternative: !!l.alternative
 			});
 		}
 	} else if (kind === 'auftraege') {
@@ -853,7 +864,7 @@ export async function exportTable(kind: TransferKind): Promise<ExportTable> {
 				invoiceTotals(own, o.vatRate, false).net
 			];
 			if (!own.length) rows.push([...headCells, '', '', null, '', null]);
-			for (const l of own) rows.push([...headCells, l.kind === 'titel' ? 'Titel' : 'Position', l.text, l.quantity, l.unit, l.unitPrice]);
+			for (const l of own) rows.push([...headCells, l.kind === 'titel' ? 'Titel' : l.alternative ? 'Alternativ' : 'Position', l.text, l.quantity, l.unit, l.unitPrice]);
 		}
 		return { header, rows, widths: widthsOf(header) };
 	}
@@ -886,7 +897,7 @@ export async function exportTable(kind: TransferKind): Promise<ExportTable> {
 			];
 			const own = lines.filter((l) => l.orderId === o.id);
 			if (!own.length) rows.push([...headCells, '', '', null, '']);
-			for (const l of own) rows.push([...headCells, l.kind === 'titel' ? 'Titel' : 'Position', l.text, l.quantity, l.unit]);
+			for (const l of own) rows.push([...headCells, l.kind === 'titel' ? 'Titel' : l.alternative ? 'Alternativ' : 'Position', l.text, l.quantity, l.unit]);
 		}
 		return { header, rows, widths: widthsOf(header) };
 	}

@@ -20,7 +20,7 @@ const releaser = alias(users, 'releaser');
 const accepter = alias(users, 'accepter');
 
 /** Netto-Summe je Angebot, direkt in der Abfrage */
-const netSum = sql<number>`(select coalesce(sum(round(${col(offerPositions.quantity)} * ${col(offerPositions.unitPrice)}, 2)), 0) from ${offerPositions} where ${col(offerPositions.offerId)} = ${col(offers.id)} and ${col(offerPositions.kind)} = 'position')`.mapWith(
+const netSum = sql<number>`(select coalesce(sum(round(${col(offerPositions.quantity)} * ${col(offerPositions.unitPrice)}, 2)), 0) from ${offerPositions} where ${col(offerPositions.offerId)} = ${col(offers.id)} and ${col(offerPositions.kind)} = 'position' and not ${col(offerPositions.alternative)})`.mapWith(
 	Number
 );
 const orderOf = sql<number | null>`(select ${col(orders.id)} from ${orders} where ${col(orders.offerId)} = ${col(offers.id)})`;
@@ -81,6 +81,7 @@ export async function listOffers(filter: OfferFilter = {}, limit = 100, offset =
 			status: offers.status,
 			billedAt: offers.billedAt,
 			vatRate: offers.vatRate,
+			reverseCharge: offers.reverseCharge,
 			net: netSum,
 			orderId: orderOf
 		})
@@ -160,7 +161,9 @@ async function customerSnapshot(customerId: number | null) {
 		customerStreet: c.street,
 		customerZip: c.zip,
 		customerCity: c.city,
-		customerUid: c.uid
+		customerUid: c.uid,
+		// Bauunternehmen: gleich ohne Umsatzsteuer
+		reverseCharge: c.reverseCharge
 	};
 }
 
@@ -182,6 +185,9 @@ export async function createOffer(
 				...(snapshot ?? {}),
 				intro: settings.offerIntro,
 				closing: settings.offerClosing,
+				paymentDays: settings.invoicePaymentDays,
+				skontoPercent: settings.skontoPercent,
+				skontoDays: settings.skontoDays,
 				createdBy: user.id,
 				updatedAt: new Date()
 			})
@@ -222,6 +228,10 @@ async function loadOffer(where: SQL) {
 			intro: offers.intro,
 			closing: offers.closing,
 			vatRate: offers.vatRate,
+			reverseCharge: offers.reverseCharge,
+			paymentDays: offers.paymentDays,
+			skontoPercent: offers.skontoPercent,
+			skontoDays: offers.skontoDays,
 			status: offers.status,
 			releasedAt: offers.releasedAt,
 			releasedBy: offers.releasedBy,
@@ -265,7 +275,8 @@ async function loadOffer(where: SQL) {
 				note: offerPositions.note,
 				quantity: offerPositions.quantity,
 				unit: offerPositions.unit,
-				unitPrice: offerPositions.unitPrice
+				unitPrice: offerPositions.unitPrice,
+				alternative: offerPositions.alternative
 			})
 			.from(offerPositions)
 			.where(eq(offerPositions.offerId, offer.id))
@@ -294,8 +305,12 @@ export interface SaveOffer {
 		intro: string;
 		closing: string;
 		vatRate: number;
+		reverseCharge: boolean;
+		paymentDays: number;
+		skontoPercent: number;
+		skontoDays: number;
 	};
-	lines: { kind: 'position' | 'titel'; text: string; note?: string; quantity: string; unit: string; unitPrice: string }[];
+	lines: { kind: 'position' | 'titel'; text: string; note?: string; quantity: string; unit: string; unitPrice: string; alternative?: boolean }[];
 }
 
 const qty = (v: string) => {
@@ -327,6 +342,10 @@ export async function saveOffer(id: number, data: SaveOffer) {
 				intro: h.intro.slice(0, 3000),
 				closing: h.closing.slice(0, 5000),
 				vatRate: h.vatRate,
+				reverseCharge: h.reverseCharge,
+				paymentDays: h.paymentDays,
+				skontoPercent: h.skontoPercent,
+				skontoDays: h.skontoDays,
 				updatedAt: new Date()
 			})
 			.where(eq(offers.id, id));
@@ -345,15 +364,23 @@ export async function saveOffer(id: number, data: SaveOffer) {
 				note: titel ? '' : (l.note ?? '').trim().slice(0, 2000),
 				quantity: titel ? null : qty(l.quantity),
 				unit: titel ? '' : l.unit.trim().slice(0, 20),
-				unitPrice: titel ? null : price(l.unitPrice)
+				unitPrice: titel ? null : price(l.unitPrice),
+				alternative: !titel && !!l.alternative
 			});
 		}
 	});
 }
 
 /** Was vor dem Freigeben fehlt – sonst null */
-export function releaseProblem(o: { customerName: string; title: string; lines: { kind: string; quantity: number | null; unitPrice: number | null }[] }) {
+export function releaseProblem(o: {
+	customerName: string;
+	customerUid: string;
+	title: string;
+	reverseCharge: boolean;
+	lines: { kind: string; quantity: number | null; unitPrice: number | null }[];
+}) {
 	if (!o.customerName.trim()) return 'Bitte zuerst den Kunden eintragen.';
+	if (o.reverseCharge && !o.customerUid.trim()) return 'Für den Übergang der Steuerschuld braucht es die UID-Nummer des Kunden.';
 	if (!o.title.trim()) return 'Bitte das Bauvorhaben (BV) eintragen.';
 	const positions = o.lines.filter((l) => l.kind === 'position');
 	if (!positions.length) return 'Das Angebot hat noch keine Position.';

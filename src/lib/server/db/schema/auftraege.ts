@@ -20,6 +20,8 @@ export const customers = sqliteTable(
 		zip: text('zip').notNull().default(''),
 		city: text('city').notNull().default(''),
 		uid: text('uid').notNull().default(''),
+		/** Bauunternehmen: Bauleistungen ohne Umsatzsteuer – Übergang der Steuerschuld (§ 19 Abs. 1a UStG) */
+		reverseCharge: integer('reverse_charge', { mode: 'boolean' }).notNull().default(false),
 		email: text('email').notNull().default(''),
 		phone: text('phone').notNull().default(''),
 		contact: text('contact').notNull().default(''),
@@ -66,6 +68,13 @@ export const offers = sqliteTable(
 		closing: text('closing').notNull().default(''),
 		/** Umsatzsteuer in Prozent */
 		vatRate: real('vat_rate').notNull().default(20),
+		/** Bauleistung an ein Bauunternehmen: Übergang der Steuerschuld (§ 19 Abs. 1a UStG), ohne Umsatzsteuer */
+		reverseCharge: integer('reverse_charge', { mode: 'boolean' }).notNull().default(false),
+		/** Zahlungsziel in Tagen ab Rechnungsdatum – leer bei älteren Angeboten (dann steht keines im Angebot) */
+		paymentDays: integer('payment_days'),
+		/** Skonto wie bei der Rechnung – geht in sie über */
+		skontoPercent: real('skonto_percent').notNull().default(0),
+		skontoDays: integer('skonto_days').notNull().default(0),
 		status: text('status', { enum: OFFER_STATUS }).notNull().default('entwurf'),
 		releasedBy: integer('released_by').references(() => users.id, { onDelete: 'set null' }),
 		releasedAt: integer('released_at', { mode: 'timestamp_ms' }),
@@ -115,7 +124,9 @@ export const offerPositions = sqliteTable(
 		quantity: real('quantity'),
 		unit: text('unit').notNull().default(''),
 		/** Einheitspreis netto in Euro */
-		unitPrice: real('unit_price')
+		unitPrice: real('unit_price'),
+		/** Alternativposition: mit Menge und Preis angeboten, aber nicht im Gesamtbetrag (GP 0) */
+		alternative: integer('alternative', { mode: 'boolean' }).notNull().default(false)
 	},
 	(t) => [index('offer_positions_offer_idx').on(t.offerId, t.sortOrder)]
 );
@@ -176,7 +187,9 @@ export const orderPositions = sqliteTable(
 		/** Bemerkung zur Position – steht im PDF darunter, nicht fett */
 		note: text('note').notNull().default(''),
 		quantity: real('quantity'),
-		unit: text('unit').notNull().default('')
+		unit: text('unit').notNull().default(''),
+		/** Alternativposition: mit Menge und Preis angeboten, aber nicht im Gesamtbetrag (GP 0) */
+		alternative: integer('alternative', { mode: 'boolean' }).notNull().default(false)
 	},
 	(t) => [index('order_positions_order_idx').on(t.orderId, t.sortOrder)]
 );
@@ -379,6 +392,9 @@ export const invoices = sqliteTable(
 		vatRate: real('vat_rate').notNull().default(20),
 		/** Bauleistung an ein Bauunternehmen: Übergang der Steuerschuld, ohne Umsatzsteuer */
 		reverseCharge: integer('reverse_charge', { mode: 'boolean' }).notNull().default(false),
+		/** Skonto: so viel Prozent weniger bei Zahlung innerhalb so vieler Tage ab Rechnungsdatum – 0 % heißt ohne */
+		skontoPercent: real('skonto_percent').notNull().default(0),
+		skontoDays: integer('skonto_days').notNull().default(0),
 		status: text('status', { enum: INVOICE_STATUS }).notNull().default('offen'),
 		/** Bezahlt am „JJJJ-MM-TT" */
 		paidOn: text('paid_on'),

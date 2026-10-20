@@ -1,7 +1,19 @@
 <script lang="ts">
 	/** Das Angebot untereinander statt als Blatt – am Handy ohne Zoomen lesbar */
 	import { date as dateLabel } from '$lib/format';
-	import { addressLines, lineNumbers, lineTotal, money, offerTotals, priceLabel, quantityLabel, spacedNumber } from '../offer';
+	import {
+		addressLines,
+		lineNumbers,
+		money,
+		offerTotals,
+		paymentTermsText,
+		priceLabel,
+		quantityLabel,
+		REVERSE_CHARGE_NOTE,
+		shownTotal,
+		spacedNumber,
+		vatLabel
+	} from '../offer';
 
 	interface Offer {
 		number: string;
@@ -16,12 +28,23 @@
 		intro: string;
 		closing: string;
 		vatRate: number;
-		lines: { id: number; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null }[];
+		reverseCharge: boolean;
+		customerUid: string;
+		/** Ältere Angebote haben kein Zahlungsziel – dann steht nichts dazu da */
+		paymentDays: number | null;
+		skontoPercent: number;
+		skontoDays: number;
+		lines: { id: number; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null; alternative?: boolean }[];
 	}
 	let { offer }: { offer: Offer } = $props();
 
 	const numbers = $derived(lineNumbers(offer.lines));
-	const totals = $derived(offerTotals(offer.lines, offer.vatRate));
+	const totals = $derived(offerTotals(offer.lines, offer.vatRate, offer.reverseCharge));
+	const terms = $derived(
+		offer.paymentDays == null
+			? []
+			: paymentTermsText({ paymentDays: offer.paymentDays, skontoPercent: offer.skontoPercent, skontoDays: offer.skontoDays }, totals.gross)
+	);
 	const address = $derived(
 		addressLines({ name: offer.customerName, addition: offer.customerAddition, street: offer.customerStreet, zip: offer.customerZip, city: offer.customerCity })
 	);
@@ -53,8 +76,9 @@
 						<span class="min-w-0 flex-1">
 							<span class="block font-medium whitespace-pre-line">{l.text}</span>
 							{#if l.note}<span class="mt-0.5 block text-sm whitespace-pre-line text-ink-2">{l.note}</span>{/if}
+							{#if l.alternative}<span class="mt-0.5 block text-sm text-ink-3 italic">Alternativposition – nicht im Gesamtbetrag enthalten</span>{/if}
 						</span>
-						<span class="num shrink-0 text-right font-semibold">{money(lineTotal(l))}</span>
+						<span class="num shrink-0 text-right font-semibold">{money(shownTotal(l))}</span>
 					</div>
 					<p class="num mt-0.5 pl-11 text-[0.8125rem] text-ink-3">{quantityLabel(l.quantity)} {l.unit} × {priceLabel(l.unitPrice)}</p>
 				</li>
@@ -65,11 +89,17 @@
 	<dl class="num ml-auto grid max-w-xs grid-cols-[1fr_auto] gap-x-6 gap-y-1">
 		<dt>Gesamt Netto</dt>
 		<dd class="text-right">{money(totals.net)}</dd>
-		<dt>{String(offer.vatRate).replace('.', ',')} % Umsatzsteuer</dt>
-		<dd class="text-right">{money(totals.vat)}</dd>
+		{#if !offer.reverseCharge}
+			<dt>{vatLabel(offer.vatRate, false)}</dt>
+			<dd class="text-right">{money(totals.vat)}</dd>
+		{/if}
 		<dt class="border-t border-ink pt-1 text-lg font-semibold">Gesamtbetrag</dt>
 		<dd class="border-t border-ink pt-1 text-right text-lg font-semibold">{money(totals.gross)}</dd>
 	</dl>
+	{#if offer.reverseCharge}
+		<p class="text-sm text-ink-2">{REVERSE_CHARGE_NOTE}{offer.customerUid ? ` UID-Nummer des Leistungsempfängers: ${offer.customerUid}` : ''}</p>
+	{/if}
+	{#if terms.length}<p class="text-sm">{#each terms as t, i (i)}<span class="block">{t}</span>{/each}</p>{/if}
 
 	{#if offer.closing}<p class="text-sm whitespace-pre-line text-ink-2">{offer.closing}</p>{/if}
 </div>

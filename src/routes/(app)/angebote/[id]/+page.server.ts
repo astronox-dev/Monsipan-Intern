@@ -25,12 +25,13 @@ import { inquiryForOffer } from '$lib/modules/auftraege/server/inquiries';
 import { mayDeleteOrder } from '$lib/modules/auftraege/server/orders';
 import { DocumentError, storeDocument, takeUploads } from '$lib/server/documents';
 import { isValidIsoDate } from '$lib/modules/stunden/week';
-import { parseAmount } from '$lib/modules/auftraege/offer';
+import { parseAmount, readPaymentTerms } from '$lib/modules/auftraege/offer';
 import { notifyOffer, notifyOrderDocuments } from '$lib/modules/auftraege/server/notify';
 import { addOfferDocuments } from '$lib/modules/auftraege/server/offer-documents';
 import { titleFromFileName } from '$lib/documents';
 import { caseDocuments, casePhotos, chainOfOffer, findCaseDocument, parseRef, removeCaseDocument, setCaseDocumentForCrew } from '$lib/modules/auftraege/server/case-files';
 import { unitOptions } from '$lib/server/options';
+import { getSettings } from '$lib/server/settings';
 import type { Actions, PageServerLoad } from './$types';
 
 async function open(id: number, locals: App.Locals) {
@@ -54,6 +55,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		units: editable ? await unitOptions() : [],
 		// Frühere Positionen als Vorschläge beim Schreiben
 		memory: editable ? await positionMemory() : [],
+		// Ältere Angebote ohne Zahlungsziel bekommen beim Bearbeiten die Vorgabe
+		defaultPaymentDays: (await getSettings()).invoicePaymentDays,
 		canAddCustomer: editable && can(user.role, 'kunden.erstellen'),
 		canRelease: offer.status === 'entwurf' && can(user.role, 'angebote.freigeben'),
 		canWithdraw: (offer.status === 'freigegeben' || offer.status === 'aenderung') && can(user.role, 'angebote.bearbeiten'),
@@ -88,6 +91,8 @@ function readOffer(form: FormData): SaveOffer | { message: string } {
 	if (!number) return { message: 'Bitte die Angebotsnummer eintragen.' };
 	const vat = parseAmount(s('ust'));
 	if (vat == null || vat < 0 || vat > 100) return { message: 'Die Umsatzsteuer stimmt nicht.' };
+	const terms = readPaymentTerms(s);
+	if ('message' in terms) return terms;
 	const customer = Number(s('kunde'));
 
 	const indexes = new Set<number>();
@@ -103,7 +108,8 @@ function readOffer(form: FormData): SaveOffer | { message: string } {
 			note: s(`z.${i}.notiz`),
 			quantity: s(`z.${i}.menge`),
 			unit: s(`z.${i}.einheit`),
-			unitPrice: s(`z.${i}.preis`)
+			unitPrice: s(`z.${i}.preis`),
+			alternative: s(`z.${i}.alternativ`) === 'on'
 		}));
 	for (const [i, l] of lines.entries()) {
 		if (l.kind === 'titel') continue;
@@ -126,7 +132,9 @@ function readOffer(form: FormData): SaveOffer | { message: string } {
 			customerUid: s('k_uid').trim(),
 			intro: s('einleitung').replace(/\r\n/g, '\n').trimEnd(),
 			closing: s('schluss').replace(/\r\n/g, '\n').trimEnd(),
-			vatRate: Math.round(vat * 100) / 100
+			vatRate: Math.round(vat * 100) / 100,
+			reverseCharge: s('reverse') === 'on',
+			...terms
 		},
 		lines
 	};

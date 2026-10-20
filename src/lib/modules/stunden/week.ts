@@ -24,6 +24,11 @@ export function addDays(iso: string, days: number): string {
 	return isoDate(new Date(toUtc(iso).getTime() + days * DAY));
 }
 
+/** Tage von einem Datum zum anderen – rückwärts negativ */
+export function daysBetween(from: string, to: string): number {
+	return Math.round((toUtc(to).getTime() - toUtc(from).getTime()) / DAY);
+}
+
 /** Montag der Woche, in der dieses Datum liegt */
 export function mondayOf(iso: string): string {
 	const d = toUtc(iso);

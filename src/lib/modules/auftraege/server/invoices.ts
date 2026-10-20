@@ -14,6 +14,7 @@ import { and, asc, desc, eq, gt, gte, inArray, isNull, like, lt, lte, or, sql, t
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db, type Tx } from '$lib/server/db';
 import {
+	customers,
 	dailyReports,
 	invoicePositions,
 	invoices,
@@ -31,7 +32,7 @@ import type { SessionUser } from '$lib/server/auth';
 import { addDays, isValidIsoDate, today } from '$lib/modules/stunden/week';
 import { notify } from '$lib/server/notifications';
 import { date as dateLabel } from '$lib/format';
-import { invoiceNo, lineNumbers, MAX_OFFER_LINES, money, parseAmount, round2 } from '../offer';
+import { invoiceNo, lineNumbers, MAX_OFFER_LINES, money, parseAmount, readPaymentTerms, round2 } from '../offer';
 import {
 	billedLines,
 	COUNTED_STATUS,
@@ -296,7 +297,8 @@ export async function invoiceDraft(orderId: number) {
 					note: offerPositions.note,
 					quantity: offerPositions.quantity,
 					unit: offerPositions.unit,
-					unitPrice: offerPositions.unitPrice
+					unitPrice: offerPositions.unitPrice,
+					alternative: offerPositions.alternative
 				})
 				.from(offerPositions)
 				.where(eq(offerPositions.offerId, offer.id))
@@ -304,7 +306,15 @@ export async function invoiceDraft(orderId: number) {
 				.all()
 		: (
 				await db
-					.select({ id: orderPositions.id, kind: orderPositions.kind, text: orderPositions.text, note: orderPositions.note, quantity: orderPositions.quantity, unit: orderPositions.unit })
+					.select({
+						id: orderPositions.id,
+						kind: orderPositions.kind,
+						text: orderPositions.text,
+						note: orderPositions.note,
+						quantity: orderPositions.quantity,
+						unit: orderPositions.unit,
+						alternative: orderPositions.alternative
+					})
 					.from(orderPositions)
 					.where(eq(orderPositions.orderId, orderId))
 					.orderBy(asc(orderPositions.sortOrder), asc(orderPositions.id))
@@ -341,6 +351,13 @@ export async function invoiceDraft(orderId: number) {
 	const period = selectedPeriod(reports, all);
 	const last = previous.at(-1);
 	const date = today();
+	// Zahlungsbedingungen wie im Angebot vereinbart – ältere Angebote ohne: die Vorgaben
+	const terms =
+		offer && offer.paymentDays != null
+			? { paymentDays: offer.paymentDays, skontoPercent: offer.skontoPercent, skontoDays: offer.skontoDays }
+			: { paymentDays: settings.invoicePaymentDays, skontoPercent: settings.skontoPercent, skontoDays: settings.skontoDays };
+	// Bauunternehmen: ohne Umsatzsteuer – wie im Angebot oder laut Kundenstamm
+	const customer = offer?.customerId ? await db.select({ reverseCharge: customers.reverseCharge }).from(customers).where(eq(customers.id, offer.customerId)).get() : undefined;
 	return {
 		order: {
 			id: order.id,
@@ -368,7 +385,7 @@ export async function invoiceDraft(orderId: number) {
 			state: last?.state ?? '',
 			section: last?.section ?? '',
 			date,
-			dueDate: addDays(date, settings.invoicePaymentDays),
+			dueDate: addDays(date, terms.paymentDays),
 			serviceFrom: period?.from ?? '',
 			serviceTo: period?.to ?? '',
 			// Die Kostenstelle wie auf der letzten Rechnung zum Auftrag
@@ -384,9 +401,11 @@ export async function invoiceDraft(orderId: number) {
 			intro: settings.invoiceIntro,
 			closing: settings.invoiceClosing,
 			vatRate: offer?.vatRate ?? 20,
-			reverseCharge: false
+			reverseCharge: !!offer?.reverseCharge || !!customer?.reverseCharge,
+			skontoPercent: terms.skontoPercent,
+			skontoDays: terms.skontoDays
 		},
-		paymentDays: settings.invoicePaymentDays
+		paymentDays: terms.paymentDays
 	};
 }
 
@@ -421,6 +440,8 @@ export interface SaveInvoice {
 		closing: string;
 		vatRate: number;
 		reverseCharge: boolean;
+		skontoPercent: number;
+		skontoDays: number;
 	};
 	lines: { number: string; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null }[];
 }
@@ -433,9 +454,10 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 	const s = (k: string) => String(form.get(k) ?? '');
 	const date = s('datum');
 	if (!isValidIsoDate(date)) return { message: 'Das Rechnungsdatum ist ungültig.' };
-	const dueDate = s('faellig');
-	if (!isValidIsoDate(dueDate)) return { message: 'Das Datum „zahlbar bis" ist ungültig.' };
-	if (dueDate < date) return { message: '„Zahlbar bis" liegt vor dem Rechnungsdatum.' };
+	// „Zahlbar bis" ergibt sich aus dem Zahlungsziel
+	const terms = readPaymentTerms(s);
+	if ('message' in terms) return terms;
+	const dueDate = addDays(date, terms.paymentDays);
 	const from = s('von').trim();
 	const to = s('bis').trim();
 	if ((from && !isValidIsoDate(from)) || (to && !isValidIsoDate(to))) return { message: 'Der Leistungszeitraum ist ungültig.' };
@@ -505,7 +527,9 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 			intro: s('einleitung').replace(/\r\n/g, '\n').trimEnd().slice(0, 3000),
 			closing: s('schluss').replace(/\r\n/g, '\n').trimEnd().slice(0, 5000),
 			vatRate: Math.round(vat * 100) / 100,
-			reverseCharge
+			reverseCharge,
+			skontoPercent: terms.skontoPercent,
+			skontoDays: terms.skontoDays
 		},
 		lines: billed
 	};
@@ -658,6 +682,8 @@ export async function invoiceDetail(id: number) {
 			closing: invoices.closing,
 			vatRate: invoices.vatRate,
 			reverseCharge: invoices.reverseCharge,
+			skontoPercent: invoices.skontoPercent,
+			skontoDays: invoices.skontoDays,
 			status: invoices.status,
 			paidOn: invoices.paidOn,
 			paidByFirst: payer.firstName,

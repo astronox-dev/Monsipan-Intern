@@ -85,7 +85,7 @@
 						</span>
 					</span>
 					<span class="num hidden shrink-0 text-right text-sm sm:block">
-						{money(o.net)}<span class="block text-[0.75rem] text-ink-3">netto · {money(round2(o.net * (1 + o.vatRate / 100)))} brutto</span>
+						{money(o.net)}<span class="block text-[0.75rem] text-ink-3">netto · {money(round2(o.net * (1 + (o.reverseCharge ? 0 : o.vatRate) / 100)))} brutto</span>
 					</span>
 					<span class="badge {st.tone}">{st.label}</span>
 					{#if o.orderId}<span class="badge badge-ok" title="Auftrag erstellt"><HardHat size={13} aria-hidden="true" />Auftrag</span>{/if}

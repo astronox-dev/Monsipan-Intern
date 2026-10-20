@@ -42,8 +42,11 @@
 		priceLabel,
 		quantityLabel,
 		REVERSE_CHARGE_NOTE,
-		invoiceNo
+		invoiceNo,
+		hasSkonto,
+		afterSkonto
 	} from '$lib/modules/auftraege/offer';
+	import { addDays } from '$lib/modules/stunden/week';
 	import { AUDIT_LABELS, CHECK_LABELS, INVOICE_STAGE_LABELS, isLegacy, PADES_LEVEL_LABELS, PROVIDER_LABELS, type CheckResult } from '$lib/modules/auftraege/signature';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -229,6 +232,13 @@
 			{#if !isStorno}
 				<dt class="text-ink-3">Zahlbar bis</dt>
 				<dd>{dateLabel(invoice.dueDate)}</dd>
+				{#if hasSkonto(invoice)}
+					<dt class="text-ink-3">Skonto</dt>
+					<dd>
+						{String(invoice.skontoPercent).replace('.', ',')} % bis {dateLabel(addDays(invoice.date, invoice.skontoDays))} –
+						<span class="num font-medium">{money(afterSkonto(totals.gross, invoice.skontoPercent))}</span>
+					</dd>
+				{/if}
 			{/if}
 			{#if invoice.serviceFrom}
 				<dt class="text-ink-3">Leistungszeitraum</dt>
@@ -419,6 +429,12 @@
 		<dd class="border-t border-ink pt-1.5 text-right text-lg font-semibold">{money(totals.gross)}</dd>
 	</dl>
 	{#if invoice.reverseCharge}<p class="px-4 pb-4 text-sm text-ink-2 lg:px-5">{REVERSE_CHARGE_NOTE} UID des Kunden: {invoice.customerUid}</p>{/if}
+	{#if hasSkonto(invoice) && !isStorno}
+		<p class="num px-4 pb-4 text-right text-sm lg:px-5">
+			Bei Zahlung bis {dateLabel(addDays(invoice.date, invoice.skontoDays))} mit {String(invoice.skontoPercent).replace('.', ',')} % Skonto:
+			<span class="font-semibold">{money(afterSkonto(totals.gross, invoice.skontoPercent))}</span>
+		</p>
+	{/if}
 	{#if invoice.closing}<p class="border-t border-line px-4 py-3 text-sm whitespace-pre-line text-ink-2 lg:px-5">{invoice.closing}</p>{/if}
 </section>
 

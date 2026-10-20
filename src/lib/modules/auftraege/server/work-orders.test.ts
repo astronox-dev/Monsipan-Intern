@@ -271,7 +271,14 @@ describe('Arbeitsauftrag am Auftrag', () => {
 		expect(await setWorkOrderSignature(orderId, 'auftraggeber', { path: SIG, name: 'Hr. Huber', at: Date.now() }, 1)).toBeNull();
 		expect((await getWorkOrder(orderId))!.content.finishedOn).toBe(today());
 
-		expect(await saveWorkOrderForm(orderId, sanitizeForm({ ...form, finishedOn: '2026-10-23' }), { office: true, site: true }, 1)).toMatch(/Auftraggeber/);
+		expect(await saveWorkOrderForm(orderId, sanitizeForm({ ...form, finishedOn: '2026-10-23' }), { office: true, site: false }, 1)).toMatch(/Auftraggeber/);
+		// Die Partie kann nur noch die Checkliste abhaken – sonst ließe sich der Auftrag nie abschließen
+		const ticked = { ...form, title: 'Geändert', finishedOn: '2026-10-23', checklist: Object.fromEntries(Object.keys(form.checklist).map((k) => [k, true])) };
+		expect(await saveWorkOrderForm(orderId, sanitizeForm(ticked), { office: true, site: true }, 1)).toBeNull();
+		const after = (await getWorkOrder(orderId))!.content;
+		expect(Object.values(after.checklist).every(Boolean)).toBe(true);
+		expect(after.finishedOn).toBe(today());
+		expect(after.title).toBe(form.title);
 		expect(await setWorkOrderSignature(orderId, 'bl', { path: SIG, name: 'BL', at: 1 }, 1)).toMatch(/Auftraggeber/);
 		expect(await removeBriefing(orderId, 0, 1)).toMatch(/Auftraggeber/);
 

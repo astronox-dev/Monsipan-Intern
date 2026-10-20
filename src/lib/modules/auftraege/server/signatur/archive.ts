@@ -99,6 +99,8 @@ export interface InvoiceContent {
 	section: string;
 	vatRate: number;
 	reverseCharge: boolean;
+	skontoPercent?: number;
+	skontoDays?: number;
 	lines: { number: string; kind: string; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null }[];
 }
 
@@ -128,7 +130,9 @@ export function contentHash(i: InvoiceContent): string {
 			i.reverseCharge,
 			// Die Bemerkung nur, wenn eine da ist – so bleibt die Prüfsumme älterer Rechnungen gleich
 			i.lines.map((l) => [l.number, l.kind, l.text, l.quantity, l.unit, l.unitPrice, ...(l.note ? [l.note] : [])]),
-			...(i.costCenter ? [i.costCenter] : [])
+			...(i.costCenter ? [i.costCenter] : []),
+			// Skonto ebenso nur, wenn eines gewährt wird
+			...(i.skontoPercent ? [['skonto', i.skontoPercent, i.skontoDays ?? 0]] : [])
 		])
 	);
 }

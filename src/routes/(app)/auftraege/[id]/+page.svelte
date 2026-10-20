@@ -188,6 +188,7 @@
 					<span class="min-w-0 flex-1">
 						<span class="block font-medium whitespace-pre-line">{l.text}</span>
 						{#if l.note}<span class="mt-0.5 block text-sm whitespace-pre-line text-ink-2">{l.note}</span>{/if}
+						{#if l.alternative}<span class="mt-0.5 block text-sm text-ink-3 italic">Alternativposition – nur ausführen, wenn beauftragt</span>{/if}
 					</span>
 					<span class="num shrink-0 text-right">{quantityLabel(l.quantity)} <span class="text-ink-3">{l.unit}</span></span>
 				</li>
