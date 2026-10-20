@@ -68,7 +68,7 @@
 	<section class="card p-4 lg:p-5" aria-labelledby="h-park">
 		<h2 id="h-park" class="text-lg">Parkordnung</h2>
 		<p class="mt-1 text-sm text-ink-2">
-			Strich 2 m, Lücke 1 m. Anfangs- und Endstrich sind gleich lang – mindestens 50 cm, höchstens 2 m.
+			Strich 2 m, Lücke immer 1 m. Angepasst werden nur Anfangs- und Endstrich – gleich lang, mindestens 50 cm, höchstens 2 m.
 		</p>
 		<label class="mt-3 block max-w-xs">
 			<span class="field-label">Länge der Parkordnung</span>
@@ -113,7 +113,7 @@
 	<section class="card p-4 lg:p-5" aria-labelledby="h-schutzweg">
 		<h2 id="h-schutzweg" class="text-lg">Schutzweg</h2>
 		<p class="mt-1 text-sm text-ink-2">
-			Riegel 50 cm, Lücke 50 cm. Vom Randstein zum ersten und zum letzten Riegel mindestens 25 cm, höchstens 50 cm.
+			Riegel 50 cm, Lücke immer 50 cm. Vom Randstein zum ersten und zum letzten Riegel mindestens 25 cm, höchstens 50 cm.
 		</p>
 		<div class="mt-3 grid gap-3 sm:grid-cols-2">
 			<label class="block">

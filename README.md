@@ -1012,7 +1012,8 @@ für die Baustelle aus – Maß in Metern eintippen (Komma oder Punkt), das Erge
 darunter, mit maßstäblicher Zeichnung. Gerechnet wird im Browser, gespeichert wird nichts.
 Öffnen dürfen ihn von Haus aus alle (Recht „Rechner“ unter Berechtigungen).
 
-- **Parkordnung:** Strich 2 m, Lücke 1 m; Anfangs- und Endstrich sind gleich lang, mindestens
+- **Parkordnung:** Strich 2 m, Lücke **immer 1 m**; angepasst werden nur Anfangs- und
+  Endstrich – gleich lang, mindestens
   50 cm und höchstens 2 m. Aus der Länge kommen die Länge von Anfangs- und Endstrich, die
   Striche dazwischen, die Lücken, die markierte Länge (für die Abrechnung) und die Folge zum
   Abmessen, z. B. 23,40 m → „Strich 0,70 m · Lücke 1 m · 7 × (Strich 2 m · Lücke 1 m) · Strich
