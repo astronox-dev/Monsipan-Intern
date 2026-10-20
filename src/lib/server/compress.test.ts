@@ -102,7 +102,7 @@ describe.runIf(jpegtran)('JPEG mit jpegtran', () => {
 		const pixels = (jpeg: Buffer) => {
 			const file = path.join(TMP, `p-${jpeg.length}.jpg`);
 			fs.writeFileSync(file, jpeg);
-			return execFileSync('djpeg', ['-ppm', file]);
+			return execFileSync('djpeg', ['-ppm', file], { maxBuffer: 16 * 1024 * 1024 });
 		};
 		expect(pixels(out).equals(pixels(original))).toBe(true);
 		console.info(`JPEG: ${original.length} → ${out.length} Bytes`);
