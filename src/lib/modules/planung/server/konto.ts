@@ -3,7 +3,7 @@
  * Stichtag und der Stand je Person – gerechnet wird in ../konto.ts. Sehen darf
  * es, wer den Urlaub der Person sieht; pflegen, wer Urlaubskonten bearbeiten darf.
  */
-import { and, asc, eq, inArray, isNull, ne, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { can } from '$lib/permissions';
 import { db } from '$lib/server/db';
 import { employmentPeriods, leaveAccounts, leaveRequests, parties, users } from '$lib/server/db/schema';
@@ -19,13 +19,15 @@ const NO_RIGHT = { message: 'Dafür fehlt dir die Berechtigung.' };
 
 /**
  * Wessen Konto jemand sieht: alle Beschäftigten, die der eigenen Partie oder nur
- * das eigene – ohne die, die vom Urlaubskonto ausgenommen sind
+ * das eigene – ohne die, die vom Urlaubskonto ausgenommen sind. Nach Partien
+ * wie die Spalten der Wochenplanung, je Partie der Partieführer zuerst, ohne
+ * Partie am Ende.
  */
 export async function accountPeople(user: SessionUser, everyone = false) {
 	const scope = everyone ? 'all' : leaveScope(user);
 	if (!scope) return [];
 	const rows = await db
-		.select({ id: users.id, firstName: users.firstName, lastName: users.lastName, username: users.username, partyName: parties.name })
+		.select({ id: users.id, firstName: users.firstName, lastName: users.lastName, username: users.username, partyId: parties.id, partyName: parties.name })
 		.from(users)
 		.leftJoin(parties, eq(parties.id, users.partyId))
 		.where(
@@ -37,9 +39,17 @@ export async function accountPeople(user: SessionUser, everyone = false) {
 				scope === 'all' ? undefined : scope === 'party' ? or(eq(users.partyId, user.partyId!), eq(users.id, user.id)) : eq(users.id, user.id)
 			)
 		)
-		.orderBy(asc(users.firstName), asc(users.lastName))
+		.orderBy(
+			sql`${parties.id} is null`,
+			sql`${parties.planOrder} is null`,
+			asc(parties.planOrder),
+			asc(parties.name),
+			sql`case ${users.role} when 'partiefuehrer' then 0 else 1 end`,
+			asc(users.firstName),
+			asc(users.lastName)
+		)
 		.all();
-	return rows.map((r) => ({ id: r.id, name: fullName(r), partyName: r.partyName }));
+	return rows.map((r) => ({ id: r.id, name: fullName(r), partyId: r.partyId, partyName: r.partyName }));
 }
 
 /** Stand der Konten heute – je Person Beschäftigungszeiten, Übertrag, Anspruch je Woche und Rest */

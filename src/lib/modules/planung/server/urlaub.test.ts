@@ -14,7 +14,7 @@ vi.mock('$lib/server/notifications', () => ({ notify: (n: (typeof notified)[numb
 
 const { db, client, ensureDatabase } = await import('$lib/server/db');
 const { eq } = await import('drizzle-orm');
-const { users } = await import('$lib/server/db/schema');
+const { parties, users } = await import('$lib/server/db/schema');
 const { updateSettings } = await import('$lib/server/settings');
 const { approvedTotals, createLeave, decideLeave, listLeave } = await import('./urlaub');
 const { createSick, listSick } = await import('./krank');
@@ -127,5 +127,28 @@ describe('Urlaubskonto', () => {
 		expect((await accountPeople(admin)).map((p) => p.id)).not.toContain(eva.id);
 		expect(await accountPeople(eva)).toEqual([]);
 		await db.update(users).set({ leaveAccountExempt: false }).where(eq(users.id, eva.id));
+	});
+
+	it('nach Partien wie in der Wochenplanung, Partieführer zuerst, ohne Partie am Ende', async () => {
+		const [nord, sued] = await db
+			.insert(parties)
+			.values([
+				{ name: 'Nord', planOrder: 2 },
+				{ name: 'Süd', planOrder: 1 }
+			])
+			.returning({ id: parties.id });
+		const made = await db
+			.insert(users)
+			.values([
+				{ username: 'anna', firstName: 'Anna', passwordHash: 'x', role: 'arbeiter', partyId: nord.id },
+				{ username: 'zeno', firstName: 'Zeno', passwordHash: 'x', role: 'partiefuehrer', partyId: nord.id },
+				{ username: 'bert', firstName: 'Bert', passwordHash: 'x', role: 'arbeiter', partyId: sued.id }
+			])
+			.returning({ id: users.id });
+		const order = (await accountPeople(admin, true)).map((p) => p.id);
+		const [anna, zeno, bert] = made.map((m) => m.id);
+		// Süd (Platz 1) vor Nord (Platz 2), in Nord der Partieführer zuerst, Eva und Admin ohne Partie am Ende
+		expect(order.slice(0, 3)).toEqual([bert, zeno, anna]);
+		expect(order.slice(3)).toEqual(expect.arrayContaining([eva.id, admin.id]));
 	});
 });

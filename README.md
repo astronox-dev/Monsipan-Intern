@@ -480,7 +480,8 @@ mit einem offenen oder genehmigten, kommt eine Meldung.
     was danach bleibt, beim Entscheiden der Rest vorher und nachher – rot, wenn mehr genehmigt
     würde als erworben.
   - **Urlaubskonten** (`/urlaubskonten`, eigener Punkt unter Planung – nur mit dem Recht
-    „Urlaubskonten“, von Haus aus Admin, Geschäftsführung, Buchhaltung): alle mit Beschäftigung,
+    „Urlaubskonten“, von Haus aus Admin, Geschäftsführung, Buchhaltung): alle nach Partien (wie die
+    Spalten der Wochenplanung, Partieführer zuerst, ohne Partie am Ende) mit Beschäftigung,
     Anspruch, Genehmigt und Rest. Über den Stift lassen sich je Person die
     **Beschäftigungszeiten** pflegen (angemeldet ab – bis;
     abmelden = das Ende eintragen, im Frühjahr eine neue Zeit anlegen; Überschneidungen gehen
