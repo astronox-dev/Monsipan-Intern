@@ -334,7 +334,7 @@
 					<div class="grid gap-2 lg:contents">
 						<label class="block">
 							<span class="field-label lg:sr-only">Kostenstelle</span>
-							<input class="input input-sm" name="kostenstelle.{row.date}" maxlength="60" bind:value={row.costCenter} />
+							<input class="input input-sm" name="kostenstelle.{row.date}" maxlength="60" list="kostenstellen" bind:value={row.costCenter} />
 						</label>
 
 						<!-- Beliebig viele Zeiträume Beginn – Ende; Beginn und Ende gehen paarweise ans Formular -->
@@ -423,6 +423,9 @@
 
 		<datalist id="baustellen">
 			{#each data.sites as s (s)}<option value={s}></option>{/each}
+		</datalist>
+		<datalist id="kostenstellen">
+			{#each data.costCenters as c (c)}<option value={c}></option>{/each}
 		</datalist>
 
 		<!-- Auslöse, VAZ und Notiz schreibt die Partie, die den Zettel schreibt – nicht die Aushilfe -->

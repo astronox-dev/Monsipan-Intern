@@ -102,7 +102,7 @@ Administration unter `/verwaltung/…`:
 | Seite | Adresse |
 |---|---|
 | Übersicht | `/` |
-| Stundenzettel | `/stundenzettel` |
+| Stundenzettel, Kostenstellen | `/stundenzettel`, `/kostenstellen` (`?von=…&bis=…&stand=…`) |
 | Tagesberichte | `/tagesberichte` |
 | Rechner (Tools und Hilfestellung) | `/tools/rechner` |
 | Wochenplanung, Urlaub, Krankenstand, Urlaubskonten | `/planung` (`?woche=JJJJ-MM-TT`), `/urlaub`, `/krankenstand`, `/urlaubskonten` |
@@ -240,6 +240,23 @@ seiner eigenen Partie. Unter **Verwaltung → Berechtigungen** steht dafür bei 
 daran zu ändern – so steht es von Haus aus bei Arbeitern und „Nur ansehen“. Bauleitung und
 Admin sehen und bearbeiten alle, die Buchhaltung sieht alle. Bei *Nein* fehlen die
 Stundenzettel in der Navigation ganz.
+
+**Kostenstellen** (`/kostenstellen`, unter Dokumentation – wer alle Stundenzettel sieht): wie
+lange auf welcher Kostenstelle gearbeitet wurde, **alle Partien zusammen**. Gezählt werden
+Norm und Überstunden 50/100 % aus den Stundenzetteln (Urlaub, Feiertag, Regen und
+Krankenstand nicht). Die Kostenstellen kommen aus dem, was eingetragen ist – eine Liste pflegt
+niemand. Schreibweisen wie „24117“, „24117 “ und „24 117“ fallen zusammen; angezeigt wird die
+häufigste.
+
+- Je Kostenstelle: Gesamt, Norm, Ü 50 %, Ü 100 %, an wie vielen Tagen, wie viele Personen, ein
+  Balken zum Vergleich; aufgeklappt die Stunden **je Partie** (die Partie, die den Zettel
+  schreibt – bei Aushilfe die andere) und der erste und letzte Tag.
+- Zeitraum frei oder per Schnellwahl (dieses/letztes Jahr, dieser/letzter Monat), dazu welche
+  Zettel zählen: alle, freigegebene und geprüfte, oder nur geprüfte. Sortiert nach Kostenstelle
+  oder nach Stunden. **Excel** und **CSV** mit demselben Filter.
+- Stunden ohne Kostenstelle stehen eigens am Ende – zum Nachtragen.
+- Im Stundenzettel schlägt das Feld **Kostenstelle** die bekannten vor (so geschrieben wie in
+  der Auswertung), damit dieselbe Kostenstelle gleich geschrieben wird.
 
 **Keine Stundenzettel:** Konten, die keine Stunden schreiben – etwa Admin- oder
 Büro-Konten –, bekommen unter **Benutzer** das Häkchen **Keine Stundenzettel**. Sie fehlen

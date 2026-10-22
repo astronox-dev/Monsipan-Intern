@@ -19,6 +19,7 @@ import {
 } from '$lib/modules/stunden/server/timesheets';
 import { isValidSignature } from '$lib/modules/stunden/signature';
 import { notifySheet } from '$lib/modules/stunden/server/notify';
+import { knownCostCenters } from '$lib/modules/stunden/server/kostenstellen';
 import type { Actions, PageServerLoad } from './$types';
 
 async function load_(id: number, locals: App.Locals) {
@@ -36,6 +37,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		sheet,
 		totals: totals(sheet.days),
 		sites: await recentSites(),
+		// Vorschläge, damit dieselbe Kostenstelle gleich geschrieben wird
+		costCenters: await knownCostCenters(),
 		editable: mayEdit(user, sheet),
 		// Laut Wochenplanung bei der eigenen Partie: diese Tage einträgt man selbst, den Rest die schreibende Partie
 		guestDays: await guestEditDays(user, sheet),

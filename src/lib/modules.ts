@@ -20,6 +20,7 @@ import PiggyBank from '@lucide/svelte/icons/piggy-bank';
 import Users from '@lucide/svelte/icons/users';
 import Clock from '@lucide/svelte/icons/clock';
 import NotebookPen from '@lucide/svelte/icons/notebook-pen';
+import Tags from '@lucide/svelte/icons/tags';
 import FileText from '@lucide/svelte/icons/file-text';
 import Wrench from '@lucide/svelte/icons/wrench';
 import Calculator from '@lucide/svelte/icons/calculator';
@@ -115,11 +116,12 @@ export const MODULES: AppModule[] = [
 		href: '/stundenzettel',
 		group: 'betrieb',
 		status: 'aktiv',
-		hint: 'Stundenzettel und Tagesberichte',
+		hint: 'Stundenzettel, Tagesberichte und Kostenstellen',
 		cardsPerItem: true,
 		items: [
 			{ href: '/stundenzettel', label: 'Stundenzettel', icon: Clock, permission: 'stunden.eigene.sehen', hint: 'Lohnwoche je Mitarbeiter' },
-			{ href: '/tagesberichte', label: 'Tagesberichte', icon: NotebookPen, permission: 'tagesberichte.sehen', hint: 'Leistung je Tag und Baustelle' }
+			{ href: '/tagesberichte', label: 'Tagesberichte', icon: NotebookPen, permission: 'tagesberichte.sehen', hint: 'Leistung je Tag und Baustelle' },
+			{ href: '/kostenstellen', label: 'Kostenstellen', icon: Tags, permission: 'stunden.alle.sehen', hint: 'Stunden je Kostenstelle, alle Partien' }
 		]
 	},
 	{
