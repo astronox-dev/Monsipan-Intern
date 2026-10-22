@@ -21,8 +21,8 @@ const NO_RIGHT = { message: 'Dafür fehlt dir die Berechtigung.' };
  * Wessen Konto jemand sieht: alle Beschäftigten, die der eigenen Partie oder nur
  * das eigene – ohne die, die vom Urlaubskonto ausgenommen sind
  */
-export async function accountPeople(user: SessionUser) {
-	const scope = leaveScope(user);
+export async function accountPeople(user: SessionUser, everyone = false) {
+	const scope = everyone ? 'all' : leaveScope(user);
 	if (!scope) return [];
 	const rows = await db
 		.select({ id: users.id, firstName: users.firstName, lastName: users.lastName, username: users.username, partyName: parties.name })

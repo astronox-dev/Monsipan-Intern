@@ -105,7 +105,7 @@ Administration unter `/verwaltung/…`:
 | Stundenzettel | `/stundenzettel` |
 | Tagesberichte | `/tagesberichte` |
 | Rechner (Tools und Hilfestellung) | `/tools/rechner` |
-| Wochenplanung, Urlaub, Krankenstand | `/planung` (`?woche=JJJJ-MM-TT`), `/urlaub`, `/krankenstand` |
+| Wochenplanung, Urlaub, Krankenstand, Urlaubskonten | `/planung` (`?woche=JJJJ-MM-TT`), `/urlaub`, `/krankenstand`, `/urlaubskonten` |
 | Richtlinien & Vorschriften | `/richtlinien` (`?ordner=<id>`, `?suche=…`), ein PDF unter `/richtlinien/<id>` |
 | Tagesbericht für den Kunden (ohne Anmeldung) | `/bericht/<link>` |
 | Anfragen, Angebote, Aufträge, Rechnungen, Kunden | `/anfragen`, `/angebote`, `/auftraege`, `/rechnungen`, `/kunden` |
@@ -479,9 +479,10 @@ mit einem offenen oder genehmigten, kommt eine Meldung.
   - Jeder sieht oben seinen **Resturlaub** (Stunden, ungefähr in Tagen); beim Beantragen steht,
     was danach bleibt, beim Entscheiden der Rest vorher und nachher – rot, wenn mehr genehmigt
     würde als erworben.
-  - **Urlaubskonten:** Liste aller (bzw. der eigenen Partie) mit Beschäftigung, Anspruch,
-    Genehmigt und Rest. Mit dem Recht „Urlaubskonten“ (von Haus aus Admin, Geschäftsführung,
-    Buchhaltung) lassen sich je Person die **Beschäftigungszeiten** pflegen (angemeldet ab – bis;
+  - **Urlaubskonten** (`/urlaubskonten`, eigener Punkt unter Planung – nur mit dem Recht
+    „Urlaubskonten“, von Haus aus Admin, Geschäftsführung, Buchhaltung): alle mit Beschäftigung,
+    Anspruch, Genehmigt und Rest. Über den Stift lassen sich je Person die
+    **Beschäftigungszeiten** pflegen (angemeldet ab – bis;
     abmelden = das Ende eintragen, im Frühjahr eine neue Zeit anlegen; Überschneidungen gehen
     nicht) und der **Übertrag** zum Stichtag – der Resturlaub aus der Zeit davor. Ab dem
     Stichtag zählen erworbener und genehmigter Urlaub; ohne Stichtag zählt alles.

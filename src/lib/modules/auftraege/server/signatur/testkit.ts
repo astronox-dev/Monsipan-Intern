@@ -42,7 +42,8 @@ export async function makeCert(o: {
 	const cert = new pkijs.Certificate();
 	cert.version = 2;
 	const serial = crypto.randomBytes(8);
-	serial[0] &= 0x7f;
+	// Positiv und ohne führende Null (1–127) – sonst ist die DER-Kodierung nicht minimal und OpenSSL lehnt das Zertifikat ab
+	serial[0] = (serial[0] % 0x7f) + 1;
 	cert.serialNumber = new asn1js.Integer({ valueHex: new Uint8Array(serial).buffer });
 	cert.subject.typesAndValues.push(new pkijs.AttributeTypeAndValue({ type: '2.5.4.3', value: new asn1js.Utf8String({ value: o.cn }) }));
 	if (o.issuer) cert.issuer = o.issuer.cert.subject;

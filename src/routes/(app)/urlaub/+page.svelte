@@ -6,7 +6,8 @@
 	 * unterbricht ihn – das steht beim Antrag dabei.
 	 *
 	 * Urlaubskonten: was jeder noch hat (Übertrag + je Beschäftigungswoche
-	 * erworben − genehmigt) – beim Beantragen, beim Entscheiden und als Liste.
+	 * erworben − genehmigt) – beim Beantragen und beim Entscheiden. Die Liste
+	 * aller Konten steht unter /urlaubskonten.
 	 */
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
@@ -17,10 +18,9 @@
 	import X from '@lucide/svelte/icons/x';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { dateTime } from '$lib/format';
-	import Pencil from '@lucide/svelte/icons/pencil';
+	import PiggyBank from '@lucide/svelte/icons/piggy-bank';
 	import { hoursText, leaveDays, rangeLabel, type LeaveUsage } from '$lib/modules/planung/days';
 	import { hoursToDays } from '$lib/modules/planung/konto';
-	import AccountDialog from '$lib/modules/planung/components/AccountDialog.svelte';
 
 	let { data, form } = $props();
 
@@ -55,14 +55,9 @@
 	const decimal = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',');
 	/** „120 Std. (≈ 15,4 Tage)" */
 	const restText = (a: Account, hours = a.account.rest) => `${hoursText(hours)} (≈ ${decimal(hoursToDays(hours, a.weekHours))} Tage)`;
-	const stateText = (a: Account) =>
-		!a.state ? 'keine Beschäftigungszeit' : a.state.state === 'angemeldet' ? `angemeldet seit ${rangeLabel(a.state.date, null)}` : a.state.state === 'ab' ? `angemeldet ab ${rangeLabel(a.state.date, null)}` : `abgemeldet seit ${rangeLabel(a.state.date, null)}`;
 	/** Für wen gerade beantragt wird – dessen Konto */
 	const requestAccount = $derived(accountOf(person ? Number(person) : data.me));
 	const previewHours = $derived(preview.reduce((s, d) => s + d.hours, 0));
-	let editing = $state<number | null>(null);
-	let editOpen = $state(false);
-	const editAccount = $derived(data.accounts.find((a) => a.id === editing));
 </script>
 
 <svelte:head><title>{pageTitle(`Urlaub ${data.year}`)}</title></svelte:head>
@@ -83,6 +78,7 @@
 		<a href="?jahr={data.year - 1}" class="btn btn-secondary btn-sm"><ChevronLeft size={16} aria-hidden="true" />{data.year - 1}</a>
 		{#if data.year !== data.thisYear}<a href="?" class="btn btn-ghost btn-sm">{data.thisYear}</a>{/if}
 		<a href="?jahr={data.year + 1}" class="btn btn-secondary btn-sm">{data.year + 1}<ChevronRight size={16} aria-hidden="true" /></a>
+		{#if data.canEditAccounts}<a href="/urlaubskonten" class="btn btn-secondary btn-sm"><PiggyBank size={16} aria-hidden="true" />Urlaubskonten</a>{/if}
 	</div>
 </div>
 
@@ -187,55 +183,6 @@
 		</ul>
 	</section>
 {/if}
-
-{#if others && data.accounts.length}
-	<section class="card mb-4 overflow-hidden">
-		<div class="px-4 pt-4 lg:px-5">
-			<h2 class="text-lg">Urlaubskonten</h2>
-			<p class="text-sm text-ink-2">
-				Stand heute: Anspruch (Übertrag + je Woche angemeldet erworben) − genehmigt = Rest. Wer über den Winter abgemeldet ist, erwirbt in der Zeit nichts.
-			</p>
-		</div>
-		<div class="mt-2 hidden gap-3 px-4 text-[0.8125rem] text-ink-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_6rem_6rem_9rem_2.5rem] lg:px-5">
-			<span>Name</span><span>Beschäftigung</span><span class="text-right" title="Übertrag + erworben">Anspruch</span><span class="text-right">Genehmigt</span><span class="text-right">Rest</span><span></span>
-		</div>
-		<ul class="mt-1 divide-y divide-line">
-			{#each data.accounts as a (a.id)}
-				<li class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-2.5 md:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_6rem_6rem_9rem_2.5rem] lg:px-5">
-					<span class="min-w-0">
-						<span class="block font-medium">{a.name}</span>
-						{#if a.partyName}<span class="block text-[0.8125rem] text-ink-3">{a.partyName}</span>{/if}
-					</span>
-					<span class="col-start-1 text-sm text-ink-2 md:col-start-auto">{stateText(a)}</span>
-					{#if a.setUp}
-						<span class="num col-start-1 text-sm text-ink-2 md:col-start-auto md:text-right">
-							<span class="md:hidden">Anspruch</span> {hoursText(a.account.carryover + a.account.earned)}
-						</span>
-						<span class="num col-start-1 text-sm text-ink-2 md:col-start-auto md:text-right"><span class="md:hidden">genehmigt</span> {hoursText(a.account.used)}</span>
-						<span class="num col-start-2 row-start-1 text-right font-semibold md:col-start-auto md:row-start-auto {a.account.rest < 0 ? 'text-danger' : ''}">
-							{hoursText(a.account.rest)}
-							<span class="block text-[0.75rem] font-normal text-ink-3">≈ {decimal(hoursToDays(a.account.rest, a.weekHours))} Tage</span>
-						</span>
-					{:else}
-						<span class="col-span-3 hidden text-sm text-ink-3 md:block">noch nicht eingerichtet</span>
-					{/if}
-					{#if data.canEditAccounts}
-						<button
-							type="button"
-							class="btn btn-ghost btn-sm btn-icon col-start-2 row-start-2 justify-self-end md:col-start-auto md:row-start-auto"
-							aria-label="Urlaubskonto von {a.name} bearbeiten"
-							onclick={() => ((editing = a.id), (editOpen = true))}
-						>
-							<Pencil size={16} />
-						</button>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	</section>
-{/if}
-
-{#if editAccount}<AccountDialog bind:open={editOpen} account={editAccount} defaultWeeks={data.leaveWeeks} today={data.today} />{/if}
 
 {#if others && data.totals.length}
 	<section class="card mb-4 p-4 lg:p-5">
