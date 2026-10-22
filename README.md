@@ -1438,6 +1438,8 @@ sonst hilft der Knopf auf der Seite.
 
 **Vorschau:** Neben jedem Knopf **PDF** steht **Vorschau** – das PDF öffnet sich groß in einem
 Fenster auf der Seite (blättern, vergrößern) und lässt sich von dort auch herunterladen.
+Am Handy und Tablet zoomen zwei Finger nur das PDF (bis 400 %), nicht die ganze Seite; ein
+Finger verschiebt es, doppelt tippen springt zwischen Breite und 200 %.
 
 **Als PDF herunterladen:** Überall, wo es Drucken oder CSV gibt, gibt es auch **PDF**. Die
 Datei entsteht am Server (pdfkit, keine Browser-Druckfunktion nötig), übernimmt die
