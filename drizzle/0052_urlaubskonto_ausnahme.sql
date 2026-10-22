@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `leave_account_exempt` integer DEFAULT false NOT NULL;

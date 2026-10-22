@@ -485,6 +485,9 @@ mit einem offenen oder genehmigten, kommt eine Meldung.
     abmelden = das Ende eintragen, im Frühjahr eine neue Zeit anlegen; Überschneidungen gehen
     nicht) und der **Übertrag** zum Stichtag – der Resturlaub aus der Zeit davor. Ab dem
     Stichtag zählen erworbener und genehmigter Urlaub; ohne Stichtag zählt alles.
+  - **Kein Urlaubskonto:** Wie bei den Stundenzetteln bekommen Konten ohne Urlaubskonto – etwa
+    Admin- oder Büro-Konten – unter **Benutzer** dieses Häkchen. Sie fehlen dann in den
+    Urlaubskonten und sehen keinen Resturlaub; Urlaub beantragen geht trotzdem.
 - Sehen: die eigenen; der Partieführer die seiner Partie; das Büro alle.
 
 **Krankenstand** (`/krankenstand`) – melden mit „krank seit“ und, falls bekannt, „bis“ (leer

@@ -44,6 +44,8 @@ export const users = sqliteTable('users', {
 	mustChangePassword: integer('must_change_password', { mode: 'boolean' }).notNull().default(false),
 	/** Führt keine Stundenzettel (etwa Admin- oder Büro-Konten) – fehlt in der Wochenliste */
 	timesheetExempt: integer('timesheet_exempt', { mode: 'boolean' }).notNull().default(false),
+	/** Ohne Urlaubskonto (etwa Admin- oder Büro-Konten) – fehlt in den Urlaubskonten, kein Resturlaub */
+	leaveAccountExempt: integer('leave_account_exempt', { mode: 'boolean' }).notNull().default(false),
 	lastLoginAt: integer('last_login_at', { mode: 'timestamp_ms' }),
 	/** Zuletzt die App geöffnet – bei Anfragen höchstens alle paar Minuten fortgeschrieben */
 	lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }),

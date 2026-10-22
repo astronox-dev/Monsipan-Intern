@@ -17,7 +17,10 @@ import { hoursFor, leaveScope, sickOf } from './urlaub';
 
 const NO_RIGHT = { message: 'Dafür fehlt dir die Berechtigung.' };
 
-/** Wessen Konto jemand sieht: alle Beschäftigten, die der eigenen Partie oder nur das eigene */
+/**
+ * Wessen Konto jemand sieht: alle Beschäftigten, die der eigenen Partie oder nur
+ * das eigene – ohne die, die vom Urlaubskonto ausgenommen sind
+ */
 export async function accountPeople(user: SessionUser) {
 	const scope = leaveScope(user);
 	if (!scope) return [];
@@ -30,6 +33,7 @@ export async function accountPeople(user: SessionUser) {
 				eq(users.active, true),
 				isNull(users.deletedAt),
 				ne(users.role, 'viewer'),
+				eq(users.leaveAccountExempt, false),
 				scope === 'all' ? undefined : scope === 'party' ? or(eq(users.partyId, user.partyId!), eq(users.id, user.id)) : eq(users.id, user.id)
 			)
 		)

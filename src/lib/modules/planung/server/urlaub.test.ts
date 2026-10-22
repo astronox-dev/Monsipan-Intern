@@ -18,7 +18,7 @@ const { users } = await import('$lib/server/db/schema');
 const { updateSettings } = await import('$lib/server/settings');
 const { approvedTotals, createLeave, decideLeave, listLeave } = await import('./urlaub');
 const { createSick, listSick } = await import('./krank');
-const { leaveAccountsFor, saveEmployment, saveLeaveAccount } = await import('./konto');
+const { accountPeople, leaveAccountsFor, saveEmployment, saveLeaveAccount } = await import('./konto');
 
 type Who = Parameters<typeof listLeave>[0];
 const as = (u: { id: number; role: string; partyId: number | null }) => ({ username: `u${u.id}`, email: null, firstName: 'X', lastName: 'Y', owner: false, mustChangePassword: false, ...u }) as unknown as Who;
@@ -119,5 +119,13 @@ describe('Urlaubskonto', () => {
 		// Eigene Urlaubswochen
 		expect(await saveLeaveAccount(admin, { userId: eva.id, carryover: 0, start: null, weeks: 6 })).toBe(true);
 		expect((await account('2027-01-15')).rate).toBe(4.5);
+	});
+
+	it('ausgenommen wie bei den Stundenzetteln: fehlt in den Urlaubskonten', async () => {
+		expect((await accountPeople(admin)).map((p) => p.id)).toContain(eva.id);
+		await db.update(users).set({ leaveAccountExempt: true }).where(eq(users.id, eva.id));
+		expect((await accountPeople(admin)).map((p) => p.id)).not.toContain(eva.id);
+		expect(await accountPeople(eva)).toEqual([]);
+		await db.update(users).set({ leaveAccountExempt: false }).where(eq(users.id, eva.id));
 	});
 });

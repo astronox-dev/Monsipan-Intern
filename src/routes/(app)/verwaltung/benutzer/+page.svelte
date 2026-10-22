@@ -149,6 +149,7 @@
 			{#if u.mustChangePassword && u.active}<span class="badge badge-warn">Passwort offen</span>{/if}
 			{#if u.owner}<span class="badge badge-brand"><Crown size={13} aria-hidden="true" />{OWNER_LABEL}</span>{/if}
 			{#if u.timesheetExempt}<span class="badge">Keine Stundenzettel</span>{/if}
+			{#if u.leaveAccountExempt}<span class="badge">Kein Urlaubskonto</span>{/if}
 			{#if showRole}<span class="badge {roleTone[u.role]}">{ROLE_LABELS[u.role]}</span>{/if}
 			{#if canEdit}
 			<button
@@ -332,6 +333,14 @@
 			<span>
 				<span class="font-medium">Keine Stundenzettel</span>
 				<span class="block text-sm text-ink-3">Fehlt in der Stundenzettel-Liste – etwa für Admin- oder Büro-Konten.</span>
+			</span>
+		</label>
+
+		<label class="flex items-center gap-3 rounded-xl bg-surface-2 p-3 sm:col-span-2">
+			<input type="checkbox" name="leaveAccountExempt" class="size-5 accent-[var(--c-ink)]" checked={editing?.leaveAccountExempt ?? false} />
+			<span>
+				<span class="font-medium">Kein Urlaubskonto</span>
+				<span class="block text-sm text-ink-3">Fehlt in den Urlaubskonten, kein Resturlaub – Urlaub beantragen geht trotzdem. Etwa für Admin- oder Büro-Konten.</span>
 			</span>
 		</label>
 
