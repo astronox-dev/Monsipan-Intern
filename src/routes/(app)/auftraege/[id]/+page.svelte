@@ -181,7 +181,7 @@
 	<ul class="mt-2 divide-y divide-line">
 		{#each order.lines as l, i (l.id)}
 			{#if l.kind === 'titel'}
-				<li class="bg-surface-2 px-4 py-2 font-semibold lg:px-5"><span class="num mr-2">{numbers[i]}</span>{l.text}</li>
+				<li class="border-l-4 border-brand bg-surface-3 py-2 pr-4 pl-3 font-bold lg:pr-5 lg:pl-4"><span class="num mr-2">{numbers[i]}</span>{l.text}</li>
 			{:else}
 				<li class="flex items-start gap-3 px-4 py-3 lg:px-5">
 					<span class="num w-9 shrink-0 text-sm text-ink-3">{numbers[i]}</span>

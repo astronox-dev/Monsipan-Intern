@@ -5,6 +5,7 @@
 		addressLines,
 		lineNumbers,
 		money,
+		discountLabel,
 		offerTotals,
 		paymentTermsText,
 		priceLabel,
@@ -34,12 +35,14 @@
 		paymentDays: number | null;
 		skontoPercent: number;
 		skontoDays: number;
+		discountPercent?: number;
+		discountAmount?: number;
 		lines: { id: number; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null; alternative?: boolean }[];
 	}
 	let { offer }: { offer: Offer } = $props();
 
 	const numbers = $derived(lineNumbers(offer.lines));
-	const totals = $derived(offerTotals(offer.lines, offer.vatRate, offer.reverseCharge));
+	const totals = $derived(offerTotals(offer.lines, offer.vatRate, offer.reverseCharge, offer));
 	const terms = $derived(
 		offer.paymentDays == null
 			? []
@@ -68,7 +71,7 @@
 	<ul class="divide-y divide-line rounded-xl border border-line">
 		{#each offer.lines as l, i (l.id)}
 			{#if l.kind === 'titel'}
-				<li class="bg-surface-2 px-3 py-2 font-semibold"><span class="num mr-2">{numbers[i]}</span>{l.text}</li>
+				<li class="border-l-4 border-brand bg-surface-3 py-2 pr-3 pl-2 font-bold"><span class="num mr-2">{numbers[i]}</span>{l.text}</li>
 			{:else}
 				<li class="px-3 py-2.5">
 					<div class="flex gap-3">
@@ -89,6 +92,12 @@
 	<dl class="num ml-auto grid max-w-xs grid-cols-[1fr_auto] gap-x-6 gap-y-1">
 		<dt>Gesamt Netto</dt>
 		<dd class="text-right">{money(totals.net)}</dd>
+		{#if totals.discount}
+			<dt>{discountLabel(offer)}</dt>
+			<dd class="text-right">− {money(totals.discount)}</dd>
+			<dt>Netto nach Nachlass</dt>
+			<dd class="text-right">{money(totals.taxable)}</dd>
+		{/if}
 		{#if !offer.reverseCharge}
 			<dt>{vatLabel(offer.vatRate, false)}</dt>
 			<dd class="text-right">{money(totals.vat)}</dd>

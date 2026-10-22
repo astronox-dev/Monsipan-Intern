@@ -23,6 +23,10 @@ const accepter = alias(users, 'accepter');
 const netSum = sql<number>`(select coalesce(sum(round(${col(offerPositions.quantity)} * ${col(offerPositions.unitPrice)}, 2)), 0) from ${offerPositions} where ${col(offerPositions.offerId)} = ${col(offers.id)} and ${col(offerPositions.kind)} = 'position' and not ${col(offerPositions.alternative)})`.mapWith(
 	Number
 );
+/** Netto nach Nachlass – davon gehen Umsatzsteuer und Brutto in der Liste aus */
+const netAfterDiscount = sql<number>`(${netSum} - min(${netSum}, case when ${col(offers.discountAmount)} > 0 then ${col(offers.discountAmount)} else round(${netSum} * ${col(offers.discountPercent)} / 100.0, 2) end))`.mapWith(
+	Number
+);
 const orderOf = sql<number | null>`(select ${col(orders.id)} from ${orders} where ${col(orders.offerId)} = ${col(offers.id)})`;
 
 export interface OfferFilter {
@@ -82,7 +86,7 @@ export async function listOffers(filter: OfferFilter = {}, limit = 100, offset =
 			billedAt: offers.billedAt,
 			vatRate: offers.vatRate,
 			reverseCharge: offers.reverseCharge,
-			net: netSum,
+			net: netAfterDiscount,
 			orderId: orderOf
 		})
 		.from(offers)
@@ -232,6 +236,8 @@ async function loadOffer(where: SQL) {
 			paymentDays: offers.paymentDays,
 			skontoPercent: offers.skontoPercent,
 			skontoDays: offers.skontoDays,
+			discountPercent: offers.discountPercent,
+			discountAmount: offers.discountAmount,
 			status: offers.status,
 			releasedAt: offers.releasedAt,
 			releasedBy: offers.releasedBy,
@@ -309,6 +315,8 @@ export interface SaveOffer {
 		paymentDays: number;
 		skontoPercent: number;
 		skontoDays: number;
+		discountPercent: number;
+		discountAmount: number;
 	};
 	lines: { kind: 'position' | 'titel'; text: string; note?: string; quantity: string; unit: string; unitPrice: string; alternative?: boolean }[];
 }
@@ -346,6 +354,8 @@ export async function saveOffer(id: number, data: SaveOffer) {
 				paymentDays: h.paymentDays,
 				skontoPercent: h.skontoPercent,
 				skontoDays: h.skontoDays,
+				discountPercent: h.discountPercent,
+				discountAmount: h.discountAmount,
 				updatedAt: new Date()
 			})
 			.where(eq(offers.id, id));

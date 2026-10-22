@@ -4,7 +4,7 @@
 	 * Handschrift. Anders als PdfViewer zeichnet sie sofort alle Seiten, damit
 	 * beim Drucken nichts fehlt, und meldet sich, wenn sie fertig ist.
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import type { PDFDocumentLoadingTask } from 'pdfjs-dist';
 
 	interface Props {
@@ -16,6 +16,7 @@
 
 	let images = $state<string[]>([]);
 	let status = $state<'laden' | 'fertig' | 'fehler'>('laden');
+	let box: HTMLDivElement;
 
 	onMount(() => {
 		let cancelled = false;
@@ -41,6 +42,11 @@
 				}
 				images = out;
 				status = 'fertig';
+				// Erst melden, wenn die Bilder fertig dekodiert sind – sonst zeigt das erste Druckfenster leere Seiten
+				await tick();
+				await Promise.all([...box.querySelectorAll('img')].map((img) => img.decode().catch(() => {})));
+				await new Promise((r) => requestAnimationFrame(r));
+				if (cancelled) return;
 				onready?.();
 			} catch (err) {
 				console.error('[pdf]', err);
@@ -62,7 +68,7 @@
 {:else if status === 'fehler'}
 	<p class="py-10 text-center text-danger">Das Formular konnte nicht geladen werden.</p>
 {/if}
-<div class="seiten">
+<div class="seiten" bind:this={box}>
 	{#each images as src, i (i)}
 		<img {src} alt="{title} – Seite {i + 1}" class="seite" />
 	{/each}

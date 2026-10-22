@@ -30,7 +30,7 @@ import {
 	REVERSE_CHARGE_NOTE,
 	shownTotal,
 	spacedNumber,
-	vatLabel
+	sumRows
 } from '../offer';
 import type { SummaryColumn, SummaryReport } from '../summary';
 import { isLegacy } from '../signature';
@@ -44,9 +44,12 @@ const MM = 72 / 25.4;
 const INK = '#1d2127';
 const MUTED = '#5c626b';
 const LINE = '#b9bdc3';
+/** Hinterlegung der Zwischenüberschriften in der Positionstabelle */
+const HEADING_BG = '#e6e9ed';
 
-const LEFT = 25 * MM;
-const RIGHT = 190 * MM;
+// Seitenränder links 20 mm (Anschrift passt noch ins Fensterkuvert), rechts 15 mm
+const LEFT = 20 * MM;
+const RIGHT = 195 * MM;
 const WIDTH = RIGHT - LEFT;
 /** Ab hier beginnt die Fußzeile – darunter wird nichts mehr gesetzt */
 const FOOTER_TOP = 297 * MM - 30 * MM;
@@ -118,6 +121,19 @@ interface Column {
 	align?: 'left' | 'right';
 }
 
+/**
+ * Positionstabelle für Angebot und Rechnung: Nr., Bezeichnung, Menge, Einheit,
+ * EP, GP – Preise von rechts her, EP und GP breit genug für sechsstellige Beträge
+ */
+const PRICED_COLUMNS: Column[] = [
+	{ label: 'Nr.', x: LEFT, w: 12 * MM },
+	{ label: 'Bezeichnung', x: LEFT + 12 * MM, w: RIGHT - 88 * MM - (LEFT + 12 * MM) },
+	{ label: 'Menge', x: RIGHT - 86 * MM, w: 16 * MM, align: 'right' },
+	{ label: 'Einheit', x: RIGHT - 68 * MM, w: 16 * MM },
+	{ label: 'EP', x: RIGHT - 52 * MM, w: 25 * MM, align: 'right' },
+	{ label: 'GP', x: RIGHT - 26 * MM, w: 26 * MM, align: 'right' }
+];
+
 interface Row {
 	kind: 'position' | 'titel';
 	nr: string;
@@ -152,7 +168,7 @@ function table(doc: Doc, y: number, columns: Column[], rows: Row[], continued: s
 	for (const row of rows) {
 		const titel = row.kind === 'titel';
 		doc.font('Helvetica-Bold').fontSize(titel ? 10.5 : 9.5);
-		const textW = titel ? RIGHT - textCol.x : textCol.w;
+		const textW = titel ? RIGHT - textCol.x - 2 * MM : textCol.w;
 		const textH = doc.heightOfString(row.text || ' ', { width: textW, lineGap: 1 });
 		const note = !titel && row.note?.trim() ? row.note.trim() : '';
 		doc.font('Helvetica').fontSize(9);
@@ -160,34 +176,43 @@ function table(doc: Doc, y: number, columns: Column[], rows: Row[], continued: s
 		const remark = !titel && row.remark ? row.remark : '';
 		doc.font('Helvetica-Oblique').fontSize(8.5);
 		const remarkH = remark ? doc.heightOfString(remark, { width: textW, lineGap: 1 }) + 2 : 0;
-		const height = Math.max(12, textH + noteH + remarkH) + (titel ? 10 : 8);
-		if (y + height > FOOTER_TOP - 6 * MM) {
+		const height = titel ? textH + 18 : Math.max(12, textH + noteH + remarkH) + 8;
+		// Eine Überschrift nicht allein unten auf der Seite – mindestens eine Position soll noch darunter passen
+		if (y + height + (titel ? 10 * MM : 0) > FOOTER_TOP - 6 * MM) {
 			doc.addPage();
 			doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text(continued, LEFT, 15 * MM, { width: WIDTH, lineBreak: false });
 			y = head(23 * MM);
 		}
-		const top = y + (titel ? 6 : 2);
-		doc.font(titel ? 'Helvetica-Bold' : 'Helvetica').fontSize(titel ? 10.5 : 9).fillColor(INK);
-		doc.text(row.nr, columns[0].x, top + (titel ? 0 : 0.5), { width: columns[0].w, lineBreak: false });
-		doc.font('Helvetica-Bold').fontSize(titel ? 10.5 : 9.5).text(row.text, textCol.x, top, { width: textW, lineGap: 1 });
+		if (titel) {
+			// Grau hinterlegt über die ganze Breite, damit sie sich klar von den Positionen abhebt
+			doc
+				.rect(LEFT - 1.5 * MM, y + 4, WIDTH + 3 * MM, textH + 8)
+				.fillColor(HEADING_BG)
+				.fill();
+			doc.font('Helvetica-Bold').fontSize(10.5).fillColor(INK);
+			doc.text(row.nr, columns[0].x, y + 8, { width: columns[0].w, lineBreak: false });
+			doc.text(row.text, textCol.x, y + 8, { width: textW, lineGap: 1 });
+			y += height;
+			continue;
+		}
+		const top = y + 2;
+		doc.font('Helvetica').fontSize(9).fillColor(INK);
+		doc.text(row.nr, columns[0].x, top + 0.5, { width: columns[0].w, lineBreak: false });
+		doc.font('Helvetica-Bold').fontSize(9.5).text(row.text, textCol.x, top, { width: textW, lineGap: 1 });
 		if (note) doc.font('Helvetica').fontSize(9).fillColor(INK).text(note, textCol.x, top + textH + 2, { width: textW, lineGap: 1 });
 		if (remark) doc.font('Helvetica-Oblique').fontSize(8.5).fillColor(MUTED).text(remark, textCol.x, top + textH + noteH + 2, { width: textW, lineGap: 1 });
 		doc.fillColor(INK);
-		if (!titel) {
-			doc.font('Helvetica').fontSize(9.5);
-			columns.slice(2).forEach((c, i) => {
-				doc.text(row.cells[i] ?? '', c.x, top, { width: c.w, align: c.align ?? 'left', lineBreak: false });
-			});
-		}
+		doc.font('Helvetica').fontSize(9.5);
+		columns.slice(2).forEach((c, i) => {
+			doc.text(row.cells[i] ?? '', c.x, top, { width: c.w, align: c.align ?? 'left', lineBreak: false });
+		});
 		y += height;
-		if (!titel) {
-			doc
-				.moveTo(LEFT, y - 3)
-				.lineTo(RIGHT, y - 3)
-				.lineWidth(0.4)
-				.strokeColor(LINE)
-				.stroke();
-		}
+		doc
+			.moveTo(LEFT, y - 3)
+			.lineTo(RIGHT, y - 3)
+			.lineWidth(0.4)
+			.strokeColor(LINE)
+			.stroke();
 	}
 	return y;
 }
@@ -215,11 +240,11 @@ function sumsBlock(doc: Doc, y: number, sums: [string, string, boolean][]): numb
 		y = 20 * MM;
 	}
 	y += 4 * MM;
-	const sumX = 118 * MM;
+	const sumX = RIGHT - 82 * MM;
 	for (const [label, value, strong] of sums) {
 		doc.font(strong ? 'Helvetica-Bold' : 'Helvetica').fontSize(strong ? 11.5 : 9.5).fillColor(INK);
-		doc.text(label, sumX, y, { width: 40 * MM, lineBreak: false });
-		doc.text(value, sumX + 40 * MM, y, { width: RIGHT - sumX - 40 * MM, align: 'right', lineBreak: false });
+		doc.text(label, sumX, y, { width: 50 * MM, lineBreak: false });
+		doc.text(value, sumX + 50 * MM, y, { width: RIGHT - sumX - 50 * MM, align: 'right', lineBreak: false });
 		y += strong ? 17 : 15;
 		doc
 			.moveTo(sumX, y - 4)
@@ -313,24 +338,13 @@ export async function offerPdf(offer: OfferDetail, { forCustomer = false } = {})
 	y = table(
 		doc,
 		y,
-		[
-			{ label: 'Nr.', x: LEFT, w: 12 * MM },
-			{ label: 'Bezeichnung', x: LEFT + 12 * MM, w: 74 * MM },
-			{ label: 'Menge', x: 111 * MM, w: 16 * MM, align: 'right' },
-			{ label: 'Einheit', x: 130 * MM, w: 18 * MM },
-			{ label: 'EP', x: 148 * MM, w: 19 * MM, align: 'right' },
-			{ label: 'GP', x: 168 * MM, w: RIGHT - 168 * MM, align: 'right' }
-		],
+		PRICED_COLUMNS,
 		rows,
 		`${title} – Fortsetzung`
 	);
 
-	const totals = offerTotals(offer.lines, offer.vatRate, offer.reverseCharge);
-	y = sumsBlock(doc, y, [
-		['Gesamt Netto', money(totals.net), false],
-		...(offer.reverseCharge ? [] : ([[vatLabel(offer.vatRate, false), money(totals.vat), false]] as [string, string, boolean][])),
-		['Gesamtbetrag', money(totals.gross), true]
-	]);
+	const totals = offerTotals(offer.lines, offer.vatRate, offer.reverseCharge, offer);
+	y = sumsBlock(doc, y, sumRows(totals, offer.vatRate, offer.reverseCharge, offer));
 
 	y += 6 * MM;
 	if (offer.reverseCharge) {
@@ -408,9 +422,9 @@ export async function orderPdf(order: OrderDetail): Promise<Response> {
 		y,
 		[
 			{ label: 'Nr.', x: LEFT, w: 12 * MM },
-			{ label: 'Bezeichnung', x: LEFT + 12 * MM, w: 112 * MM },
-			{ label: 'Menge', x: 150 * MM, w: 18 * MM, align: 'right' },
-			{ label: 'Einheit', x: 172 * MM, w: RIGHT - 172 * MM }
+			{ label: 'Bezeichnung', x: LEFT + 12 * MM, w: RIGHT - 47 * MM - (LEFT + 12 * MM) },
+			{ label: 'Menge', x: RIGHT - 45 * MM, w: 18 * MM, align: 'right' },
+			{ label: 'Einheit', x: RIGHT - 23 * MM, w: 23 * MM }
 		],
 		order.lines.map((l, i) => ({
 			kind: l.kind,
@@ -445,15 +459,6 @@ export async function orderPdf(order: OrderDetail): Promise<Response> {
 
 /* ------------------------------------------------------------ Rechnung */
 
-/** Positionstabelle wie im Angebot: Nr., Bezeichnung, Menge, Einheit, EP, GP */
-const PRICED_COLUMNS: Column[] = [
-	{ label: 'Nr.', x: LEFT, w: 12 * MM },
-	{ label: 'Bezeichnung', x: LEFT + 12 * MM, w: 74 * MM },
-	{ label: 'Menge', x: 111 * MM, w: 16 * MM, align: 'right' },
-	{ label: 'Einheit', x: 130 * MM, w: 18 * MM },
-	{ label: 'EP', x: 148 * MM, w: 19 * MM, align: 'right' },
-	{ label: 'GP', x: 168 * MM, w: RIGHT - 168 * MM, align: 'right' }
-];
 
 /**
  * Prüfcode: QR-Code zur öffentlichen Prüfseite, daneben Adresse und
@@ -570,21 +575,8 @@ export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }
 		`${title} – Fortsetzung`
 	);
 
-	const totals = invoiceTotals(invoice.lines, invoice.vatRate, invoice.reverseCharge);
-	y = sumsBlock(
-		doc,
-		y,
-		invoice.reverseCharge
-			? [
-					['Gesamt Netto', money(totals.net), false],
-					['Gesamtbetrag', money(totals.gross), true]
-				]
-			: [
-					['Gesamt Netto', money(totals.net), false],
-					[`${String(invoice.vatRate).replace('.', ',')} % Umsatzsteuer`, money(totals.vat), false],
-					['Gesamtbetrag', money(totals.gross), true]
-				]
-	);
+	const totals = invoiceTotals(invoice.lines, invoice.vatRate, invoice.reverseCharge, invoice);
+	y = sumsBlock(doc, y, sumRows(totals, invoice.vatRate, invoice.reverseCharge, invoice));
 
 	y += 6 * MM;
 	if (invoice.reverseCharge) {

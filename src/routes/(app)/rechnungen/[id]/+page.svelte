@@ -35,6 +35,7 @@
 		addressLines,
 		INVOICE_STATUS_LABELS,
 		invoiceLabel,
+		discountLabel,
 		invoiceTotals,
 		lineNumbers,
 		lineTotal,
@@ -62,7 +63,7 @@
 	const stage = $derived(INVOICE_STAGE_LABELS[invoice.stage]);
 	const overdue = $derived(invoice.status === 'offen' && !cancelled && !isStorno && invoice.dueDate < data.today);
 	const numbers = $derived(lineNumbers(invoice.lines));
-	const totals = $derived(invoiceTotals(invoice.lines, invoice.vatRate, invoice.reverseCharge));
+	const totals = $derived(invoiceTotals(invoice.lines, invoice.vatRate, invoice.reverseCharge, invoice));
 	const name = (first: string | null, last: string | null) => [first, last].filter(Boolean).join(' ');
 	const label = $derived(`${invoiceLabel(invoice.kind)} ${invoiceNo(invoice)}`);
 	const stornoNo = $derived(invoiceNo({ number: invoice.stornoNumber ?? '', costCenter: invoice.stornoCostCenter }));
@@ -404,7 +405,7 @@
 	<ul class="mt-2 divide-y divide-line">
 		{#each invoice.lines as l, i (l.id)}
 			{#if l.kind === 'titel'}
-				<li class="bg-surface-2 px-4 py-2 font-semibold lg:px-5"><span class="num mr-2">{l.number || numbers[i]}</span>{l.text}</li>
+				<li class="border-l-4 border-brand bg-surface-3 py-2 pr-4 pl-3 font-bold lg:pr-5 lg:pl-4"><span class="num mr-2">{l.number || numbers[i]}</span>{l.text}</li>
 			{:else}
 				<li class="grid grid-cols-[2.75rem_minmax(0,1fr)_auto] gap-x-3 px-4 py-3 lg:px-5">
 					<span class="num text-sm text-ink-3">{l.number || numbers[i]}</span>
@@ -421,6 +422,12 @@
 	<dl class="num mx-4 mt-2 mb-4 ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 border-t border-line pt-3 lg:mx-5 lg:ml-auto">
 		<dt>Gesamt Netto</dt>
 		<dd class="text-right">{money(totals.net)}</dd>
+		{#if totals.discount}
+			<dt>{discountLabel(invoice)}</dt>
+			<dd class="text-right">− {money(Math.abs(totals.discount))}</dd>
+			<dt>Netto nach Nachlass</dt>
+			<dd class="text-right">{money(totals.taxable)}</dd>
+		{/if}
 		{#if !invoice.reverseCharge}
 			<dt>{String(invoice.vatRate).replace('.', ',')} % Umsatzsteuer</dt>
 			<dd class="text-right">{money(totals.vat)}</dd>

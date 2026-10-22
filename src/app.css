@@ -646,6 +646,20 @@ dialog.sheet[open]::backdrop {
 	}
 }
 
+/* Zwischenüberschrift im Positions-Editor (Angebot, Rechnung): Band über die ganze Kartenbreite */
+.heading-row {
+	margin-inline: -1rem;
+	padding: 0.625rem 1rem 0.625rem 0.75rem;
+	border-left: 4px solid var(--c-brand);
+	background: var(--c-surface-3);
+}
+@media (min-width: 64rem) {
+	.heading-row {
+		margin-inline: -1.25rem;
+		padding-inline: 1rem 1.25rem;
+	}
+}
+
 /* Ziehen und Ablegen (src/lib/dnd.ts) */
 .dnd-draggable {
 	touch-action: manipulation;

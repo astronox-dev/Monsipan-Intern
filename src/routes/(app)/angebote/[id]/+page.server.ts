@@ -25,7 +25,7 @@ import { inquiryForOffer } from '$lib/modules/auftraege/server/inquiries';
 import { mayDeleteOrder } from '$lib/modules/auftraege/server/orders';
 import { DocumentError, storeDocument, takeUploads } from '$lib/server/documents';
 import { isValidIsoDate } from '$lib/modules/stunden/week';
-import { parseAmount, readPaymentTerms } from '$lib/modules/auftraege/offer';
+import { parseAmount, readDiscount, readPaymentTerms } from '$lib/modules/auftraege/offer';
 import { notifyOffer, notifyOrderDocuments } from '$lib/modules/auftraege/server/notify';
 import { addOfferDocuments } from '$lib/modules/auftraege/server/offer-documents';
 import { titleFromFileName } from '$lib/documents';
@@ -93,6 +93,8 @@ function readOffer(form: FormData): SaveOffer | { message: string } {
 	if (vat == null || vat < 0 || vat > 100) return { message: 'Die Umsatzsteuer stimmt nicht.' };
 	const terms = readPaymentTerms(s);
 	if ('message' in terms) return terms;
+	const discount = readDiscount(s);
+	if ('message' in discount) return discount;
 	const customer = Number(s('kunde'));
 
 	const indexes = new Set<number>();
@@ -134,7 +136,8 @@ function readOffer(form: FormData): SaveOffer | { message: string } {
 			closing: s('schluss').replace(/\r\n/g, '\n').trimEnd(),
 			vatRate: Math.round(vat * 100) / 100,
 			reverseCharge: s('reverse') === 'on',
-			...terms
+			...terms,
+			...discount
 		},
 		lines
 	};

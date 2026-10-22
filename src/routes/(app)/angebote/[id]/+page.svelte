@@ -26,11 +26,14 @@
 	import PositionInput, { type PositionMemory } from '$lib/modules/auftraege/components/PositionInput.svelte';
 	import TaxSelect from '$lib/modules/auftraege/components/TaxSelect.svelte';
 	import PaymentTermsFields from '$lib/modules/auftraege/components/PaymentTermsFields.svelte';
+	import DiscountRow from '$lib/modules/auftraege/components/DiscountRow.svelte';
 	import PhotoGallery from '$lib/components/PhotoGallery.svelte';
 	import CaseDocuments from '$lib/modules/auftraege/components/CaseDocuments.svelte';
 	import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '$lib/modules/stunden/signature';
 	import {
 		amountInput,
+		discountFrom,
+		discountInput,
 		lineNumbers,
 		lineTotal,
 		MAX_OFFER_LINES,
@@ -73,7 +76,9 @@
 		reverse: data.offer.reverseCharge,
 		days: String(data.offer.paymentDays ?? data.defaultPaymentDays),
 		skonto: data.offer.skontoPercent ? String(data.offer.skontoPercent).replace('.', ',') : '',
-		skontoDays: data.offer.skontoDays ? String(data.offer.skontoDays) : ''
+		skontoDays: data.offer.skontoDays ? String(data.offer.skontoDays) : '',
+		discount: discountInput(data.offer).value,
+		discountKind: discountInput(data.offer).kind
 	});
 	// svelte-ignore state_referenced_locally
 	let lines = $state<Line[]>(
@@ -91,7 +96,7 @@
 
 	const numbers = $derived(lineNumbers(lines));
 	const parsed = $derived(lines.map((l) => ({ kind: l.kind, quantity: parseAmount(l.quantity), unitPrice: parseAmount(l.price), alternative: l.alternative })));
-	const totals = $derived(offerTotals(parsed, parseAmount(head.vat) ?? 0, head.reverse));
+	const totals = $derived(offerTotals(parsed, parseAmount(head.vat) ?? 0, head.reverse, discountFrom(head.discount, head.discountKind)));
 	const alternatives = $derived(lines.filter((l) => l.kind === 'position' && l.alternative).length);
 	const st = $derived(OFFER_STATUS_LABELS[offerState(offer)] ?? OFFER_STATUS_LABELS.entwurf);
 
@@ -362,13 +367,14 @@
 			</div>
 			<ul class="mt-1 divide-y divide-line">
 				{#each lines as l, i (l.key)}
-					<li class="py-2.5 {l.alternative ? 'alt' : ''}">
+					<!-- Überschriften als Band über die ganze Breite – heben sich klar von den Positionen ab -->
+					<li class={l.kind === 'titel' ? 'heading-row' : `py-2.5 ${l.alternative ? 'alt' : ''}`}>
 						<input type="hidden" name="z.{i}.art" value={l.kind} />
 						{#if l.kind === 'titel'}
 							<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-2">
-								<span class="num font-semibold">{numbers[i]}</span>
+								<span class="num text-[1.0625rem] font-bold">{numbers[i]}</span>
 								<input
-									class="input font-semibold"
+									class="input text-[1.0625rem] font-bold"
 									name="z.{i}.text"
 									maxlength="300"
 									placeholder="Überschrift, z. B. Werkstättenring Süd"
@@ -460,6 +466,7 @@
 			<dl class="num mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 border-t border-line pt-3">
 				<dt>Gesamt Netto</dt>
 				<dd class="text-right">{money(totals.net)}</dd>
+				<DiscountRow bind:value={head.discount} bind:kind={head.discountKind} discount={totals.discount} taxable={totals.taxable} />
 				{#if !head.reverse}
 					<dt>{vatLabel(parseAmount(head.vat) ?? 0, false)}</dt>
 					<dd class="text-right">{money(totals.vat)}</dd>

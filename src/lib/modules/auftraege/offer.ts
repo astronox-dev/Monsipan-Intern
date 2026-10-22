@@ -98,16 +98,84 @@ export function shownTotal(line: { quantity: number | null; unitPrice?: number |
 	return line.alternative && total != null ? 0 : total;
 }
 
-/** Netto, Umsatzsteuer und Gesamtbetrag – bei Übergang der Steuerschuld ohne Umsatzsteuer */
-export function offerTotals(lines: OfferLine[], vatRate: number, reverseCharge = false) {
+/* ------------------------------------------------------------- Nachlass */
+
+/** Nachlass auf die Netto-Summe: in Prozent oder als Betrag – gesetzt ist höchstens eines */
+export interface Discount {
+	discountPercent?: number | null;
+	discountAmount?: number | null;
+}
+
+/**
+ * Der Nachlass in Euro: der Betrag oder die Prozent der Netto-Summe (auf Cent),
+ * nie mehr als die Summe selbst. Bei einer Stornorechnung (negativ) mit Vorzeichen.
+ */
+export function discountOf(net: number, d: Discount = {}): number {
+	const abs = Math.abs(net);
+	const raw = (d.discountAmount ?? 0) > 0 ? d.discountAmount! : round2((abs * (d.discountPercent ?? 0)) / 100);
+	const off = round2(Math.min(Math.max(raw, 0), abs));
+	return net < 0 ? -off : off;
+}
+
+/** „abzüglich 5 % Nachlass" bzw. „abzüglich Nachlass" */
+export const discountLabel = (d: Discount) =>
+	(d.discountAmount ?? 0) > 0 || !(d.discountPercent ?? 0) ? 'abzüglich Nachlass' : `abzüglich ${String(d.discountPercent).replace('.', ',')} % Nachlass`;
+
+/** Nachlass fürs Formular: die Zahl, wie sie im Feld steht, und die Art */
+export function discountInput(d: Discount): { value: string; kind: 'prozent' | 'betrag' } {
+	if ((d.discountAmount ?? 0) > 0) return { value: amountInput(d.discountAmount), kind: 'betrag' };
+	return { value: d.discountPercent ? String(d.discountPercent).replace('.', ',') : '', kind: 'prozent' };
+}
+
+/** Nachlass aus dem Formular, wie getippt – fürs Mitrechnen im Browser */
+export const discountFrom = (value: string, kind: string): Discount =>
+	kind === 'betrag' ? { discountAmount: Math.max(0, parseAmount(value) ?? 0) } : { discountPercent: Math.min(100, Math.max(0, parseAmount(value) ?? 0)) };
+
+/** Nachlass aus dem Formular: nachlass (Zahl) und nachlassart (prozent | betrag) – oder eine Meldung */
+export function readDiscount(get: (key: string) => string): { discountPercent: number; discountAmount: number } | { message: string } {
+	const raw = get('nachlass').trim();
+	const value = raw ? parseAmount(raw) : 0;
+	if (value == null || value < 0) return { message: 'Der Nachlass ist keine gültige Zahl.' };
+	if (get('nachlassart') === 'betrag') {
+		if (value > 100_000_000) return { message: 'Der Nachlass ist zu hoch.' };
+		return { discountPercent: 0, discountAmount: round2(value) };
+	}
+	if (value > 100) return { message: 'Der Nachlass muss zwischen 0 und 100 % liegen.' };
+	return { discountPercent: Math.round(value * 100) / 100, discountAmount: 0 };
+}
+
+/* --------------------------------------------------------------- Summen */
+
+/**
+ * Netto (Summe der Positionen), Nachlass, Netto nach Nachlass, Umsatzsteuer und
+ * Gesamtbetrag – bei Übergang der Steuerschuld ohne Umsatzsteuer.
+ */
+export function offerTotals(lines: OfferLine[], vatRate: number, reverseCharge = false, discount: Discount = {}) {
 	const net = round2(lines.reduce((s, l) => s + (l.kind === 'position' ? (shownTotal(l) ?? 0) : 0), 0));
-	const vat = reverseCharge ? 0 : round2((net * vatRate) / 100);
-	return { net, vat, gross: round2(net + vat) };
+	const off = discountOf(net, discount);
+	const taxable = round2(net - off);
+	const vat = reverseCharge ? 0 : round2((taxable * vatRate) / 100);
+	return { net, discount: off, taxable, vat, gross: round2(taxable + vat) };
 }
 
 /** Rechnung: wie beim Angebot */
-export function invoiceTotals(lines: OfferLine[], vatRate: number, reverseCharge: boolean) {
-	return offerTotals(lines, vatRate, reverseCharge);
+export function invoiceTotals(lines: OfferLine[], vatRate: number, reverseCharge: boolean, discount: Discount = {}) {
+	return offerTotals(lines, vatRate, reverseCharge, discount);
+}
+
+/** Die Zeilen unter der Tabelle: [Beschriftung, Betrag, fett] – Nachlass nur, wenn einer gewährt wird */
+export function sumRows(totals: ReturnType<typeof offerTotals>, vatRate: number, reverseCharge: boolean, discount: Discount): [string, string, boolean][] {
+	return [
+		['Gesamt Netto', money(totals.net), false],
+		...(totals.discount
+			? ([
+					[discountLabel(discount), `− ${money(Math.abs(totals.discount))}`, false],
+					['Netto nach Nachlass', money(totals.taxable), false]
+				] as [string, string, boolean][])
+			: []),
+		...(reverseCharge ? [] : ([[vatLabel(vatRate, false), money(totals.vat), false]] as [string, string, boolean][])),
+		['Gesamtbetrag', money(totals.gross), true]
+	];
 }
 
 /** Zur Wahl bei der Umsatzsteuer – dazu „Übergang der Steuerschuld" (0 %) */

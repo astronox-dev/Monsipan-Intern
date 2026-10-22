@@ -128,7 +128,7 @@ export function notifyInvoice(event: 'rechnung.erstellt' | 'rechnung.bezahlt', i
 		notify({
 			event,
 			title: `${invoiceLabel(i.kind)} ${invoiceNo(i)} ${event === 'rechnung.erstellt' ? 'erstellt' : 'bezahlt'}`,
-			body: join(i.customerName, money(invoiceTotals(i.lines, i.vatRate, i.reverseCharge).gross), event === 'rechnung.erstellt' && `zahlbar bis ${dateLabel(i.dueDate)}`),
+			body: join(i.customerName, money(invoiceTotals(i.lines, i.vatRate, i.reverseCharge, i).gross), event === 'rechnung.erstellt' && `zahlbar bis ${dateLabel(i.dueDate)}`),
 			url: `/rechnungen/${i.id}`,
 			actorId
 		});

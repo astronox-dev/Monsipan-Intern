@@ -75,6 +75,9 @@ export const offers = sqliteTable(
 		/** Skonto wie bei der Rechnung – geht in sie über */
 		skontoPercent: real('skonto_percent').notNull().default(0),
 		skontoDays: integer('skonto_days').notNull().default(0),
+		/** Nachlass auf die Netto-Summe: Prozent oder Betrag (gesetzt ist höchstens eines) – geht in die Rechnung über */
+		discountPercent: real('discount_percent').notNull().default(0),
+		discountAmount: real('discount_amount').notNull().default(0),
 		status: text('status', { enum: OFFER_STATUS }).notNull().default('entwurf'),
 		releasedBy: integer('released_by').references(() => users.id, { onDelete: 'set null' }),
 		releasedAt: integer('released_at', { mode: 'timestamp_ms' }),
@@ -395,6 +398,9 @@ export const invoices = sqliteTable(
 		/** Skonto: so viel Prozent weniger bei Zahlung innerhalb so vieler Tage ab Rechnungsdatum – 0 % heißt ohne */
 		skontoPercent: real('skonto_percent').notNull().default(0),
 		skontoDays: integer('skonto_days').notNull().default(0),
+		/** Nachlass auf die Netto-Summe vor der Umsatzsteuer: Prozent oder Betrag (gesetzt ist höchstens eines) */
+		discountPercent: real('discount_percent').notNull().default(0),
+		discountAmount: real('discount_amount').notNull().default(0),
 		status: text('status', { enum: INVOICE_STATUS }).notNull().default('offen'),
 		/** Bezahlt am „JJJJ-MM-TT" */
 		paidOn: text('paid_on'),

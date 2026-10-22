@@ -45,7 +45,9 @@ const head = (number: string) => ({
 	reverseCharge: false,
 	paymentDays: 30,
 	skontoPercent: 0,
-	skontoDays: 0
+	skontoDays: 0,
+	discountPercent: 0,
+	discountAmount: 0
 });
 
 async function offerWith(number: string, lines: Line[]) {
@@ -164,7 +166,7 @@ describe('Alternativpositionen', () => {
 		expect(offer.lines.map((l) => l.alternative)).toEqual([false, true, true, false]);
 		expect(lineTotal(offer.lines[1])).toBe(300);
 		expect(shownTotal(offer.lines[1])).toBe(0);
-		expect(offerTotals(offer.lines, 20)).toEqual({ net: 200, vat: 40, gross: 240 });
+		expect(offerTotals(offer.lines, 20)).toMatchObject({ net: 200, vat: 40, gross: 240 });
 		expect((await listOffers({}, 500)).find((o) => o.number === '26720')?.net).toBe(200);
 
 		const orderId = await orderOf(id);
@@ -194,7 +196,7 @@ describe('Steuer: Bauunternehmen', () => {
 		const id = await createOffer({ id: me } as never, { number: '26730', projectNumber: '', date: '2026-10-20', title: 'Halle', customerId });
 		const offer = (await offerDetail(id))!;
 		expect(offer).toMatchObject({ reverseCharge: true, customerUid: 'ATU12345678', paymentDays: 30 });
-		expect(offerTotals([{ kind: 'position', quantity: 10, unitPrice: 10 }], 20, true)).toEqual({ net: 100, vat: 0, gross: 100 });
+		expect(offerTotals([{ kind: 'position', quantity: 10, unitPrice: 10 }], 20, true)).toMatchObject({ net: 100, vat: 0, gross: 100 });
 		// Ohne UID kein Übergang der Steuerschuld
 		const priced = { ...offer, lines: [{ kind: 'position', quantity: 1, unitPrice: 100 }] };
 		expect(releaseProblem({ ...priced, customerUid: '' })).toMatch(/UID/);
@@ -278,5 +280,61 @@ describe('Zahlungsbedingungen mit Skonto', () => {
 		await db.update(invoices).set({ stage: 'ausgestellt' }).where(eq(invoices.id, row.id));
 		await expect(db.update(invoices).set({ skontoPercent: 5 }).where(eq(invoices.id, row.id))).rejects.toThrow();
 		await expect(db.update(invoices).set({ skontoDays: 30 }).where(eq(invoices.id, row.id))).rejects.toThrow();
+	});
+});
+
+describe('Nachlass', () => {
+	it('kommt aus dem Angebot in die Rechnung – ein Betrag nur auf die erste', async () => {
+		const lines: Line[] = [{ kind: 'position', text: 'Leitlinie', quantity: '100', unit: 'lfm', unitPrice: '20' }];
+		const id = await offerWith('26750', lines);
+		await saveOffer(id, { head: { ...head('26750'), discountPercent: 5 }, lines });
+		expect(await offerDetail(id)).toMatchObject({ discountPercent: 5, discountAmount: 0 });
+		// In der Liste: Netto schon nach Nachlass
+		expect((await listOffers({ q: '26750' }))[0].net).toBe(1900);
+		expect((await invoiceDraft(await orderOf(id)))!.head).toMatchObject({ discountPercent: 5, discountAmount: 0 });
+
+		const flatLines: Line[] = [{ kind: 'position', text: 'Sperrfläche', quantity: '1', unit: 'Pauschal', unitPrice: '1000' }];
+		const flat = await offerWith('26751', flatLines);
+		await saveOffer(flat, { head: { ...head('26751'), discountAmount: 50 }, lines: flatLines });
+		const flatOrder = await orderOf(flat);
+		expect((await invoiceDraft(flatOrder))!.head).toMatchObject({ discountPercent: 0, discountAmount: 50 });
+		// Gibt es schon eine Rechnung zum Auftrag, ist der Betrag dort abgezogen
+		await db.insert(invoices).values({ number: '26751', orderId: flatOrder, date: '2026-10-20', dueDate: '2026-11-19', discountAmount: 50 });
+		expect((await invoiceDraft(flatOrder))!.head).toMatchObject({ discountAmount: 0 });
+	});
+
+	it('ändert die Prüfsumme älterer Rechnungen nicht – und ist nach dem Ausstellen gesperrt', async () => {
+		const base = {
+			number: '26003',
+			kind: 'rechnung',
+			date: '2026-10-20',
+			dueDate: '2026-11-19',
+			serviceFrom: null,
+			serviceTo: null,
+			projectNumber: '',
+			title: 'Test',
+			location: '',
+			customerName: 'Kunde',
+			customerAddition: '',
+			customerStreet: '',
+			customerZip: '',
+			customerCity: '',
+			customerUid: '',
+			intro: '',
+			closing: '',
+			state: '',
+			section: '',
+			vatRate: 20,
+			reverseCharge: false,
+			lines: [{ number: '1', kind: 'position', text: 'Leitlinie', quantity: 100, unit: 'lfm', unitPrice: 2.5 }]
+		};
+		const before = contentHash(base);
+		expect(contentHash({ ...base, discountPercent: 0, discountAmount: 0 })).toBe(before);
+		expect(contentHash({ ...base, discountPercent: 5, discountAmount: 0 })).not.toBe(before);
+
+		const row = await db.insert(invoices).values({ number: '26003', date: '2026-10-20', dueDate: '2026-11-19', discountPercent: 5 }).returning({ id: invoices.id }).get();
+		await db.update(invoices).set({ stage: 'ausgestellt' }).where(eq(invoices.id, row.id));
+		await expect(db.update(invoices).set({ discountPercent: 10 }).where(eq(invoices.id, row.id))).rejects.toThrow();
+		await expect(db.update(invoices).set({ discountAmount: 100 }).where(eq(invoices.id, row.id))).rejects.toThrow();
 	});
 });

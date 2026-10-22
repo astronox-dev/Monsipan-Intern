@@ -101,6 +101,8 @@ export interface InvoiceContent {
 	reverseCharge: boolean;
 	skontoPercent?: number;
 	skontoDays?: number;
+	discountPercent?: number;
+	discountAmount?: number;
 	lines: { number: string; kind: string; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null }[];
 }
 
@@ -132,7 +134,9 @@ export function contentHash(i: InvoiceContent): string {
 			i.lines.map((l) => [l.number, l.kind, l.text, l.quantity, l.unit, l.unitPrice, ...(l.note ? [l.note] : [])]),
 			...(i.costCenter ? [i.costCenter] : []),
 			// Skonto ebenso nur, wenn eines gewährt wird
-			...(i.skontoPercent ? [['skonto', i.skontoPercent, i.skontoDays ?? 0]] : [])
+			...(i.skontoPercent ? [['skonto', i.skontoPercent, i.skontoDays ?? 0]] : []),
+			// Nachlass ebenso nur, wenn einer gewährt wird
+			...(i.discountPercent || i.discountAmount ? [['nachlass', i.discountPercent ?? 0, i.discountAmount ?? 0]] : [])
 		])
 	);
 }

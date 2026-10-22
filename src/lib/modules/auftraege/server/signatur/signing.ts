@@ -306,6 +306,8 @@ async function createStorno(user: SessionUser, invoice: InvoiceDetail, why: stri
 				section: invoice.section,
 				vatRate: invoice.vatRate,
 				reverseCharge: invoice.reverseCharge,
+				discountPercent: invoice.discountPercent,
+				discountAmount: invoice.discountAmount,
 				status: 'offen',
 				cancelsId: invoice.id,
 				createdBy: user.id,

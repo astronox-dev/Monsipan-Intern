@@ -913,7 +913,7 @@ export async function exportTable(kind: TransferKind): Promise<ExportTable> {
 	const rows: TableCell[][] = [];
 	for (const { i, orderNumber } of list) {
 		const own = lines.filter((l) => l.invoiceId === i.id);
-		const totals = invoiceTotals(own, i.vatRate, i.reverseCharge);
+		const totals = invoiceTotals(own, i.vatRate, i.reverseCharge, i);
 		const headCells: TableCell[] = [
 			i.number,
 			invoiceLabel(i.kind),

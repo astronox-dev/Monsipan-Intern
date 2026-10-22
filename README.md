@@ -566,7 +566,9 @@ bleibt sie frei eintippbar.
 - Der **Ausführungsort** (wo gearbeitet wird) steht im PDF unter der Überschrift und geht in
   den Auftrag über.
 - Positionen werden 1.1, 1.2 … nummeriert; eine **Überschrift** beginnt eine neue Gruppe (2,
-  2.1, 2.2 …). Positionen lassen sich verschieben und entfernen.
+  2.1, 2.2 …). Positionen lassen sich verschieben und entfernen. Überschriften stehen im Editor
+  als Band mit gelbem Rand und im PDF grau hinterlegt über die ganze Breite; unten auf einer
+  Seite steht keine Überschrift allein.
 - **Bemerkung** zu jeder Position: steht im PDF unter der fetten Bezeichnung, in normaler
   Schrift, und geht mit in Auftrag und Rechnung.
 - **Vorschläge:** Beim Tippen der Bezeichnung erscheinen Positionen aus früheren Angeboten (alle
@@ -582,6 +584,11 @@ bleibt sie frei eintippbar.
   UStG)** für Bauleistungen an ein Bauunternehmen: ohne Umsatzsteuer, mit dem Hinweis und der
   UID des Kunden (ohne UID lässt es sich nicht freigeben). Bei einem Kunden mit Haken
   „Bauunternehmen“ ist das gleich eingestellt.
+- **Nachlass:** In den Summen zwischen „Gesamt Netto“ und Umsatzsteuer – in **Prozent oder als
+  Betrag in €**. Im PDF stehen dann „abzüglich 5 % Nachlass“ (bzw. „abzüglich Nachlass“) und
+  „Netto nach Nachlass“; davon wird die Umsatzsteuer gerechnet. In der Liste ist „netto“ schon
+  nach Nachlass. Er geht in die Rechnung über: Prozent auf jede Rechnung zum Auftrag, ein Betrag
+  nur auf die erste – sonst würde er bei Teilrechnungen mehrfach abgezogen.
 - **Zahlungsbedingungen:** Zahlungsziel in Tagen, dazu auf Wunsch **Skonto** (Prozent und
   innerhalb wie vieler Tage). Darunter steht gleich der **Gesamtbetrag nach Skonto** und der
   Satz, wie er im PDF steht (z. B. „Bei Zahlung innerhalb von 14 Tagen ab Rechnungsdatum
@@ -597,6 +604,10 @@ bleibt sie frei eintippbar.
   leer bleibt dort nichts stehen – und lassen sich im einzelnen Angebot ändern. Dort stehen auch die drei Spalten
   der Fußzeile und der **Briefkopf**: als hochgeladenes Bild (PNG/JPG, oben mittig
   eingepasst) oder – ohne Bild – aus dem Logo mit Firma und Anschrift darunter.
+- **Seitenränder** in Angebot, Auftrag und Rechnung: links 20 mm (die Anschrift passt noch ins
+  Fensterkuvert), rechts 15 mm. EP und GP sind breit genug für sechsstellige Beträge.
+- **Drucken** (Angebot, Rechnung, Auftrag, Formulare mit Handschrift): Das Druckfenster öffnet
+  sich erst, wenn die Seiten fertig gezeichnet sind – beim ersten Mal ist nichts mehr leer.
 - **Logo:** Alle PDFs (Angebot, Auftrag, Rechnung, Summenblatt, Tagesbericht, Lohnzettel)
   und die Druckansichten von Tagesbericht und Lohnzettel setzen das Monsipan-Logo als
   Vektor – die Pfade stehen in [`src/lib/logo.ts`](src/lib/logo.ts).
@@ -820,6 +831,8 @@ alles andere auf der Rechnung.
   (Reverse Charge)** für Bauleistungen an Bauunternehmen: ohne Umsatzsteuer, mit Hinweis auf
   § 19 Abs. 1a UStG und der UID des Kunden (dann Pflicht). Kommt von selbst, wenn das Angebot
   so war oder der Kunde als Bauunternehmen eingetragen ist.
+- **Nachlass** wie im Angebot (Prozent oder Betrag, zwischen Netto und Umsatzsteuer) – in der
+  Rechnung änderbar, nach dem Ausstellen gesperrt. Die Stornorechnung übernimmt ihn.
 - **Zahlungsbedingungen:** Zahlungsziel und **Skonto** (Prozent, innerhalb wie vieler Tage) wie
   im Angebot vereinbart – ältere Angebote ohne: die Vorgaben aus den Einstellungen. Darunter
   gleich der Gesamtbetrag nach Skonto und die Sätze mit Datum: „Zahlbar bis 19.11.2026 ohne

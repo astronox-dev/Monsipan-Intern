@@ -24,6 +24,8 @@
 		reverseCharge: boolean;
 		skontoPercent: number;
 		skontoDays: number;
+		discountPercent: number;
+		discountAmount: number;
 	}
 
 	export interface EditorLine {
@@ -62,8 +64,9 @@
 	import { date as dateLabel } from '$lib/format';
 	import TaxSelect from './TaxSelect.svelte';
 	import PaymentTermsFields from './PaymentTermsFields.svelte';
+	import DiscountRow from './DiscountRow.svelte';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
-	import { amountInput, INVOICE_KIND_LABELS, invoiceTotals, lineTotal, money, parseAmount, quantityLabel, vatLabel } from '../offer';
+	import { amountInput, discountFrom, discountInput, INVOICE_KIND_LABELS, invoiceTotals, lineTotal, money, parseAmount, quantityLabel, vatLabel } from '../offer';
 	import {
 		columnLabel,
 		invoiceLines,
@@ -122,7 +125,9 @@
 		// Zahlungsziel in Tagen – bei einer bestehenden Rechnung aus „zahlbar bis"
 		days: String(isValidIsoDate(initialHead.dueDate) && isValidIsoDate(initialHead.date) ? Math.max(0, daysBetween(initialHead.date, initialHead.dueDate)) : paymentDays),
 		skonto: initialHead.skontoPercent ? String(initialHead.skontoPercent).replace('.', ',') : '',
-		skontoDays: initialHead.skontoDays ? String(initialHead.skontoDays) : ''
+		skontoDays: initialHead.skontoDays ? String(initialHead.skontoDays) : '',
+		discount: discountInput(initialHead).value,
+		discountKind: discountInput(initialHead).kind
 	});
 	// svelte-ignore state_referenced_locally
 	const toLine = (l: EditorLine | InvoiceLineDraft): Line => ({
@@ -162,7 +167,7 @@
 	const columns = $derived(mapping ? (selection ? selectedColumns(mapping.columns, selection.reports, chosen) : mapping.columns) : []);
 
 	const parsed = $derived(lines.map((l) => ({ kind: l.kind, quantity: parseAmount(l.quantity), unitPrice: parseAmount(l.price) })));
-	const totals = $derived(invoiceTotals(parsed, parseAmount(head.vat) ?? 0, head.reverseCharge));
+	const totals = $derived(invoiceTotals(parsed, parseAmount(head.vat) ?? 0, head.reverseCharge, discountFrom(head.discount, head.discountKind)));
 	const openColumns = $derived(columns.filter((c) => !assigned[c.key]).length);
 
 	/** „Zahlbar bis" und „Skonto bis" folgen Rechnungsdatum und Zahlungsbedingungen */
@@ -440,13 +445,13 @@
 	<ul class="mt-1 divide-y divide-line">
 		{#each lines as l, i (l.key)}
 			{@const empty = l.kind === 'position' && !parsed[i].quantity}
-			<li class="py-2.5 {empty ? 'opacity-60 focus-within:opacity-100' : ''}">
+			<li class={l.kind === 'titel' ? 'heading-row' : `py-2.5 ${empty ? 'opacity-60 focus-within:opacity-100' : ''}`}>
 				<input type="hidden" name="z.{i}.art" value={l.kind} />
 				<input type="hidden" name="z.{i}.nr" value={l.number} />
 				{#if l.kind === 'titel'}
 					<div class="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-2">
-						<span class="num font-semibold">{l.number}</span>
-						<input class="input font-semibold" name="z.{i}.text" maxlength="300" bind:value={l.text} aria-label="Überschrift Zeile {i + 1}" />
+						<span class="num text-[1.0625rem] font-bold">{l.number}</span>
+						<input class="input text-[1.0625rem] font-bold" name="z.{i}.text" maxlength="300" bind:value={l.text} aria-label="Überschrift Zeile {i + 1}" />
 					</div>
 				{:else}
 					<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-2 xl:grid-cols-[2.5rem_minmax(0,1fr)_6rem_6.5rem_7rem_7rem_2.25rem] xl:items-start">
@@ -513,6 +518,7 @@
 	<dl class="num mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 border-t border-line pt-3">
 		<dt>Gesamt Netto</dt>
 		<dd class="text-right">{money(totals.net)}</dd>
+		<DiscountRow bind:value={head.discount} bind:kind={head.discountKind} discount={totals.discount} taxable={totals.taxable} />
 		{#if !head.reverseCharge}
 			<dt>{vatLabel(parseAmount(head.vat) ?? 0, false)}</dt>
 			<dd class="text-right">{money(totals.vat)}</dd>

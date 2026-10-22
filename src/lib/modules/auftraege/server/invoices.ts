@@ -32,7 +32,7 @@ import type { SessionUser } from '$lib/server/auth';
 import { addDays, isValidIsoDate, today } from '$lib/modules/stunden/week';
 import { notify } from '$lib/server/notifications';
 import { date as dateLabel } from '$lib/format';
-import { invoiceNo, lineNumbers, MAX_OFFER_LINES, money, parseAmount, readPaymentTerms, round2 } from '../offer';
+import { invoiceNo, lineNumbers, MAX_OFFER_LINES, money, parseAmount, readDiscount, readPaymentTerms, round2 } from '../offer';
 import {
 	billedLines,
 	COUNTED_STATUS,
@@ -65,6 +65,11 @@ const activeCol = sql`${col(invoices.stage)} <> 'storniert' and ${col(invoices.k
 
 /** Netto je Rechnung, direkt in der Abfrage */
 const netSum = sql<number>`(select coalesce(sum(round(${col(invoicePositions.quantity)} * ${col(invoicePositions.unitPrice)}, 2)), 0) from ${invoicePositions} where ${col(invoicePositions.invoiceId)} = ${col(invoices.id)} and ${col(invoicePositions.kind)} = 'position')`.mapWith(
+	Number
+);
+
+/** Netto nach Nachlass je Rechnung – davon gehen Umsatzsteuer und Brutto aus (Stornorechnungen negativ) */
+const netAfterDiscount = sql<number>`(${netSum} - (case when ${netSum} < 0 then -1 else 1 end) * min(abs(${netSum}), case when ${col(invoices.discountAmount)} > 0 then ${col(invoices.discountAmount)} else round(abs(${netSum}) * ${col(invoices.discountPercent)} / 100.0, 2) end))`.mapWith(
 	Number
 );
 
@@ -116,7 +121,7 @@ export async function invoiceYears(filter: InvoiceFilter = {}) {
 export async function openGrossTotal(): Promise<number> {
 	const row = await db
 		.select({
-			gross: sql<number>`coalesce(sum(round(${netSum} * (1 + (case when ${invoices.reverseCharge} then 0 else ${invoices.vatRate} end) / 100.0), 2)), 0)`.mapWith(Number)
+			gross: sql<number>`coalesce(sum(round(${netAfterDiscount} * (1 + (case when ${invoices.reverseCharge} then 0 else ${invoices.vatRate} end) / 100.0), 2)), 0)`.mapWith(Number)
 		})
 		.from(invoices)
 		.where(and(eq(invoices.status, 'offen'), activeInvoice))
@@ -141,7 +146,7 @@ export async function listInvoices(filter: InvoiceFilter = {}, limit = 300, offs
 			paidOn: invoices.paidOn,
 			vatRate: invoices.vatRate,
 			reverseCharge: invoices.reverseCharge,
-			net: netSum
+			net: netAfterDiscount
 		})
 		.from(invoices)
 		.where(invoiceWhere(filter))
@@ -210,7 +215,7 @@ export async function invoicesForOrder(orderId: number) {
 			stage: invoices.stage,
 			vatRate: invoices.vatRate,
 			reverseCharge: invoices.reverseCharge,
-			net: netSum,
+			net: netAfterDiscount,
 			reports: sql<number>`(select count(*) from ${dailyReports} where ${col(dailyReports.invoiceId)} = ${col(invoices.id)})`.mapWith(Number)
 		})
 		.from(invoices)
@@ -403,7 +408,10 @@ export async function invoiceDraft(orderId: number) {
 			vatRate: offer?.vatRate ?? 20,
 			reverseCharge: !!offer?.reverseCharge || !!customer?.reverseCharge,
 			skontoPercent: terms.skontoPercent,
-			skontoDays: terms.skontoDays
+			skontoDays: terms.skontoDays,
+			// Nachlass wie im Angebot: Prozent auf jeder Rechnung, ein Betrag nur einmal – auf der ersten zum Auftrag
+			discountPercent: offer?.discountPercent ?? 0,
+			discountAmount: previous.length ? 0 : (offer?.discountAmount ?? 0)
 		},
 		paymentDays: terms.paymentDays
 	};
@@ -442,6 +450,8 @@ export interface SaveInvoice {
 		reverseCharge: boolean;
 		skontoPercent: number;
 		skontoDays: number;
+		discountPercent: number;
+		discountAmount: number;
 	};
 	lines: { number: string; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null }[];
 }
@@ -457,6 +467,8 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 	// „Zahlbar bis" ergibt sich aus dem Zahlungsziel
 	const terms = readPaymentTerms(s);
 	if ('message' in terms) return terms;
+	const discount = readDiscount(s);
+	if ('message' in discount) return discount;
 	const dueDate = addDays(date, terms.paymentDays);
 	const from = s('von').trim();
 	const to = s('bis').trim();
@@ -529,7 +541,8 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 			vatRate: Math.round(vat * 100) / 100,
 			reverseCharge,
 			skontoPercent: terms.skontoPercent,
-			skontoDays: terms.skontoDays
+			skontoDays: terms.skontoDays,
+			...discount
 		},
 		lines: billed
 	};
@@ -684,6 +697,8 @@ export async function invoiceDetail(id: number) {
 			reverseCharge: invoices.reverseCharge,
 			skontoPercent: invoices.skontoPercent,
 			skontoDays: invoices.skontoDays,
+			discountPercent: invoices.discountPercent,
+			discountAmount: invoices.discountAmount,
 			status: invoices.status,
 			paidOn: invoices.paidOn,
 			paidByFirst: payer.firstName,
@@ -770,7 +785,7 @@ export async function setInvoiceOpen(id: number) {
 	await syncOfferBilling(await orderOfInvoice(id), 'nur_zuruecknehmen');
 }
 
-/** Brutto einer Rechnung aus dem Netto der Abfrage */
+/** Brutto einer Rechnung aus dem Netto der Abfrage (schon nach Nachlass) */
 export const grossOf = (i: { net: number; vatRate: number; reverseCharge: boolean }) => round2(i.net * (1 + (i.reverseCharge ? 0 : i.vatRate) / 100));
 
 /** Am Tag nach „zahlbar bis" melden – einmal je Rechnung, solange sie offen ist */
@@ -784,7 +799,7 @@ export async function notifyOverdueInvoices(day = today()) {
 			dueDate: invoices.dueDate,
 			vatRate: invoices.vatRate,
 			reverseCharge: invoices.reverseCharge,
-			net: netSum
+			net: netAfterDiscount
 		})
 		.from(invoices)
 		.where(and(eq(invoices.status, 'offen'), activeInvoice, lt(invoices.dueDate, day), isNull(invoices.overdueNotifiedAt)))
