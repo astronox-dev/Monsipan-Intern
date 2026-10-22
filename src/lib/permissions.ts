@@ -154,6 +154,7 @@ export const DEFAULT_PERMISSIONS = {
 	'urlaub.alle.sehen': BUERO,
 	'urlaub.beantragen': ['admin', 'geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer', 'arbeiter'],
 	'urlaub.genehmigen': LEITUNG,
+	'urlaub.konten.bearbeiten': ['admin', 'geschaeftsfuehrer', 'buchhaltung'],
 	'krankenstand.eigene.sehen': ALL,
 	'krankenstand.sehen': ['admin', 'geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer'],
 	'krankenstand.alle.sehen': BUERO,
@@ -399,8 +400,11 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 		section: 'Planung',
 		view: { self: 'urlaub.eigene.sehen', own: 'urlaub.sehen', all: 'urlaub.alle.sehen', selfLabel: 'Nur eigene', ownLabel: PARTY },
 		create: { key: 'urlaub.beantragen', label: 'Beantragen', hint: 'Für sich selbst' },
-		status: [{ key: 'urlaub.genehmigen', label: 'Genehmigen / ablehnen', hint: 'Auch für andere eintragen und löschen' }],
-		implies: { 'urlaub.beantragen': 'urlaub.eigene.sehen', 'urlaub.genehmigen': 'urlaub.alle.sehen' }
+		status: [
+			{ key: 'urlaub.genehmigen', label: 'Genehmigen / ablehnen', hint: 'Auch für andere eintragen und löschen' },
+			{ key: 'urlaub.konten.bearbeiten', label: 'Urlaubskonten', hint: 'An- und Abmeldung, Übertrag' }
+		],
+		implies: { 'urlaub.beantragen': 'urlaub.eigene.sehen', 'urlaub.genehmigen': 'urlaub.alle.sehen', 'urlaub.konten.bearbeiten': 'urlaub.alle.sehen' }
 	},
 	{
 		key: 'krankenstand',

@@ -32,6 +32,8 @@ export interface AppSettings {
 	skontoDays: number;
 	/** Urlaubsstunden, die ein genehmigter Urlaubstag verbraucht – je Wochentag, Montag zuerst */
 	leaveHours: number[];
+	/** Wochen Urlaub im Jahr – daraus der Anspruch je Beschäftigungswoche (5 × 39 Std. ÷ 52 = 3,75 Std.) */
+	leaveWeeks: number;
 }
 
 const DEFAULTS: AppSettings = {
@@ -51,7 +53,8 @@ const DEFAULTS: AppSettings = {
 	invoicePaymentDays: 30,
 	skontoPercent: 0,
 	skontoDays: 0,
-	leaveHours: [...DEFAULT_LEAVE_HOURS]
+	leaveHours: [...DEFAULT_LEAVE_HOURS],
+	leaveWeeks: 5
 };
 
 let cache: AppSettings | null = null;
@@ -71,6 +74,7 @@ export async function getSettings(): Promise<AppSettings> {
 	}
 	out.alertRoles = out.alertRoles.filter((r) => (ROLES as readonly string[]).includes(r));
 	out.leaveHours = validLeaveHours(out.leaveHours);
+	if (!(typeof out.leaveWeeks === 'number' && out.leaveWeeks > 0 && out.leaveWeeks <= 10)) out.leaveWeeks = DEFAULTS.leaveWeeks;
 	cache = out;
 	return out;
 }

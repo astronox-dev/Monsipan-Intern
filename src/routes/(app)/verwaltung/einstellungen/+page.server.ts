@@ -14,7 +14,7 @@ import { mailInfo, sendMail, testMail } from '$lib/server/mail';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { letterheadPath, LetterheadError, storeLetterhead } from '$lib/server/letterhead';
 import { disconnectWebsite, newWebsiteKey, websiteLink } from '$lib/modules/auftraege/server/website';
-import { readPaymentTerms } from '$lib/modules/auftraege/offer';
+import { parseAmount, readPaymentTerms } from '$lib/modules/auftraege/offer';
 import { parseHours } from '$lib/modules/stunden/week';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -119,7 +119,9 @@ export const actions: Actions = {
 		const hours = Array.from({ length: 7 }, (_, i) => Math.round(parseHours(String(f.get(`tag${i}`) ?? '')) * 100) / 100);
 		if (hours.some((h) => h > 24)) return fail(400, { message: 'Höchstens 24 Stunden je Tag.' });
 		if (!hours.some((h) => h > 0)) return fail(400, { message: 'Mindestens ein Wochentag braucht Urlaubsstunden.' });
-		await updateSettings({ leaveHours: hours });
+		const weeks = parseAmount(String(f.get('wochen') ?? ''));
+		if (weeks == null || weeks <= 0 || weeks > 10) return fail(400, { message: 'Urlaub im Jahr: zwischen 1 und 10 Wochen.' });
+		await updateSettings({ leaveHours: hours, leaveWeeks: Math.round(weeks * 100) / 100 });
 		return { saved: 'leaveHours' };
 	},
 	letterhead: async ({ request, locals }) => {

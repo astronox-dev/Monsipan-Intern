@@ -119,6 +119,43 @@ export const leaveRequests = sqliteTable(
 	(t) => [index('leave_requests_user_idx').on(t.userId, t.from), index('leave_requests_status_idx').on(t.status), index('leave_requests_range_idx').on(t.from, t.to)]
 );
 
+/**
+ * Beschäftigungszeit: angemeldet von – bis (ohne Ende: laufend). Wer über den
+ * Winter abgemeldet ist, hat dazwischen eine Lücke und erwirbt dort keinen Urlaub.
+ */
+export const employmentPeriods = sqliteTable(
+	'employment_periods',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		/** „JJJJ-MM-TT", beide eingeschlossen */
+		from: text('from_date').notNull(),
+		to: text('to_date'),
+		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+		createdAt: createdAt()
+	},
+	(t) => [index('employment_periods_user_idx').on(t.userId, t.from)]
+);
+
+/**
+ * Urlaubskonto je Person: Übertrag (Resturlaub in Stunden) zum Stichtag – ab
+ * dann zählen erworbener und genehmigter Urlaub – und, falls abweichend, die
+ * Wochen Urlaub im Jahr (sonst die aus den Einstellungen).
+ */
+export const leaveAccounts = sqliteTable('leave_accounts', {
+	userId: integer('user_id')
+		.primaryKey()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	carryover: real('carryover').notNull().default(0),
+	/** Stichtag „JJJJ-MM-TT" – ohne: alles zählt */
+	startDate: text('start_date'),
+	weeks: real('weeks'),
+	updatedBy: integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+	updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+});
+
 /** Krankenstand: von – bis; ohne Ende heißt „noch krank" */
 export const sickReports = sqliteTable(
 	'sick_reports',

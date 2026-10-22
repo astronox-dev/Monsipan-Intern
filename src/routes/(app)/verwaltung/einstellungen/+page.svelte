@@ -106,6 +106,10 @@
 	// svelte-ignore state_referenced_locally
 	let leaveHours = $state(data.settings.leaveHours.map((h) => String(h).replace('.', ',')));
 	const leaveWeek = $derived(leaveHours.reduce((s, h) => s + parseHours(h), 0));
+	// svelte-ignore state_referenced_locally
+	let leaveWeeks = $state(String(data.settings.leaveWeeks).replace('.', ','));
+	/** Anspruch je Beschäftigungswoche: 5 × 39 Std. ÷ 52 = 3,75 Std. */
+	const perWeek = $derived(((Number(leaveWeeks.replace(',', '.')) || 0) * leaveWeek) / 52);
 
 	const mb = (b: number) => `${(b / 1024 / 1024).toLocaleString('de-AT', { maximumFractionDigits: 1 })} MB`;
 
@@ -331,6 +335,10 @@
 			Antrag festgehalten; eine Änderung hier gilt nur für Urlaub, der ab jetzt genehmigt wird. Wird während des Urlaubs ein Krankenstand gemeldet, ist der Urlaub
 			unterbrochen: Diese Tage zählen nicht.
 		</p>
+		<p class="mt-2 text-sm text-ink-2">
+			Urlaubskonto: Je Woche, in der jemand angemeldet ist, kommt Urlaub dazu – Wochen Urlaub im Jahr × Wochenstunden ÷ 52. Wer über den Winter abgemeldet ist,
+			erwirbt in der Zeit nichts. An- und Abmeldung und den Übertrag trägt man beim Urlaub unter „Urlaubskonten" ein.
+		</p>
 		<form method="POST" action="?/leaveHours" class="mt-3 flex flex-wrap items-end gap-3" use:enhance={done('leaveHours', () => 'Urlaubsstunden gespeichert')}>
 			<div class="grid grid-cols-4 gap-2 sm:grid-cols-7">
 				{#each WEEKDAYS as day, i (day)}
@@ -341,6 +349,11 @@
 				{/each}
 			</div>
 			<span class="num pb-2.5 text-sm text-ink-2">= {hoursText(leaveWeek)} pro Woche</span>
+			<label class="block">
+				<span class="field-label">Urlaub im Jahr</span>
+				<span class="flex items-center gap-2"><input class="input num w-16 text-right" name="wochen" inputmode="decimal" maxlength="5" required bind:value={leaveWeeks} />Wochen</span>
+			</label>
+			<span class="num pb-2.5 text-sm text-ink-2">= {hoursText(perWeek)} je Beschäftigungswoche</span>
 			<button class="btn btn-secondary" disabled={busy === 'leaveHours'}>Speichern</button>
 		</form>
 	</section>

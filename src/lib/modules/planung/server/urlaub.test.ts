@@ -18,6 +18,7 @@ const { users } = await import('$lib/server/db/schema');
 const { updateSettings } = await import('$lib/server/settings');
 const { approvedTotals, createLeave, decideLeave, listLeave } = await import('./urlaub');
 const { createSick, listSick } = await import('./krank');
+const { leaveAccountsFor, saveEmployment, saveLeaveAccount } = await import('./konto');
 
 type Who = Parameters<typeof listLeave>[0];
 const as = (u: { id: number; role: string; partyId: number | null }) => ({ username: `u${u.id}`, email: null, firstName: 'X', lastName: 'Y', owner: false, mustChangePassword: false, ...u }) as unknown as Who;
@@ -78,5 +79,45 @@ describe('Urlaubsstunden', () => {
 		expect(await createLeave(eva, { userId: eva.id, from: '2026-11-14', to: '2026-11-15', note: '' })).toEqual({
 			message: 'In diesem Zeitraum liegt kein Arbeitstag mit Urlaubsstunden.'
 		});
+	});
+});
+
+describe('Urlaubskonto', () => {
+	const account = async (today: string) => (await leaveAccountsFor([eva.id], today)).get(eva.id)!;
+
+	it('Übertrag + je Beschäftigungswoche erworben − genehmigt (ohne Krankenstandstage)', async () => {
+		await updateSettings({ leaveHours: [8, 8, 8, 8, 7, 0, 0], leaveWeeks: 5 });
+		expect((await account('2026-11-30')).setUp).toBe(false);
+
+		// Pflegen darf nur, wer Urlaubskonten bearbeiten darf
+		expect(await saveEmployment(eva, { id: null, userId: eva.id, from: '2026-03-02', to: null })).toEqual({ message: 'Dafür fehlt dir die Berechtigung.' });
+		expect(await saveEmployment(admin, { id: null, userId: eva.id, from: '2026-03-02', to: null })).toBe(true);
+		expect(await saveLeaveAccount(admin, { userId: eva.id, carryover: 20, start: '2026-03-01', weeks: null })).toBe(true);
+
+		// 2.3. – 30.11.: 274 Tage ÷ 7 × 3,75 = 146,79; genehmigt Mo 2. – Fr 6.11. ohne Mi/Do (krank) = 23
+		const a = await account('2026-11-30');
+		expect(a.rate).toBe(3.75);
+		expect(a.account).toEqual({ carryover: 20, earned: 146.79, used: 23, rest: 143.79 });
+		expect(a.state).toEqual({ state: 'angemeldet', date: '2026-03-02' });
+	});
+
+	it('über den Winter abgemeldet: danach kommt nichts mehr dazu', async () => {
+		const period = (await account('2026-11-30')).periods[0];
+		// Überschneidungen gehen nicht
+		expect(await saveEmployment(admin, { id: null, userId: eva.id, from: '2026-01-01', to: '2026-03-05' })).toHaveProperty('message');
+		expect(await saveEmployment(admin, { id: period.id, userId: eva.id, from: '2026-03-02', to: '2026-11-20' })).toBe(true);
+		// 2.3. – 20.11.: 264 Tage
+		const a = await account('2027-01-15');
+		expect(a.account).toEqual({ carryover: 20, earned: 141.43, used: 23, rest: 138.43 });
+		expect(a.state).toEqual({ state: 'abgemeldet', date: '2026-11-21' });
+	});
+
+	it('ab dem Stichtag: was davor lag, steckt im Übertrag', async () => {
+		expect(await saveLeaveAccount(admin, { userId: eva.id, carryover: 20, start: '2026-11-05', weeks: null })).toBe(true);
+		// Erworben 5. – 20.11. (16 Tage), vom Urlaub nur noch Fr 6.11. (Do 5. krank) = 7 Std.
+		expect((await account('2027-01-15')).account).toEqual({ carryover: 20, earned: 8.57, used: 7, rest: 21.57 });
+		// Eigene Urlaubswochen
+		expect(await saveLeaveAccount(admin, { userId: eva.id, carryover: 0, start: null, weeks: 6 })).toBe(true);
+		expect((await account('2027-01-15')).rate).toBe(4.5);
 	});
 });

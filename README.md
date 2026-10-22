@@ -470,6 +470,21 @@ mit einem offenen oder genehmigten, kommt eine Meldung.
 - Ein offener Antrag lässt sich zurückziehen.
 - Je Jahr: die genehmigten Tage und Stunden je Person, ohne Krankenstandstage (über den
   Jahreswechsel zählt jeder Tag in seinem Jahr).
+- **Urlaubskonto:** Je Woche, in der jemand angemeldet ist, kommt Urlaub dazu – rein rechnerisch
+  5 Wochen × 39 Std. = 195 Std. im Jahr, also 195 ÷ 52 = **3,75 Std. je Beschäftigungswoche**
+  (anteilig je Tag; Wochen und Stunden unter Einstellungen → Urlaub, je Person abweichende
+  Wochen möglich). Wer über den Winter **abgemeldet** ist, erwirbt in der Zeit nichts.
+  Genehmigter Urlaub geht ab (ohne Krankenstandstage), der Rest zählt im nächsten Jahr weiter:
+  **Rest = Übertrag + erworben − genehmigt**, Stand heute.
+  - Jeder sieht oben seinen **Resturlaub** (Stunden, ungefähr in Tagen); beim Beantragen steht,
+    was danach bleibt, beim Entscheiden der Rest vorher und nachher – rot, wenn mehr genehmigt
+    würde als erworben.
+  - **Urlaubskonten:** Liste aller (bzw. der eigenen Partie) mit Beschäftigung, Anspruch,
+    Genehmigt und Rest. Mit dem Recht „Urlaubskonten“ (von Haus aus Admin, Geschäftsführung,
+    Buchhaltung) lassen sich je Person die **Beschäftigungszeiten** pflegen (angemeldet ab – bis;
+    abmelden = das Ende eintragen, im Frühjahr eine neue Zeit anlegen; Überschneidungen gehen
+    nicht) und der **Übertrag** zum Stichtag – der Resturlaub aus der Zeit davor. Ab dem
+    Stichtag zählen erworbener und genehmigter Urlaub; ohne Stichtag zählt alles.
 - Sehen: die eigenen; der Partieführer die seiner Partie; das Büro alle.
 
 **Krankenstand** (`/krankenstand`) – melden mit „krank seit“ und, falls bekannt, „bis“ (leer

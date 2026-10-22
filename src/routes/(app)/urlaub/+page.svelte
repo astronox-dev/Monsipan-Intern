@@ -4,6 +4,9 @@
 	 * darunter die offenen Anträge zum Entscheiden, die genehmigten Tage und
 	 * Stunden je Person und alle Anträge des Jahres. Krankenstand im Urlaub
 	 * unterbricht ihn – das steht beim Antrag dabei.
+	 *
+	 * Urlaubskonten: was jeder noch hat (Übertrag + je Beschäftigungswoche
+	 * erworben − genehmigt) – beim Beantragen, beim Entscheiden und als Liste.
 	 */
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
@@ -14,7 +17,10 @@
 	import X from '@lucide/svelte/icons/x';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { dateTime } from '$lib/format';
+	import Pencil from '@lucide/svelte/icons/pencil';
 	import { hoursText, leaveDays, rangeLabel, type LeaveUsage } from '$lib/modules/planung/days';
+	import { hoursToDays } from '$lib/modules/planung/konto';
+	import AccountDialog from '$lib/modules/planung/components/AccountDialog.svelte';
 
 	let { data, form } = $props();
 
@@ -42,6 +48,21 @@
 	const interrupted = (u: LeaveUsage) =>
 		`Unterbrochen durch Krankenstand ${u.interruptions.map((s) => rangeLabel(s.from, s.to)).join(', ')} – ${dayCount(u.sickDays)} (${hoursText(u.sickHours)}) ${u.sickDays === 1 ? 'zählt' : 'zählen'} nicht`;
 	const withdraw = (r: (typeof data.rows)[number]) => (r.userId === data.me && r.status === 'beantragt') || data.canDecide;
+
+	type Account = (typeof data.accounts)[number];
+	const accountOf = (id: number) => data.accounts.find((a) => a.id === id && a.setUp);
+	const myAccount = $derived(accountOf(data.me));
+	const decimal = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',');
+	/** „120 Std. (≈ 15,4 Tage)" */
+	const restText = (a: Account, hours = a.account.rest) => `${hoursText(hours)} (≈ ${decimal(hoursToDays(hours, a.weekHours))} Tage)`;
+	const stateText = (a: Account) =>
+		!a.state ? 'keine Beschäftigungszeit' : a.state.state === 'angemeldet' ? `angemeldet seit ${rangeLabel(a.state.date, null)}` : a.state.state === 'ab' ? `angemeldet ab ${rangeLabel(a.state.date, null)}` : `abgemeldet seit ${rangeLabel(a.state.date, null)}`;
+	/** Für wen gerade beantragt wird – dessen Konto */
+	const requestAccount = $derived(accountOf(person ? Number(person) : data.me));
+	const previewHours = $derived(preview.reduce((s, d) => s + d.hours, 0));
+	let editing = $state<number | null>(null);
+	let editOpen = $state(false);
+	const editAccount = $derived(data.accounts.find((a) => a.id === editing));
 </script>
 
 <svelte:head><title>{pageTitle(`Urlaub ${data.year}`)}</title></svelte:head>
@@ -52,6 +73,11 @@
 		<p class="text-ink-2">
 			{data.year} · genehmigt für dich: <span class="num font-medium text-ink">{dayCount(mine.days)} · {hoursText(mine.hours)}</span>
 		</p>
+		{#if myAccount}
+			<p class="text-ink-2">
+				Dein Resturlaub: <span class="num font-semibold {myAccount.account.rest < 0 ? 'text-danger' : 'text-ink'}">{restText(myAccount)}</span>
+			</p>
+		{/if}
 	</div>
 	<div class="flex items-center gap-2">
 		<a href="?jahr={data.year - 1}" class="btn btn-secondary btn-sm"><ChevronLeft size={16} aria-hidden="true" />{data.year - 1}</a>
@@ -107,8 +133,14 @@
 				<button class="btn btn-primary" disabled={busy || !from}>{forOther ? 'Eintragen (gleich genehmigt)' : 'Beantragen'}</button>
 				{#if from}
 					<span class="num text-sm text-ink-2">
-						{dayCount(preview.length)} · {hoursText(preview.reduce((s, d) => s + d.hours, 0))} – Feiertage und Tage ohne Urlaubsstunden zählen nicht
+						{dayCount(preview.length)} · {hoursText(previewHours)} – Feiertage und Tage ohne Urlaubsstunden zählen nicht
 					</span>
+					{#if requestAccount}
+						{@const after = requestAccount.account.rest - previewHours}
+						<span class="num text-sm {after < 0 ? 'font-medium text-danger' : 'text-ink-2'}">
+							Danach bleiben {restText(requestAccount, after)}{after < 0 ? ' – mehr als erworben' : ''}
+						</span>
+					{/if}
 				{/if}
 			</div>
 		</form>
@@ -129,6 +161,13 @@
 					</div>
 					{#if r.usage.sickDays}<p class="mt-1 text-sm text-info">{interrupted(r.usage)}</p>{/if}
 					{#if r.note}<p class="mt-1 text-sm text-ink-2">„{r.note}"</p>{/if}
+					{#if accountOf(r.userId)}
+						{@const acc = accountOf(r.userId)!}
+						{@const after = acc.account.rest - r.usage.hours}
+						<p class="num mt-1 text-sm {after < 0 ? 'font-medium text-danger' : 'text-ink-2'}">
+							Resturlaub {restText(acc)} → nach Genehmigung {restText(acc, after)}{after < 0 ? ' – mehr als erworben' : ''}
+						</p>
+					{/if}
 					<form
 						method="POST"
 						action="?/decide"
@@ -148,6 +187,55 @@
 		</ul>
 	</section>
 {/if}
+
+{#if others && data.accounts.length}
+	<section class="card mb-4 overflow-hidden">
+		<div class="px-4 pt-4 lg:px-5">
+			<h2 class="text-lg">Urlaubskonten</h2>
+			<p class="text-sm text-ink-2">
+				Stand heute: Anspruch (Übertrag + je Woche angemeldet erworben) − genehmigt = Rest. Wer über den Winter abgemeldet ist, erwirbt in der Zeit nichts.
+			</p>
+		</div>
+		<div class="mt-2 hidden gap-3 px-4 text-[0.8125rem] text-ink-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_6rem_6rem_9rem_2.5rem] lg:px-5">
+			<span>Name</span><span>Beschäftigung</span><span class="text-right" title="Übertrag + erworben">Anspruch</span><span class="text-right">Genehmigt</span><span class="text-right">Rest</span><span></span>
+		</div>
+		<ul class="mt-1 divide-y divide-line">
+			{#each data.accounts as a (a.id)}
+				<li class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-2.5 md:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_6rem_6rem_9rem_2.5rem] lg:px-5">
+					<span class="min-w-0">
+						<span class="block font-medium">{a.name}</span>
+						{#if a.partyName}<span class="block text-[0.8125rem] text-ink-3">{a.partyName}</span>{/if}
+					</span>
+					<span class="col-start-1 text-sm text-ink-2 md:col-start-auto">{stateText(a)}</span>
+					{#if a.setUp}
+						<span class="num col-start-1 text-sm text-ink-2 md:col-start-auto md:text-right">
+							<span class="md:hidden">Anspruch</span> {hoursText(a.account.carryover + a.account.earned)}
+						</span>
+						<span class="num col-start-1 text-sm text-ink-2 md:col-start-auto md:text-right"><span class="md:hidden">genehmigt</span> {hoursText(a.account.used)}</span>
+						<span class="num col-start-2 row-start-1 text-right font-semibold md:col-start-auto md:row-start-auto {a.account.rest < 0 ? 'text-danger' : ''}">
+							{hoursText(a.account.rest)}
+							<span class="block text-[0.75rem] font-normal text-ink-3">≈ {decimal(hoursToDays(a.account.rest, a.weekHours))} Tage</span>
+						</span>
+					{:else}
+						<span class="col-span-3 hidden text-sm text-ink-3 md:block">noch nicht eingerichtet</span>
+					{/if}
+					{#if data.canEditAccounts}
+						<button
+							type="button"
+							class="btn btn-ghost btn-sm btn-icon col-start-2 row-start-2 justify-self-end md:col-start-auto md:row-start-auto"
+							aria-label="Urlaubskonto von {a.name} bearbeiten"
+							onclick={() => ((editing = a.id), (editOpen = true))}
+						>
+							<Pencil size={16} />
+						</button>
+					{/if}
+				</li>
+			{/each}
+		</ul>
+	</section>
+{/if}
+
+{#if editAccount}<AccountDialog bind:open={editOpen} account={editAccount} defaultWeeks={data.leaveWeeks} today={data.today} />{/if}
 
 {#if others && data.totals.length}
 	<section class="card mb-4 p-4 lg:p-5">

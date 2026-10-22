@@ -93,10 +93,10 @@ export async function listLeave(user: SessionUser, year: number) {
 }
 
 /** Genehmigt: die beim Genehmigen festgehaltenen Stunden; sonst (und bei alten Anträgen) die aktuellen */
-const hoursFor = (status: LeaveStatus, dayHours: number[] | null, current: number[]) => (status === 'genehmigt' && dayHours ? validLeaveHours(dayHours) : current);
+export const hoursFor = (status: LeaveStatus, dayHours: number[] | null, current: number[]) => (status === 'genehmigt' && dayHours ? validLeaveHours(dayHours) : current);
 
 /** Krankenstände der Leute, die in diesen Zeiträumen liegen */
-async function sickOf(ranges: { userId: number; from: string; to: string }[]) {
+export async function sickOf(ranges: { userId: number; from: string; to: string }[]) {
 	if (!ranges.length) return [];
 	const from = ranges.reduce((m, r) => (r.from < m ? r.from : m), ranges[0].from);
 	const to = ranges.reduce((m, r) => (r.to > m ? r.to : m), ranges[0].to);
