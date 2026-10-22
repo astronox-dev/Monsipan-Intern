@@ -338,7 +338,10 @@ describe('Prüfseite', () => {
 		if (!found || found === 'aus') return;
 		expect(found.result).toBe('gueltig');
 		expect(found.signed).toBe(true);
-		const text = JSON.stringify(found);
+		// Prüfsummen und Zeitstempel sind zufällig – „300" kann darin vorkommen, ohne der Betrag zu sein
+		const { hashes, ...rest } = found;
+		for (const h of hashes) expect(h).toMatch(/^[0-9a-f]{64}$/);
+		const text = JSON.stringify(rest).replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '');
 		for (const secret of ['Straßenbau', 'Leitlinie', '300', 'Hauptstraße']) expect(text).not.toContain(secret);
 		expect(await publicVerification('A'.repeat(24))).toBeNull();
 		expect(await publicVerification('../../etc')).toBeNull();
