@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { easterSunday, holidayName, isWorkday, overlaps, rangeLabel, termDays, workdays } from './days';
+import { DEFAULT_LEAVE_HOURS, easterSunday, holidayName, hoursText, isWorkday, leaveDays, leaveUsage, overlaps, rangeLabel, termDays, validLeaveHours, workdays } from './days';
 
 describe('Feiertage', () => {
 	it('kennt Ostern', () => {
@@ -39,6 +39,39 @@ describe('Arbeitstage', () => {
 		expect(overlaps('2026-10-19', '2026-10-23', '2026-10-23', '2026-10-30')).toBe(true);
 		expect(overlaps('2026-10-19', '2026-10-23', '2026-10-24', null)).toBe(false);
 		expect(overlaps('2026-10-19', null, '2026-12-01', '2026-12-02')).toBe(true);
+	});
+});
+
+describe('Urlaub in Stunden', () => {
+	const H = [8, 8, 8, 8, 7, 0, 0];
+
+	it('verbraucht je Wochentag die eingestellten Stunden, Feiertage nicht', () => {
+		// Mo 19.10. – So 25.10.2026: 4 × 8 + 7
+		expect(leaveUsage('2026-10-19', '2026-10-25', H, [])).toMatchObject({ days: 5, hours: 39, sickDays: 0 });
+		// Mo 26.10. ist Nationalfeiertag
+		expect(leaveDays('2026-10-26', '2026-10-30', H).map((d) => d.hours)).toEqual([8, 8, 8, 7]);
+		// Samstag nur mit Stunden
+		expect(leaveDays('2026-10-24', '2026-10-24', H)).toEqual([]);
+		expect(leaveDays('2026-10-24', '2026-10-24', [8, 8, 8, 8, 7, 4.5, 0])).toEqual([{ date: '2026-10-24', hours: 4.5 }]);
+	});
+
+	it('Krankenstand im Urlaub unterbricht ihn', () => {
+		// Krank Mi 21. – Do 22.10.: 16 Stunden zurück
+		const u = leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-21', to: '2026-10-22' }]);
+		expect(u).toMatchObject({ days: 3, hours: 23, sickDays: 2, sickHours: 16 });
+		expect(u.interruptions).toEqual([{ from: '2026-10-21', to: '2026-10-22' }]);
+		// Schon vorher krank und noch offen: ab Urlaubsbeginn bis zum Ende
+		expect(leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-15', to: null }])).toMatchObject({ days: 0, hours: 0, sickDays: 5, sickHours: 39, interruptions: [{ from: '2026-10-19', to: '2026-10-23' }] });
+		// Krankenstand außerhalb zählt nicht
+		expect(leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-26', to: '2026-10-27' }]).interruptions).toEqual([]);
+	});
+
+	it('nimmt nur gültige Wochenstunden', () => {
+		expect(validLeaveHours([8, 8, 8, 8, 7.5, 0, 0])).toEqual([8, 8, 8, 8, 7.5, 0, 0]);
+		expect(validLeaveHours([8, 8])).toEqual([...DEFAULT_LEAVE_HOURS]);
+		expect(validLeaveHours([8, 8, 8, 8, 30, 0, 0])).toEqual([...DEFAULT_LEAVE_HOURS]);
+		expect(validLeaveHours(null)).toEqual([...DEFAULT_LEAVE_HOURS]);
+		expect(hoursText(7.5)).toBe('7,5 Std.');
 	});
 });
 

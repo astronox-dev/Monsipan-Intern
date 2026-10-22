@@ -99,8 +99,13 @@ export const leaveRequests = sqliteTable(
 		/** „JJJJ-MM-TT", beide eingeschlossen */
 		from: text('from_date').notNull(),
 		to: text('to_date').notNull(),
-		/** Arbeitstage beim Beantragen (Mo–Fr ohne Feiertage) */
+		/** Urlaubstage beim Beantragen bzw. Genehmigen (ohne Feiertage und Wochentage ohne Urlaubsstunden) */
 		days: real('days').notNull().default(0),
+		/**
+		 * Urlaubsstunden je Wochentag (Montag zuerst), festgehalten beim Genehmigen –
+		 * spätere Änderungen in den Einstellungen gelten nur für neue. Ohne: die aktuellen.
+		 */
+		dayHours: text('day_hours', { mode: 'json' }).$type<number[]>(),
 		note: text('note').notNull().default(''),
 		status: text('status', { enum: LEAVE_STATUS }).notNull().default('beantragt'),
 		decidedBy: integer('decided_by').references(() => users.id, { onDelete: 'set null' }),

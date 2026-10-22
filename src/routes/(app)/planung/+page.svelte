@@ -49,7 +49,11 @@
 
 	type Entry = (typeof data.entries)[number];
 	const cell = (partyId: number, day: string) => data.entries.filter((e) => e.partyId === partyId && e.date === day);
-	const away = (partyId: number, day: string) => data.absences.filter((a) => a.partyId === partyId && a.from <= day && (a.to ?? '9999-12-31') >= day);
+	const away = (partyId: number, day: string) => {
+		const all = data.absences.filter((a) => a.partyId === partyId && a.from <= day && (a.to ?? '9999-12-31') >= day);
+		// Krankenstand unterbricht den Urlaub – dann steht nur er da
+		return all.filter((a) => a.kind !== 'urlaub' || !all.some((b) => b.userId === a.userId && b.kind !== 'urlaub'));
+	};
 	const label = (e: Entry) => (e.orderId ? e.orderLocation || e.orderTitle || `Auftrag ${spacedNumber(e.orderNumber ?? '')}` : e.text);
 	/** Wer an diesem Tag aus einer anderen Spalte hier aushilft – und wer von hier woanders ist */
 	const guests = (partyId: number, day: string) => data.dayMoves.filter((m) => m.partyId === partyId && m.date === day);

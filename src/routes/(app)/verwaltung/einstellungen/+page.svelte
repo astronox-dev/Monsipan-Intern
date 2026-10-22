@@ -16,10 +16,13 @@
 	import Copy from '@lucide/svelte/icons/copy';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Unplug from '@lucide/svelte/icons/unplug';
+	import TreePalm from '@lucide/svelte/icons/tree-palm';
 	import { goto, invalidateAll } from '$app/navigation';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import { dateTime, int } from '$lib/format';
+	import { hoursText } from '$lib/modules/planung/days';
+	import { parseHours } from '$lib/modules/stunden/week';
 	import { can } from '$lib/permissions';
 	import { isResetPhrase } from '$lib/reset-phrase';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -98,6 +101,12 @@
 		}
 	}
 
+	// Urlaubsstunden je Wochentag – die Summe darunter rechnet beim Tippen mit
+	const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+	// svelte-ignore state_referenced_locally
+	let leaveHours = $state(data.settings.leaveHours.map((h) => String(h).replace('.', ',')));
+	const leaveWeek = $derived(leaveHours.reduce((s, h) => s + parseHours(h), 0));
+
 	const mb = (b: number) => `${(b / 1024 / 1024).toLocaleString('de-AT', { maximumFractionDigits: 1 })} MB`;
 
 	async function copy(value: string, what: string) {
@@ -126,7 +135,7 @@
 
 <div class="pt-2 pb-5">
 	<h1 class="text-[2rem] leading-tight">Einstellungen</h1>
-	<p class="text-ink-2">E-Mail-Versand, Kontaktformular der Webseite, Vorlagen und Datensicherung.</p>
+	<p class="text-ink-2">E-Mail-Versand, Kontaktformular der Webseite, Vorlagen, Urlaub und Datensicherung.</p>
 	{#if !canEdit}<p class="mt-2 rounded-xl bg-surface-2 px-3 py-2 text-sm text-ink-2">Nur zum Ansehen – ändern darf, wer Einstellungen bearbeiten darf.</p>{/if}
 </div>
 
@@ -313,6 +322,27 @@
 			</div>
 			<a href="/verwaltung/einstellungen/signatur" class="btn btn-secondary"><ShieldCheck size={18} aria-hidden="true" />Rechnungssignatur</a>
 		</div>
+	</section>
+
+	<section class="card p-4 lg:col-span-2 lg:p-6" aria-labelledby="h-leave">
+		<h2 id="h-leave" class="flex items-center gap-2 text-xl"><TreePalm size={20} aria-hidden="true" />Urlaub</h2>
+		<p class="text-sm text-ink-2">
+			So viele Stunden verbraucht ein genehmigter Urlaubstag – je Wochentag. Feiertage und Tage mit 0 zählen nicht als Urlaubstag. Die Stunden werden beim Genehmigen am
+			Antrag festgehalten; eine Änderung hier gilt nur für Urlaub, der ab jetzt genehmigt wird. Wird während des Urlaubs ein Krankenstand gemeldet, ist der Urlaub
+			unterbrochen: Diese Tage zählen nicht.
+		</p>
+		<form method="POST" action="?/leaveHours" class="mt-3 flex flex-wrap items-end gap-3" use:enhance={done('leaveHours', () => 'Urlaubsstunden gespeichert')}>
+			<div class="grid grid-cols-4 gap-2 sm:grid-cols-7">
+				{#each WEEKDAYS as day, i (day)}
+					<label class="block">
+						<span class="field-label">{day}</span>
+						<input class="input num w-16 text-right" name="tag{i}" inputmode="decimal" maxlength="5" bind:value={leaveHours[i]} placeholder="0" />
+					</label>
+				{/each}
+			</div>
+			<span class="num pb-2.5 text-sm text-ink-2">= {hoursText(leaveWeek)} pro Woche</span>
+			<button class="btn btn-secondary" disabled={busy === 'leaveHours'}>Speichern</button>
+		</form>
 	</section>
 
 	<section class="card p-4 lg:p-6" aria-labelledby="h-backup">

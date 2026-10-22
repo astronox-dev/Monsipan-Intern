@@ -425,7 +425,8 @@ was er auf der Seite sieht: die Partie nur ihre Spalte, ohne Notizen.
 
 - **Urlaub und Krankenstand** stehen von selbst im Feld der Partie: genehmigter Urlaub mit
   Palme, Krankenstand mit Thermometer. Wer Krankenstände nicht sehen darf (z. B. Arbeiter),
-  sieht bei anderen nur „abwesend“.
+  sieht bei anderen nur „abwesend“. Ist jemand im Urlaub krank, steht an diesen Tagen nur der
+  Krankenstand.
 - **An die Partien schicken:** Ist die Woche fertig, bekommt jede Partie mit Einträgen eine
   Benachrichtigung – statt bei jedem einzelnen Eintrag.
 - **Nicht zugeteilte Aufträge** unten: die offenen Aufträge ohne Partie, die ältesten zuerst –
@@ -448,15 +449,27 @@ was er auf der Seite sieht: die Partie nur ihre Spalte, ohne Notizen.
   zusätzlich Buchhaltung und Lesezugriff.
 
 **Urlaub** (`/urlaub`) – jeder beantragt für sich (von – bis, Notiz). Gezählt werden
-**Arbeitstage**: Montag bis Freitag ohne die österreichischen Feiertage (Ostern, Pfingsten,
-Fronleichnam usw. werden je Jahr berechnet). Überschneidet sich ein Antrag mit einem offenen
-oder genehmigten, kommt eine Meldung.
+**Arbeitstage und Urlaubsstunden**: Unter Einstellungen → Urlaub steht je Wochentag, wie viele
+Stunden ein Urlaubstag verbraucht (Vorgabe Mo–Do 8, Fr 7, Sa/So 0 – 39 Stunden). Ein Tag zählt,
+wenn für seinen Wochentag Stunden eingestellt sind und er kein österreichischer Feiertag ist
+(Ostern, Pfingsten, Fronleichnam usw. werden je Jahr berechnet). Überschneidet sich ein Antrag
+mit einem offenen oder genehmigten, kommt eine Meldung.
+
+- **Beim Genehmigen** werden die Stunden je Wochentag am Antrag festgehalten – ändert man die
+  Einstellung später, bleibt schon genehmigter Urlaub, wie er war. Offene Anträge rechnen mit
+  der aktuellen Einstellung.
+- **Krankenstand im Urlaub unterbricht ihn:** Tage, an denen jemand krank gemeldet ist, zählen
+  nicht als Urlaub und verbrauchen keine Stunden (ein offener Krankenstand bis zum
+  Urlaubsende). Beim Antrag steht „Unterbrochen“ mit den Tagen und Stunden, die nicht zählen,
+  beim Krankenstand der Urlaub, den er unterbricht; die Meldung des Krankenstands sagt es dazu.
+  Wird der Krankenstand geändert oder gelöscht, rechnet der Urlaub von selbst neu.
 
 - Die **Leitung** (Admin, Geschäftsführung, Bauleitung) genehmigt oder lehnt ab, auf Wunsch
   mit Hinweis; die Person bekommt dazu eine Benachrichtigung. Sie kann auch **für andere
   eintragen** – das gilt dann gleich als genehmigt – und Urlaub löschen.
 - Ein offener Antrag lässt sich zurückziehen.
-- Je Jahr: die genehmigten Tage je Person (über den Jahreswechsel zählt jeder Tag in seinem Jahr).
+- Je Jahr: die genehmigten Tage und Stunden je Person, ohne Krankenstandstage (über den
+  Jahreswechsel zählt jeder Tag in seinem Jahr).
 - Sehen: die eigenen; der Partieführer die seiner Partie; das Büro alle.
 
 **Krankenstand** (`/krankenstand`) – melden mit „krank seit“ und, falls bekannt, „bis“ (leer

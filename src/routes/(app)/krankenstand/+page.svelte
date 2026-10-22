@@ -158,6 +158,11 @@
 									.filter(Boolean)
 									.join(' · ')}
 							</span>
+							{#if r.leave.length}
+								<span class="block text-[0.8125rem] text-info">
+									Im Urlaub {r.leave.map((l) => rangeLabel(l.from, l.to)).join(', ')} – der Urlaub ist unterbrochen, diese Tage zählen nicht als Urlaub
+								</span>
+							{/if}
 						</span>
 						{#if running(r)}<span class="badge badge-warn">{r.to ? 'Krank' : 'Offen'}</span>{/if}
 						{#if r.docCount}

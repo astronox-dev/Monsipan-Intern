@@ -1,6 +1,7 @@
 import { db } from './db';
 import { settings } from './db/schema';
 import { ROLES, type Role } from '$lib/permissions';
+import { DEFAULT_LEAVE_HOURS, validLeaveHours } from '$lib/modules/planung/days';
 
 export interface AppSettings {
 	/**
@@ -29,6 +30,8 @@ export interface AppSettings {
 	/** Skonto in Prozent und innerhalb wie vieler Tage – 0 % heißt ohne */
 	skontoPercent: number;
 	skontoDays: number;
+	/** Urlaubsstunden, die ein genehmigter Urlaubstag verbraucht – je Wochentag, Montag zuerst */
+	leaveHours: number[];
 }
 
 const DEFAULTS: AppSettings = {
@@ -47,7 +50,8 @@ const DEFAULTS: AppSettings = {
 	invoiceClosing: 'Wir danken für Ihren Auftrag und freuen uns auf die weitere Zusammenarbeit.',
 	invoicePaymentDays: 30,
 	skontoPercent: 0,
-	skontoDays: 0
+	skontoDays: 0,
+	leaveHours: [...DEFAULT_LEAVE_HOURS]
 };
 
 let cache: AppSettings | null = null;
@@ -66,6 +70,7 @@ export async function getSettings(): Promise<AppSettings> {
 		}
 	}
 	out.alertRoles = out.alertRoles.filter((r) => (ROLES as readonly string[]).includes(r));
+	out.leaveHours = validLeaveHours(out.leaveHours);
 	cache = out;
 	return out;
 }

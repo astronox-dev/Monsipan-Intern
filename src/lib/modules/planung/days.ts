@@ -70,6 +70,68 @@ export function workdays(from: string, to: string): number {
 	return n;
 }
 
+/** Urlaubsstunden je Wochentag, Montag zuerst – Vorgabe: 39-Stunden-Woche */
+export const DEFAULT_LEAVE_HOURS: readonly number[] = [8, 8, 8, 8, 7, 0, 0];
+
+/** Sieben Zahlen von 0 bis 24 – sonst die Vorgabe */
+export function validLeaveHours(value: unknown): number[] {
+	const ok = Array.isArray(value) && value.length === 7 && value.every((h) => typeof h === 'number' && Number.isFinite(h) && h >= 0 && h <= 24);
+	return ok ? [...value] : [...DEFAULT_LEAVE_HOURS];
+}
+
+/** „7,5 Std." */
+export const hoursText = (h: number) => `${String(Math.round(h * 100) / 100).replace('.', ',')} Std.`;
+
+/**
+ * Die Tage eines Urlaubs mit den Stunden, die sie verbrauchen. Feiertage und
+ * Wochentage ohne Urlaubsstunden zählen nicht.
+ */
+export function leaveDays(from: string, to: string, hours: readonly number[]): { date: string; hours: number }[] {
+	if (!isValidIsoDate(from) || !isValidIsoDate(to) || to < from) return [];
+	const out: { date: string; hours: number }[] = [];
+	for (let d = from, guard = 0; d <= to && guard < 800; d = addDays(d, 1), guard++) {
+		const h = hours[weekdayIndex(d)] ?? 0;
+		if (h > 0 && !holidayName(d)) out.push({ date: d, hours: h });
+	}
+	return out;
+}
+
+export interface LeaveUsage {
+	/** Verbrauchte Urlaubstage und -stunden */
+	days: number;
+	hours: number;
+	/** Durch Krankenstand unterbrochen – diese Tage und Stunden zählen nicht */
+	sickDays: number;
+	sickHours: number;
+	/** Die Krankenstände im Urlaub, auf dessen Zeitraum gekürzt */
+	interruptions: { from: string; to: string }[];
+}
+
+/**
+ * Was ein Urlaub verbraucht. Ein Krankenstand während des Urlaubs unterbricht
+ * ihn: Tage, an denen jemand krank gemeldet ist, zählen nicht. Ein offenes
+ * Ende („noch krank") gilt bis zum Urlaubsende.
+ */
+export function leaveUsage(from: string, to: string, hours: readonly number[], sick: readonly { from: string; to: string | null }[]): LeaveUsage {
+	const interruptions = sick
+		.filter((s) => overlaps(s.from, s.to, from, to))
+		.map((s) => ({ from: s.from < from ? from : s.from, to: !s.to || s.to > to ? to : s.to }))
+		.sort((a, b) => a.from.localeCompare(b.from));
+	const usage: LeaveUsage = { days: 0, hours: 0, sickDays: 0, sickHours: 0, interruptions };
+	for (const d of leaveDays(from, to, hours)) {
+		if (interruptions.some((s) => s.from <= d.date && d.date <= s.to)) {
+			usage.sickDays++;
+			usage.sickHours += d.hours;
+		} else {
+			usage.days++;
+			usage.hours += d.hours;
+		}
+	}
+	usage.hours = Math.round(usage.hours * 100) / 100;
+	usage.sickHours = Math.round(usage.sickHours * 100) / 100;
+	return usage;
+}
+
 /**
  * Die Tage eines Termins von–bis (etwa aus dem Arbeitsauftrag): die Arbeitstage
  * dazwischen. Erster und letzter Tag zählen immer – auch an einem Samstag oder

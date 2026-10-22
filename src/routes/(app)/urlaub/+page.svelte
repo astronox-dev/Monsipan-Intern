@@ -1,8 +1,9 @@
 <script lang="ts">
 	/**
 	 * Urlaub: oben beantragen (wer genehmigen darf, trägt auch für andere ein),
-	 * darunter die offenen Anträge zum Entscheiden, die genehmigten Tage je
-	 * Person und alle Anträge des Jahres.
+	 * darunter die offenen Anträge zum Entscheiden, die genehmigten Tage und
+	 * Stunden je Person und alle Anträge des Jahres. Krankenstand im Urlaub
+	 * unterbricht ihn – das steht beim Antrag dabei.
 	 */
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
@@ -13,7 +14,7 @@
 	import X from '@lucide/svelte/icons/x';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { dateTime } from '$lib/format';
-	import { rangeLabel, workdays } from '$lib/modules/planung/days';
+	import { hoursText, leaveDays, rangeLabel, type LeaveUsage } from '$lib/modules/planung/days';
 
 	let { data, form } = $props();
 
@@ -30,12 +31,16 @@
 	let busy = $state(false);
 	/** Rückfrage vor dem Zurückziehen bzw. Löschen */
 	let asking = $state<number | null>(null);
-	const days = $derived(from ? workdays(from, to || from) : 0);
+	const preview = $derived(from ? leaveDays(from, to || from, data.leaveHours) : []);
 	const forOther = $derived(!!person && Number(person) !== data.me);
 
 	const open = $derived(data.rows.filter((r) => r.status === 'beantragt'));
 	const others = $derived(data.scope !== 'self');
-	const myDays = $derived(data.totals.find((t) => t.userId === data.me)?.days ?? 0);
+	const mine = $derived(data.totals.find((t) => t.userId === data.me) ?? { days: 0, hours: 0 });
+	const dayCount = (n: number) => `${n} ${n === 1 ? 'Arbeitstag' : 'Arbeitstage'}`;
+	const used = (u: LeaveUsage) => `${dayCount(u.days)} · ${hoursText(u.hours)}`;
+	const interrupted = (u: LeaveUsage) =>
+		`Unterbrochen durch Krankenstand ${u.interruptions.map((s) => rangeLabel(s.from, s.to)).join(', ')} – ${dayCount(u.sickDays)} (${hoursText(u.sickHours)}) ${u.sickDays === 1 ? 'zählt' : 'zählen'} nicht`;
 	const withdraw = (r: (typeof data.rows)[number]) => (r.userId === data.me && r.status === 'beantragt') || data.canDecide;
 </script>
 
@@ -45,7 +50,7 @@
 	<div class="min-w-0">
 		<h1 class="flex items-center gap-2 text-[2rem] leading-tight"><TreePalm size={26} aria-hidden="true" />Urlaub</h1>
 		<p class="text-ink-2">
-			{data.year} · genehmigt für dich: <span class="num font-medium text-ink">{myDays} {myDays === 1 ? 'Arbeitstag' : 'Arbeitstage'}</span>
+			{data.year} · genehmigt für dich: <span class="num font-medium text-ink">{dayCount(mine.days)} · {hoursText(mine.hours)}</span>
 		</p>
 	</div>
 	<div class="flex items-center gap-2">
@@ -100,7 +105,11 @@
 			</label>
 			<div class="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-4">
 				<button class="btn btn-primary" disabled={busy || !from}>{forOther ? 'Eintragen (gleich genehmigt)' : 'Beantragen'}</button>
-				{#if from}<span class="num text-sm text-ink-2">{days} {days === 1 ? 'Arbeitstag' : 'Arbeitstage'} – Wochenende und Feiertage zählen nicht</span>{/if}
+				{#if from}
+					<span class="num text-sm text-ink-2">
+						{dayCount(preview.length)} · {hoursText(preview.reduce((s, d) => s + d.hours, 0))} – Feiertage und Tage ohne Urlaubsstunden zählen nicht
+					</span>
+				{/if}
 			</div>
 		</form>
 	</section>
@@ -116,8 +125,9 @@
 						<span class="font-semibold">{r.name}</span>
 						{#if r.partyName}<span class="text-sm text-ink-3">{r.partyName}</span>{/if}
 						<span class="num">{rangeLabel(r.from, r.to)}</span>
-						<span class="num text-sm text-ink-2">{r.days} {r.days === 1 ? 'Arbeitstag' : 'Arbeitstage'}</span>
+						<span class="num text-sm text-ink-2">{used(r.usage)}</span>
 					</div>
+					{#if r.usage.sickDays}<p class="mt-1 text-sm text-info">{interrupted(r.usage)}</p>{/if}
 					{#if r.note}<p class="mt-1 text-sm text-ink-2">„{r.note}"</p>{/if}
 					<form
 						method="POST"
@@ -144,7 +154,9 @@
 		<h2 class="text-lg">Genehmigt {data.year}</h2>
 		<ul class="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
 			{#each data.totals as t (t.userId)}
-				<li class="flex justify-between gap-3 border-b border-line py-1"><span>{t.name}</span><span class="num">{t.days} {t.days === 1 ? 'Tag' : 'Tage'}</span></li>
+				<li class="flex justify-between gap-3 border-b border-line py-1">
+						<span>{t.name}</span><span class="num">{t.days} {t.days === 1 ? 'Tag' : 'Tage'} · {hoursText(t.hours)}</span>
+					</li>
 			{/each}
 		</ul>
 	</section>
@@ -163,7 +175,7 @@
 						</span>
 						<span class="block text-[0.8125rem] text-ink-3">
 							{[
-								`${r.days} ${r.days === 1 ? 'Arbeitstag' : 'Arbeitstage'}`,
+								used(r.usage),
 								r.note && `„${r.note}"`,
 								r.status !== 'beantragt' && r.decidedByName && `${st.label.toLowerCase()} von ${r.decidedByName}${r.decidedAt ? ` am ${dateTime(r.decidedAt)}` : ''}`,
 								r.decisionNote && `Hinweis: ${r.decisionNote}`
@@ -171,7 +183,9 @@
 								.filter(Boolean)
 								.join(' · ')}
 						</span>
+						{#if r.usage.sickDays && r.status !== 'abgelehnt'}<span class="block text-[0.8125rem] text-info">{interrupted(r.usage)}</span>{/if}
 					</span>
+					{#if r.usage.sickDays && r.status === 'genehmigt'}<span class="badge badge-info">Unterbrochen</span>{/if}
 					<span class="badge {st.tone}">{st.label}</span>
 					{#if withdraw(r)}
 						{@const verb = r.status === 'beantragt' && r.userId === data.me ? 'Zurückziehen' : 'Löschen'}

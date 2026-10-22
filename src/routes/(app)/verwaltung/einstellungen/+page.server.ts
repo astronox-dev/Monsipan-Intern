@@ -15,6 +15,7 @@ import { getSettings, updateSettings } from '$lib/server/settings';
 import { letterheadPath, LetterheadError, storeLetterhead } from '$lib/server/letterhead';
 import { disconnectWebsite, newWebsiteKey, websiteLink } from '$lib/modules/auftraege/server/website';
 import { readPaymentTerms } from '$lib/modules/auftraege/offer';
+import { parseHours } from '$lib/modules/stunden/week';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -110,6 +111,16 @@ export const actions: Actions = {
 		if ('message' in terms) return fail(400, { message: terms.message });
 		await updateSettings({ invoicePaymentDays: terms.paymentDays, skontoPercent: terms.skontoPercent, skontoDays: terms.skontoDays });
 		return { saved: 'paymentTerms' };
+	},
+	/** Urlaubsstunden je Wochentag – gelten für Urlaub, der ab jetzt genehmigt wird */
+	leaveHours: async ({ request, locals }) => {
+		requirePermission(locals, 'einstellungen.bearbeiten');
+		const f = await request.formData();
+		const hours = Array.from({ length: 7 }, (_, i) => Math.round(parseHours(String(f.get(`tag${i}`) ?? '')) * 100) / 100);
+		if (hours.some((h) => h > 24)) return fail(400, { message: 'Höchstens 24 Stunden je Tag.' });
+		if (!hours.some((h) => h > 0)) return fail(400, { message: 'Mindestens ein Wochentag braucht Urlaubsstunden.' });
+		await updateSettings({ leaveHours: hours });
+		return { saved: 'leaveHours' };
 	},
 	letterhead: async ({ request, locals }) => {
 		requirePermission(locals, 'einstellungen.bearbeiten');

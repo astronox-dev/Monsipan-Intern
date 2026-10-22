@@ -5,6 +5,9 @@
  *
  * Die Belege sehen nur die Person selbst, wer gemeldet hat, und wer alle
  * Krankenstände sieht (das Büro).
+ *
+ * Fällt ein Krankenstand in einen genehmigten Urlaub, ist der Urlaub
+ * unterbrochen – diese Tage verbrauchen keinen Urlaub (siehe urlaub.ts).
  */
 import fs from 'node:fs';
 import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
@@ -12,7 +15,7 @@ import { alias } from 'drizzle-orm/sqlite-core';
 import { can } from '$lib/permissions';
 import { db } from '$lib/server/db';
 import { col } from '$lib/server/db/sql';
-import { parties, sickDocuments, sickReports, users } from '$lib/server/db/schema';
+import { leaveRequests, parties, sickDocuments, sickReports, users } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
 import { notify } from '$lib/server/notifications';
 import { fullName } from '$lib/format';
@@ -73,6 +76,15 @@ export async function listSick(user: SessionUser, year: number) {
 		.orderBy(sql`case when ${sickReports.to} is null then 0 else 1 end`, desc(sickReports.from), desc(sickReports.id))
 		.all();
 	const ids = rows.map((r) => r.id);
+	// Genehmigter Urlaub derselben Leute – den unterbricht der Krankenstand
+	const leave = ids.length
+		? await db
+				.select({ userId: leaveRequests.userId, from: leaveRequests.from, to: leaveRequests.to })
+				.from(leaveRequests)
+				.where(and(inArray(leaveRequests.userId, [...new Set(rows.map((r) => r.userId))]), eq(leaveRequests.status, 'genehmigt')))
+				.orderBy(asc(leaveRequests.from))
+				.all()
+		: [];
 	const docs = ids.length
 		? await db
 				.select({
@@ -96,7 +108,9 @@ export async function listSick(user: SessionUser, year: number) {
 			reportedBy: r.createdBy === r.userId ? '' : fullName({ firstName: reporterFirst, lastName: reporterLast }),
 			docCount: mine.length,
 			docs: visible ? mine.map(({ reportId: _, ...d }) => d) : [],
-			canEdit: mayEditSick(user, r)
+			canEdit: mayEditSick(user, r),
+			/** Urlaub, der dadurch unterbrochen ist */
+			leave: leave.filter((l) => l.userId === r.userId && overlaps(l.from, l.to, r.from, r.to)).map(({ from, to }) => ({ from, to }))
 		};
 	});
 }
@@ -202,6 +216,11 @@ export async function createSick(user: SessionUser, input: SickInput, files: Fil
 		for (const s of stored) await tx.insert(sickDocuments).values({ reportId: row.id, ...s, createdBy: user.id });
 		return row.id;
 	});
+	const inLeave = await db
+		.select({ id: leaveRequests.id })
+		.from(leaveRequests)
+		.where(and(eq(leaveRequests.userId, input.userId), eq(leaveRequests.status, 'genehmigt'), lte(leaveRequests.from, input.to ?? '9999-12-31'), gte(leaveRequests.to, input.from)))
+		.get();
 	const who = await db
 		.select({
 			firstName: users.firstName,
@@ -216,8 +235,11 @@ export async function createSick(user: SessionUser, input: SickInput, files: Fil
 		title: `Krankenstand: ${who ? fullName(who) : ''}`,
 		body: [
 			input.to ? rangeLabel(input.from, input.to) : `seit ${rangeLabel(input.from, null)}`,
-			stored.length ? 'mit Krankmeldung' : 'Krankmeldung folgt'
-		].join(' · '),
+			stored.length ? 'mit Krankmeldung' : 'Krankmeldung folgt',
+			inLeave && 'unterbricht den Urlaub'
+		]
+			.filter(Boolean)
+			.join(' · '),
 		url: '/krankenstand',
 		partyId: person.partyId,
 		actorId: user.id

@@ -1,7 +1,8 @@
 import { fail } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
 import { requirePermission } from '$lib/server/guard';
-import { approvedDays, createLeave, decideLeave, deleteLeave, leavePeople, leaveScope, listLeave, readLeave } from '$lib/modules/planung/server/urlaub';
+import { getSettings } from '$lib/server/settings';
+import { approvedTotals, createLeave, decideLeave, deleteLeave, leavePeople, leaveScope, listLeave, readLeave } from '$lib/modules/planung/server/urlaub';
 import { today } from '$lib/modules/stunden/week';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -11,15 +12,17 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const raw = Number(url.searchParams.get('jahr'));
 	const year = Number.isInteger(raw) && raw > 2000 && raw < 2100 ? raw : thisYear;
 	const rows = await listLeave(user, year);
-	const totals = approvedDays(rows, year);
+	const totals = approvedTotals(rows);
 	return {
 		year,
 		thisYear,
 		today: today(),
 		me: user.id,
 		scope: leaveScope(user),
-		rows,
-		totals: [...totals.entries()].map(([userId, days]) => ({ userId, name: rows.find((r) => r.userId === userId)?.name ?? '', days })).sort((a, b) => a.name.localeCompare(b.name, 'de')),
+		rows: rows.map(({ inYear: _, ...r }) => r),
+		totals: [...totals.entries()].map(([userId, t]) => ({ userId, name: rows.find((r) => r.userId === userId)?.name ?? '', ...t })).sort((a, b) => a.name.localeCompare(b.name, 'de')),
+		/** Für die Vorschau beim Beantragen */
+		leaveHours: (await getSettings()).leaveHours,
 		people: await leavePeople(user),
 		canRequest: can(user.role, 'urlaub.beantragen'),
 		canDecide: can(user.role, 'urlaub.genehmigen')
