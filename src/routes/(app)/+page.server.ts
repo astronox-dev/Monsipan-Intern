@@ -21,6 +21,7 @@ import { partyOnDay, todayForParty } from '$lib/modules/planung/server/plan';
 import { countOpenLeave } from '$lib/modules/planung/server/urlaub';
 import { sickCounts } from '$lib/modules/planung/server/krank';
 import { can, type Permission } from '$lib/permissions';
+import { getWeather, WEATHER_PLACE } from '$lib/server/weather';
 import type { PageServerLoad } from './$types';
 
 /** Ein Punkt in „Zu erledigen": was, wie viele, wohin – und wie dringend */
@@ -155,7 +156,13 @@ export const load: PageServerLoad = async ({ depends, locals }) => {
 	const day = today();
 	const monday = mondayOf(day);
 
-	const [lager, auftrag, doku, plan] = await Promise.all([lagerData(user), auftragData(user, day), dokuData(user, monday), planData(user, day)]);
+	const [lager, auftrag, doku, plan, weather] = await Promise.all([
+		lagerData(user),
+		auftragData(user, day),
+		dokuData(user, monday),
+		planData(user, day),
+		getWeather()
+	]);
 
 	// Zu erledigen – das Dringendste zuerst, nur was diese Person auch angehen darf
 	const todos: Todo[] = [];
@@ -193,5 +200,5 @@ export const load: PageServerLoad = async ({ depends, locals }) => {
 		tone: 'warn'
 	});
 
-	return { todos, lager, auftrag, doku, plan, week: isoWeek(monday).week };
+	return { todos, lager, auftrag, doku, plan, weather, weatherPlace: WEATHER_PLACE.name, week: isoWeek(monday).week };
 };

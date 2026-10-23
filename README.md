@@ -28,6 +28,15 @@ Dokumentation (Tagesberichte der Woche, Stundenzettel der Woche bzw. der eigene)
 Jeder sieht nur, was er auch öffnen darf – ein Partieführer etwa die Aufträge und Berichte
 seiner Partie, keine Preise. Jeder Punkt führt in die passende, schon gefilterte Liste.
 
+**Wetter in Eibesbrunn** (2203) – für alle auf der Übersicht: jetzt (Temperatur, gefühlt, Wind,
+ob und ab wann es heute regnet) und heute plus die nächsten 7 Tage mit Symbol, höchster und
+tiefster Temperatur, Niederschlag in mm und Wind. Die Vorhersage kommt von
+[MET Norway](https://api.met.no/) – frei, auch für Firmen, mit Quellenangabe (CC BY 4.0). Der
+Server fragt höchstens etwa jede halbe Stunde nach („Expires“) und zeigt bis dahin die letzte;
+ist der Dienst nicht erreichbar, bleibt die letzte stehen. Der Ort steht als `WEATHER_PLACE` in
+[`src/lib/server/weather.ts`](src/lib/server/weather.ts), das Zusammenfassen zu Tagen in
+[`src/lib/weather.ts`](src/lib/weather.ts).
+
 **Suche oben** (Strg K, am Handy die Lupe): durchsucht das ganze Portal – Aufträge, Angebote,
 Rechnungen, Tagesberichte, Anfragen (auch erledigte), Kunden, Artikel, Richtlinien & Vorschriften
 (Ordner und PDFs), Benutzer und die Seiten

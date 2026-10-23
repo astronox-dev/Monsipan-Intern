@@ -2,6 +2,7 @@
 	/**
 	 * Übersicht: oben, was zu tun ist; darunter je Bereich die wichtigsten Zahlen –
 	 * Auftragsmanagement, Dokumentation und Lager, jeweils nur mit Recht darauf.
+	 * Dazu das Wetter in Eibesbrunn für heute und die nächsten 7 Tage.
 	 * Ganz unten alle Bereiche als Kacheln.
 	 */
 	import { APP_NAME, pageTitle } from '$lib/app';
@@ -27,6 +28,7 @@
 	import CalendarDays from '@lucide/svelte/icons/calendar-days';
 	import BarChart from '$lib/components/BarChart.svelte';
 	import CountUp from '$lib/components/CountUp.svelte';
+	import WeatherCard from '$lib/components/WeatherCard.svelte';
 	import MovementList from '$lib/modules/lager/components/MovementList.svelte';
 	import ProductAvatar from '$lib/modules/lager/components/ProductAvatar.svelte';
 	import { monthLong, monthShort } from '$lib/format';
@@ -189,6 +191,8 @@
 		{/if}
 	</section>
 {/if}
+
+<WeatherCard weather={data.weather} place={data.weatherPlace} />
 
 <!-- Zu erledigen: nur, was diese Person angehen darf -->
 {#if lager || auftrag || doku || data.plan.openLeave != null || data.plan.sick}
