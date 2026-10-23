@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `lead_until` text;

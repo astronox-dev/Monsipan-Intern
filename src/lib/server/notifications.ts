@@ -21,6 +21,7 @@ import {
 	type NotificationEventDef
 } from '$lib/notifications';
 import { db } from './db';
+import { effectiveRoleSql } from './lead';
 import {
 	notificationMailMutes,
 	notificationMailPeople,
@@ -165,11 +166,12 @@ export async function recipientsFor(
 	const roles = rules.map((r) => r.role);
 	const ids = people.map((p) => p.userId);
 	const match: SQL[] = [];
-	if (roles.length) match.push(inArray(users.role, roles));
+	const role = effectiveRoleSql();
+	if (roles.length) match.push(inArray(role, roles));
 	if (ids.length) match.push(inArray(users.id, ids));
 	if (!match.length) return [];
 	const candidates = await db
-		.select({ id: users.id, role: users.role, partyId: users.partyId })
+		.select({ id: users.id, role, partyId: users.partyId })
 		.from(users)
 		.where(and(activeUser, or(...match)))
 		.all();
@@ -204,7 +206,7 @@ async function directRecipients(event: NotificationEvent, userIds: number[], act
 	const t = tables(channel);
 	const [people, mutes] = await Promise.all([
 		db
-			.select({ id: users.id, role: users.role, partyId: users.partyId })
+			.select({ id: users.id, role: effectiveRoleSql(), partyId: users.partyId })
 			.from(users)
 			.where(and(activeUser, inArray(users.id, wanted)))
 			.all(),

@@ -6,6 +6,7 @@
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import NewPasswordFields from '$lib/components/NewPasswordFields.svelte';
 	import { needsParty, ROLE_DESCRIPTIONS, ROLE_LABELS } from '$lib/permissions';
+	import { date } from '$lib/format';
 	import { toast } from '$lib/stores/toast.svelte';
 	import Bell from '@lucide/svelte/icons/bell';
 	import PushToggle from '$lib/components/PushToggle.svelte';
@@ -27,7 +28,9 @@
 <div class="pt-2 pb-5">
 	<h1 class="text-[2rem] leading-tight">Mein Konto</h1>
 	<p class="text-ink-2">
-		Angemeldet als <span class="font-medium text-ink">{data.user.username}</span>, Rolle {ROLE_LABELS[data.user.role]} – {ROLE_DESCRIPTIONS[data.user.role]}.
+		Angemeldet als <span class="font-medium text-ink">{data.user.username}</span>, Rolle {ROLE_LABELS[data.user.role]}{data.user.leadUntil
+			? ` (vorübergehend bis ${date(data.user.leadUntil)}, sonst ${ROLE_LABELS.arbeiter})`
+			: ''} – {ROLE_DESCRIPTIONS[data.user.role]}.
 	</p>
 	{#if data.partyName}
 		<p class="mt-1 text-ink-2">Partie: <span class="font-medium text-ink">{data.partyName}</span> – wird beim Ausbuchen automatisch eingesetzt.</p>

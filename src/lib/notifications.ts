@@ -176,6 +176,13 @@ export const NOTIFICATION_EVENTS = {
 		requires: 'planung.sehen',
 		defaults: []
 	},
+	'planung.partiefuehrer': {
+		label: 'Vorübergehend Partieführer',
+		section: 'Planung',
+		hint: 'Geht an die Person, die in der Wochenplanung vorübergehend zum Partieführer gemacht wird – oder es nicht mehr ist',
+		requires: 'planung.sehen',
+		defaults: []
+	},
 	'planung.woche': {
 		label: 'Wochenplan an die Partie geschickt',
 		section: 'Planung',

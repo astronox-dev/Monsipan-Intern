@@ -62,16 +62,21 @@ describe('Urlaubsstunden', () => {
 		expect((await leaveRow(open)).usage).toMatchObject({ days: 4, hours: 40 });
 	});
 
-	it('Krankenstand im Urlaub unterbricht ihn', async () => {
+	it('Krankenstand im Urlaub unterbricht ihn erst ab mehr als drei Tagen', async () => {
 		const id = (await listLeave(admin, 2026)).find((r) => r.from === '2026-11-02')!.id;
-		// Krank Mi 4. – Do 5.11.
+		// Krank Mi 4. – Do 5.11.: zwei Tage, der Urlaub läuft weiter
 		expect(typeof (await createSick(admin, { userId: eva.id, from: '2026-11-04', to: '2026-11-05', note: '' }, []))).toBe('number');
-		expect(notified.at(-1)?.body).toBe('04.11. – 05.11.2026 · Krankmeldung folgt · unterbricht den Urlaub');
+		expect(notified.at(-1)?.body).toBe('04.11. – 05.11.2026 · Krankmeldung folgt · im Urlaub – bis 3 Tage, der Urlaub läuft weiter');
+		expect((await leaveRow(id)).usage).toMatchObject({ days: 5, hours: 39, sickDays: 0, interruptions: [] });
+		expect((await listSick(admin, 2026)).find((s) => s.userId === eva.id)).toMatchObject({ leave: [{ from: '2026-11-02', to: '2026-11-06' }], interrupts: false });
 
+		// Verlängert bis Sa 7.11.: zusammen vier Tage – Mi, Do, Fr zählen nicht
+		expect(typeof (await createSick(admin, { userId: eva.id, from: '2026-11-06', to: '2026-11-07', note: '' }, []))).toBe('number');
+		expect(notified.at(-1)?.body).toBe('06.11. – 07.11.2026 · Krankmeldung folgt · unterbricht den Urlaub');
 		const row = await leaveRow(id);
-		expect(row.usage).toMatchObject({ days: 3, hours: 23, sickDays: 2, sickHours: 16, interruptions: [{ from: '2026-11-04', to: '2026-11-05' }] });
-		expect(approvedTotals(await listLeave(admin, 2026)).get(eva.id)).toEqual({ days: 3, hours: 23 });
-		expect((await listSick(admin, 2026)).find((s) => s.userId === eva.id)!.leave).toEqual([{ from: '2026-11-02', to: '2026-11-06' }]);
+		expect(row.usage).toMatchObject({ days: 2, hours: 16, sickDays: 3, sickHours: 23, interruptions: [{ from: '2026-11-04', to: '2026-11-06' }] });
+		expect(approvedTotals(await listLeave(admin, 2026)).get(eva.id)).toEqual({ days: 2, hours: 16 });
+		expect((await listSick(admin, 2026)).filter((s) => s.userId === eva.id).map((s) => s.interrupts)).toEqual([true, true]);
 	});
 
 	it('ohne Urlaubsstunden im Zeitraum kein Antrag', async () => {
@@ -94,10 +99,10 @@ describe('Urlaubskonto', () => {
 		expect(await saveEmployment(admin, { id: null, userId: eva.id, from: '2026-03-02', to: null })).toBe(true);
 		expect(await saveLeaveAccount(admin, { userId: eva.id, carryover: 20, start: '2026-03-01', weeks: null })).toBe(true);
 
-		// 2.3. – 30.11.: 274 Tage ÷ 7 × 3,75 = 146,79; genehmigt Mo 2. – Fr 6.11. ohne Mi/Do (krank) = 23
+		// 2.3. – 30.11.: 274 Tage ÷ 7 × 3,75 = 146,79; genehmigt Mo 2. – Fr 6.11. ohne Mi–Fr (krank) = 16
 		const a = await account('2026-11-30');
 		expect(a.rate).toBe(3.75);
-		expect(a.account).toEqual({ carryover: 20, earned: 146.79, used: 23, rest: 143.79 });
+		expect(a.account).toEqual({ carryover: 20, earned: 146.79, used: 16, rest: 150.79 });
 		expect(a.state).toEqual({ state: 'angemeldet', date: '2026-03-02' });
 	});
 
@@ -108,14 +113,14 @@ describe('Urlaubskonto', () => {
 		expect(await saveEmployment(admin, { id: period.id, userId: eva.id, from: '2026-03-02', to: '2026-11-20' })).toBe(true);
 		// 2.3. – 20.11.: 264 Tage
 		const a = await account('2027-01-15');
-		expect(a.account).toEqual({ carryover: 20, earned: 141.43, used: 23, rest: 138.43 });
+		expect(a.account).toEqual({ carryover: 20, earned: 141.43, used: 16, rest: 145.43 });
 		expect(a.state).toEqual({ state: 'abgemeldet', date: '2026-11-21' });
 	});
 
 	it('ab dem Stichtag: was davor lag, steckt im Übertrag', async () => {
-		expect(await saveLeaveAccount(admin, { userId: eva.id, carryover: 20, start: '2026-11-05', weeks: null })).toBe(true);
-		// Erworben 5. – 20.11. (16 Tage), vom Urlaub nur noch Fr 6.11. (Do 5. krank) = 7 Std.
-		expect((await account('2027-01-15')).account).toEqual({ carryover: 20, earned: 8.57, used: 7, rest: 21.57 });
+		expect(await saveLeaveAccount(admin, { userId: eva.id, carryover: 20, start: '2026-11-03', weeks: null })).toBe(true);
+		// Erworben 3. – 20.11. (18 Tage), vom Urlaub nur noch Di 3.11. (Mi–Fr krank) = 8 Std.
+		expect((await account('2027-01-15')).account).toEqual({ carryover: 20, earned: 9.64, used: 8, rest: 21.64 });
 		// Eigene Urlaubswochen
 		expect(await saveLeaveAccount(admin, { userId: eva.id, carryover: 0, start: null, weeks: 6 })).toBe(true);
 		expect((await account('2027-01-15')).rate).toBe(4.5);

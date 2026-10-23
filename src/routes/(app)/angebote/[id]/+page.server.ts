@@ -6,6 +6,7 @@ import { createCustomer, customerProblem, getCustomer, listCustomers, readCustom
 import {
 	acceptInternally,
 	deleteOffer,
+	duplicateOffer,
 	mayDeleteOffer,
 	ensureOfferToken,
 	markOfferLinkSent,
@@ -24,7 +25,7 @@ import {
 import { inquiryForOffer } from '$lib/modules/auftraege/server/inquiries';
 import { mayDeleteOrder } from '$lib/modules/auftraege/server/orders';
 import { DocumentError, storeDocument, takeUploads } from '$lib/server/documents';
-import { isValidIsoDate } from '$lib/modules/stunden/week';
+import { isValidIsoDate, today } from '$lib/modules/stunden/week';
 import { parseAmount, readDiscount, readPaymentTerms } from '$lib/modules/auftraege/offer';
 import { notifyOffer, notifyOrderDocuments } from '$lib/modules/auftraege/server/notify';
 import { addOfferDocuments } from '$lib/modules/auftraege/server/offer-documents';
@@ -67,6 +68,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		canDeleteOrder: !!offer.order && mayDeleteOrder(user, offer.order),
 		canLink,
 		canCreateOrder,
+		canDuplicate: can(user.role, 'angebote.erstellen'),
+		today: today(),
 		// Unterlagen: in jedem Stand, auch wenn schon beauftragt
 		// Pläne und Fotos des ganzen Vorgangs – auch die von der Anfrage und vom Auftrag
 		documents: await caseDocuments(chain),
@@ -203,6 +206,21 @@ export const actions: Actions = {
 		if (!can(user.role, 'angebote.oeffnen.angenommen')) return fail(403, { message: 'Dafür fehlt dir die Berechtigung.' });
 		if (!(await reopenAccepted(offer.id))) return fail(400, { message: 'Zu diesem Angebot gibt es schon einen Auftrag.' });
 		return { reopened: true };
+	},
+
+	/** Duplizieren: ein neues Angebot in Arbeit mit allem Inhalt – Nummer, Datum und BV neu */
+	duplicate: async ({ params, request, locals }) => {
+		const { user, offer } = await open(Number(params.id), locals);
+		if (!can(user.role, 'angebote.erstellen')) return fail(403, { copyMessage: 'Dafür fehlt dir die Berechtigung.' });
+		const form = await request.formData();
+		const number = String(form.get('nummer') ?? '').trim();
+		const date = String(form.get('datum') ?? '');
+		if (!number) return fail(400, { copyMessage: 'Bitte die Angebotsnummer eintragen.' });
+		if (await numberTaken(number)) return fail(400, { copyMessage: `Die Angebotsnummer ${number} gibt es schon.` });
+		if (!isValidIsoDate(date)) return fail(400, { copyMessage: 'Das Datum ist ungültig.' });
+		const id = await duplicateOffer(user, offer.id, { number, date, title: String(form.get('titel') ?? '').trim() });
+		if (!id) error(404, 'Angebot nicht gefunden');
+		redirect(303, `/angebote/${id}`);
 	},
 
 	delete: async ({ params, request, locals }) => {

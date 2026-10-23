@@ -332,8 +332,8 @@
 		<h2 id="h-leave" class="flex items-center gap-2 text-xl"><TreePalm size={20} aria-hidden="true" />Urlaub</h2>
 		<p class="text-sm text-ink-2">
 			So viele Stunden verbraucht ein genehmigter Urlaubstag – je Wochentag. Feiertage und Tage mit 0 zählen nicht als Urlaubstag. Die Stunden werden beim Genehmigen am
-			Antrag festgehalten; eine Änderung hier gilt nur für Urlaub, der ab jetzt genehmigt wird. Wird während des Urlaubs ein Krankenstand gemeldet, ist der Urlaub
-			unterbrochen: Diese Tage zählen nicht.
+			Antrag festgehalten; eine Änderung hier gilt nur für Urlaub, der ab jetzt genehmigt wird. Dauert ein Krankenstand während des Urlaubs länger als drei
+			Kalendertage, ist der Urlaub unterbrochen: Diese Tage zählen nicht. Ein kürzerer Krankenstand unterbricht ihn nicht.
 		</p>
 		<p class="mt-2 text-sm text-ink-2">
 			Urlaubskonto: Je Woche, in der jemand angemeldet ist, kommt Urlaub dazu – Wochen Urlaub im Jahr × Wochenstunden ÷ 52. Wer über den Winter abgemeldet ist,

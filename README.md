@@ -28,14 +28,20 @@ Dokumentation (Tagesberichte der Woche, Stundenzettel der Woche bzw. der eigene)
 Jeder sieht nur, was er auch öffnen darf – ein Partieführer etwa die Aufträge und Berichte
 seiner Partie, keine Preise. Jeder Punkt führt in die passende, schon gefilterte Liste.
 
-**Wetter in Eibesbrunn** (2203) – für alle auf der Übersicht: jetzt (Temperatur, gefühlt, Wind,
-ob und ab wann es heute regnet) und heute plus die nächsten 7 Tage mit Symbol, höchster und
-tiefster Temperatur, Niederschlag in mm und Wind. Die Vorhersage kommt von
-[MET Norway](https://api.met.no/) – frei, auch für Firmen, mit Quellenangabe (CC BY 4.0). Der
-Server fragt höchstens etwa jede halbe Stunde nach („Expires“) und zeigt bis dahin die letzte;
-ist der Dienst nicht erreichbar, bleibt die letzte stehen. Der Ort steht als `WEATHER_PLACE` in
+**Wetter** – für alle auf der Übersicht, umschaltbar zwischen **Eibesbrunn** (2203) und dem
+**Standort** des Geräts: jetzt (Temperatur, gefühlt, Wind, ob und ab wann es heute regnet) und
+heute plus die nächsten 7 Tage mit Symbol, höchster und tiefster Temperatur, Niederschlag in mm
+und Wind; auf den Knöpfen steht für beide Orte die Temperatur gerade. Den Standort fragt der
+Browser bzw. die App erst, wenn man „Standort“ antippt; ist er freigegeben, kommt er danach von
+selbst, und das Gerät merkt sich, welcher Ort zuletzt gewählt war. Die Vorhersage kommt von
+[MET Norway](https://api.met.no/) – frei, auch für Firmen, mit Quellenangabe (CC BY 4.0), der
+Ortsname zum Standort von OpenStreetMap (Nominatim). Beide bekommen nur die auf etwa 1 km
+gerundete Lage vom Server, nichts über die Person; gespeichert wird sie nicht. Der Server fragt
+je Ort höchstens etwa jede halbe Stunde nach („Expires“) und zeigt bis dahin die letzte; ist der
+Dienst nicht erreichbar, bleibt die letzte stehen. Eibesbrunn steht als `WEATHER_PLACE` in
 [`src/lib/server/weather.ts`](src/lib/server/weather.ts), das Zusammenfassen zu Tagen in
-[`src/lib/weather.ts`](src/lib/weather.ts).
+[`src/lib/weather.ts`](src/lib/weather.ts). Die Android-App fragt nach dem (ungefähren)
+Standort – dafür muss sie einmal neu installiert werden.
 
 **Suche oben** (Strg K, am Handy die Lupe): durchsucht das ganze Portal – Aufträge, Angebote,
 Rechnungen, Tagesberichte, Anfragen (auch erledigte), Kunden, Artikel, Richtlinien & Vorschriften
@@ -438,6 +444,13 @@ kurz halten, dann ziehen):
   wieder sie. Urlaub und Krankenstand stehen bei der Partie der Woche, „Heute laut Plan“ auf
   der Übersicht zeigt den Tag der Partie, bei der jemand heute ist, und die Partie sieht in
   ihrer Liste, wer diese Woche dabei ist und wer an einem Tag aushilft.
+- **Vorübergehend Partieführer:** Fahren ein paar Leute ohne ihren Partieführer auf eine
+  Baustelle, macht man einen davon im selben Dialog (Klick auf den Namen) **bis zu einem Tag**
+  zum Partieführer. Bis dahin hat er dessen Rechte für seine feste Partie – Tagesberichte und
+  Stundenzettel schreiben und freigeben – und bekommt dessen Benachrichtigungen; danach ist er
+  von selbst wieder Arbeiter, die Rolle im Benutzerkonto ändert sich nicht. Er bekommt Bescheid,
+  in der Planung steht ein Stern neben dem Namen, in der Benutzerverwaltung „Partieführer bis …“.
+  Geht nur bei Arbeitern mit fester Partie, höchstens ein Jahr; **Beenden** nimmt es zurück.
 - **Wer woanders eingeteilt ist**, bekommt Bescheid („Bei einer anderen Partie eingeteilt“ –
   mit Partie und Tagen; ebenso, wenn es zurückgenommen wird). Er sieht in seiner Planung an
   diesen Tagen die Einträge der anderen Partie („Du bist bei … eingeteilt“) und die Aufträge,
@@ -484,10 +497,13 @@ mit einem offenen oder genehmigten, kommt eine Meldung.
 - **Beim Genehmigen** werden die Stunden je Wochentag am Antrag festgehalten – ändert man die
   Einstellung später, bleibt schon genehmigter Urlaub, wie er war. Offene Anträge rechnen mit
   der aktuellen Einstellung.
-- **Krankenstand im Urlaub unterbricht ihn:** Tage, an denen jemand krank gemeldet ist, zählen
-  nicht als Urlaub und verbrauchen keine Stunden (ein offener Krankenstand bis zum
-  Urlaubsende). Beim Antrag steht „Unterbrochen“ mit den Tagen und Stunden, die nicht zählen,
-  beim Krankenstand der Urlaub, den er unterbricht; die Meldung des Krankenstands sagt es dazu.
+- **Krankenstand im Urlaub unterbricht ihn – wenn er länger als drei Kalendertage dauert**
+  (§ 5 Urlaubsgesetz): Dann zählen die Tage, an denen jemand krank gemeldet ist, nicht als
+  Urlaub und verbrauchen keine Stunden (ein offener Krankenstand bis zum Urlaubsende, sobald er
+  bis heute länger als drei Tage dauert). Ein kürzerer unterbricht ihn nicht – der Urlaub läuft
+  weiter. Meldungen, die direkt aneinander anschließen, zählen als ein Krankenstand. Beim Antrag
+  steht „Unterbrochen“ mit den Tagen und Stunden, die nicht zählen, beim Krankenstand, ob er den
+  Urlaub unterbricht; die Meldung des Krankenstands sagt es dazu.
   Wird der Krankenstand geändert oder gelöscht, rechnet der Urlaub von selbst neu.
 
 - Die **Leitung** (Admin, Geschäftsführung, Bauleitung) genehmigt oder lehnt ab, auf Wunsch
@@ -641,10 +657,15 @@ bleibt sie frei eintippbar.
   gewähren wir 3 % Skonto – das sind € 22.083,41.“). Vorgabe für neue Angebote unter
   **Einstellungen → Zahlungsbedingungen**; sie gehen in die Rechnung über. Ältere Angebote
   ohne Zahlungsziel zeigen keines.
-- **Angebotsnummer:** zwei Stellen fürs Jahr, dann die laufende Nummer – „26001“ ist das erste
-  Angebot 2026, „26002“ das zweite; im neuen Jahr beginnt die Zählung wieder („27001“). Die App
-  schlägt die nächste vor; sie bleibt frei änderbar. (Eine Projektnummer gibt es nicht mehr –
-  ältere Angebote behalten sie in der Datenbank, sie steht nur nirgends mehr.)
+- **Angebotsnummer:** trägt man beim Anlegen selbst ein (z. B. „26001“) – das Feld ist leer,
+  jede Nummer gibt es nur einmal. (Eine Projektnummer gibt es nicht mehr – ältere Angebote
+  behalten sie in der Datenbank, sie steht nur nirgends mehr.)
+- **BV** ist beim neuen Angebot mit „Bodenmarkierungen“ vorausgefüllt – zum Weiterschreiben oder
+  Ändern (aus einer Anfrage kommt deren Betreff).
+- **Duplizieren** (oben im Angebot, wer Angebote erstellen darf): ein neues Angebot in Arbeit mit
+  Kunde, Ausführungsort, Einleitung und Schluss, Konditionen (Zahlungsziel, Skonto, Nachlass,
+  Umsatzsteuer) und allen Positionen. Nummer, Datum und BV gibt man im Dialog an; Fotos und
+  Unterlagen bleiben beim alten Angebot.
 - Einleitung und Schlusstext kommen aus der Vorlage unter **Einstellungen → Angebote,
   Aufträge und Rechnungen** – je Art eine eigene; die für Aufträge stehen im Auftrags-PDF,
   leer bleibt dort nichts stehen – und lassen sich im einzelnen Angebot ändern. Dort stehen auch die drei Spalten

@@ -8,9 +8,10 @@
 	import MailCheck from '@lucide/svelte/icons/mail-check';
 	import Trash from '@lucide/svelte/icons/trash';
 	import Crown from '@lucide/svelte/icons/crown';
+	import UserStar from '@lucide/svelte/icons/user-star';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
-	import { dateTime, fullName, initials, relativeDateTime } from '$lib/format';
+	import { date, dateTime, fullName, initials, relativeDateTime } from '$lib/format';
 	import { can, mayHaveParty, needsParty, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, type Role } from '$lib/permissions';
 	import { canBecomeOwner, denyReason, OWNER_HINT, OWNER_LABEL, type UserAction } from '$lib/user-rules';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -150,6 +151,7 @@
 			{#if u.owner}<span class="badge badge-brand"><Crown size={13} aria-hidden="true" />{OWNER_LABEL}</span>{/if}
 			{#if u.timesheetExempt}<span class="badge">Keine Stundenzettel</span>{/if}
 			{#if u.leaveAccountExempt}<span class="badge">Kein Urlaubskonto</span>{/if}
+			{#if u.leadUntil}<span class="badge badge-info" title="Vorübergehend – in der Wochenplanung gesetzt"><UserStar size={13} aria-hidden="true" />Partieführer bis {date(u.leadUntil)}</span>{/if}
 			{#if showRole}<span class="badge {roleTone[u.role]}">{ROLE_LABELS[u.role]}</span>{/if}
 			{#if canEdit}
 			<button

@@ -15,6 +15,7 @@ import { movements, parties, users } from '$lib/server/db/schema';
 import { intOrNull, requirePermission } from '$lib/server/guard';
 import { inviteMail, isMailConfigured, passwordResetMail, sendMail } from '$lib/server/mail';
 import { partyOptions } from '$lib/server/options';
+import { effectiveRole } from '$lib/server/lead';
 import { fullName } from '$lib/format';
 import { mayHaveParty, needsParty, ROLE_LABELS, ROLES, type Role } from '$lib/permissions';
 import { canBecomeOwner, denyReason, type UserAction, type UserRef } from '$lib/user-rules';
@@ -38,6 +39,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				mustChangePassword: users.mustChangePassword,
 				timesheetExempt: users.timesheetExempt,
 				leaveAccountExempt: users.leaveAccountExempt,
+				leadUntil: users.leadUntil,
 				lastLoginAt: users.lastLoginAt,
 				lastSeenAt: users.lastSeenAt
 			})
@@ -49,7 +51,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		partyOptions()
 	]);
 	list.sort((a, b) => Number(b.active) - Number(a.active));
-	return { users: list, parties: partyList, mailConfigured: isMailConfigured() };
+	// Vorübergehend Partieführer – nur, solange es gilt
+	const people = list.map((u) => ({ ...u, leadUntil: effectiveRole(u.role, u.leadUntil) !== u.role ? u.leadUntil : null }));
+	return { users: people, parties: partyList, mailConfigured: isMailConfigured() };
 };
 
 const UserSchema = z.object({

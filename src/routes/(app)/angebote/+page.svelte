@@ -12,7 +12,7 @@
 	import Pagination from '$lib/components/Pagination.svelte';
 	import YearTabs from '$lib/components/YearTabs.svelte';
 	import { date as dateLabel } from '$lib/format';
-	import { money, OFFER_STATUS_LABELS, offerState, round2, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { money, OFFER_STATUS_LABELS, OFFER_TITLE_DEFAULT, offerState, round2, spacedNumber, titleToEnd } from '$lib/modules/auftraege/offer';
 
 	let { data, form } = $props();
 
@@ -125,19 +125,19 @@
 			</label>
 			<label class="block">
 				<span class="field-label">Bauvorhaben (BV)</span>
-				<input class="input" name="titel" maxlength="300" placeholder="z. B. Bodenmarkierungen Werkstättenring Süd / Betriebsgelände" />
+				<input class="input" name="titel" maxlength="300" value={OFFER_TITLE_DEFAULT} onfocus={titleToEnd} />
 			</label>
 			<div class="grid grid-cols-2 gap-4">
 				<label class="block">
 					<span class="field-label">Angebotsnummer *</span>
-					<input class="input num" name="nummer" required maxlength="30" value={data.suggestion.number} />
+					<input class="input num" name="nummer" required maxlength="30" />
 				</label>
 				<label class="block">
 					<span class="field-label">Datum *</span>
 					<input class="input num" type="date" name="datum" required value={data.suggestion.date} />
 				</label>
 			</div>
-			<p class="field-hint">Die Nummer zählt je Jahr: „26" für 2026, dann die laufende Nummer – im neuen Jahr beginnt sie wieder bei 001. Frei änderbar.</p>
+			<p class="field-hint">Die Angebotsnummer selbst eintragen – jede gibt es nur einmal.</p>
 			{#if form?.message}<p class="field-error" role="alert">{form.message}</p>{/if}
 			<div class="flex justify-end gap-2 pt-1">
 				<button type="button" class="btn btn-ghost" onclick={() => (newOpen = false)}>Abbrechen</button>

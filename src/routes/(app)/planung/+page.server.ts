@@ -17,6 +17,7 @@ import {
 	resetCrew,
 	seesAllPlans,
 	sendWeek,
+	setActingLead,
 	setCrew,
 	setPartyOrder,
 	setNoteDone,
@@ -137,6 +138,18 @@ export const actions: Actions = {
 		if (problem) return fail(400, { message: problem });
 		if (before) await notifyCrewChange(user, userId, before, monday);
 		return { crew: true };
+	},
+
+	/** Vorübergehend Partieführer – bis zu einem Tag (`bis`), oder wieder beenden (`ende`) */
+	lead: async ({ request, locals }) => {
+		const user = requirePermission(locals, 'planung.bearbeiten');
+		const form = await request.formData();
+		const userId = Number(form.get('person'));
+		if (!Number.isInteger(userId)) return fail(400, { leadMessage: 'Person fehlt.' });
+		const until = form.get('ende') ? null : String(form.get('bis') ?? '');
+		const done = await setActingLead(user, userId, until);
+		if (done !== true) return fail(400, { leadMessage: done.message });
+		return { lead: until };
 	},
 
 	/** Abweichung aufheben – Woche bzw. Tag */

@@ -7,9 +7,7 @@ import {
 	invoiceNo,
 	lineNumbers,
 	money,
-	nextOfferNumber,
 	offerState,
-	nextProjectNumber,
 	offerTotals,
 	parseAmount,
 	readDiscount,
@@ -114,16 +112,5 @@ describe('Nummern', () => {
 		expect(offerState({ status: 'angenommen', billedAt: new Date() })).toBe('abgerechnet');
 		expect(offerState({ status: 'angenommen', billedAt: null })).toBe('angenommen');
 		expect(offerState({ status: 'freigegeben', billedAt: new Date() })).toBe('freigegeben');
-	});
-
-	it('schlägt die nächste Angebots- und Projektnummer vor', () => {
-		expect(nextOfferNumber(['26659', '26841', 'X1'], 2026)).toBe('26842');
-		expect(nextOfferNumber([], 2026)).toBe('26001');
-		// Neues Jahr: die Zählung beginnt wieder von vorn
-		expect(nextOfferNumber(['25682', '26841'], 2027)).toBe('27001');
-		expect(nextOfferNumber(['25999', '25998'], 2026)).toBe('26001');
-		expect(nextOfferNumber(['26999'], 2026)).toBe('261000');
-		expect(nextProjectNumber(['26-00785', '26-01074', '25-09999'], 2026)).toBe('26-01075');
-		expect(nextProjectNumber(['25-00012'], 2026)).toBe('26-00001');
 	});
 });

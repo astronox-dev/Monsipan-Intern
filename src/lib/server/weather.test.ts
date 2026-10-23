@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$env/dynamic/private', () => ({ env: { ORIGIN: 'https://intern.example.at' } }));
 
-const { getWeather, resetWeatherCache } = await import('./weather');
+const { getWeather, placeName, resetWeatherCache } = await import('./weather');
 
 const forecast = (temp: number) => ({
 	properties: {
@@ -65,6 +65,29 @@ describe('Wetter abrufen', () => {
 		expect(w?.now?.temp).toBe(11);
 		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
 		expect(fetch.mock.calls[1][1].headers['If-Modified-Since']).toBe('Fri, 23 Oct 2026 10:00:00 GMT');
+	});
+
+	it('je Ort eine eigene Vorhersage – der Standort ohne Seehöhe', async () => {
+		const fetch = vi.fn().mockImplementation(async () => answer(200, forecast(fetch.mock.calls.length === 1 ? 11 : 7)));
+		vi.stubGlobal('fetch', fetch);
+		at('2026-10-23T10:15:00Z');
+		expect((await getWeather())?.now?.temp).toBe(11);
+		const here = await getWeather({ name: 'Wolkersdorf', lat: 48.38, lon: 16.52 });
+		expect(here).toMatchObject({ place: 'Wolkersdorf', now: { temp: 7 } });
+		expect(fetch.mock.calls[1][0]).toMatch(/lat=48.38&lon=16.52$/);
+		// Eibesbrunn bleibt, wie es war
+		expect((await getWeather())?.now?.temp).toBe(11);
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it('Ortsname aus OpenStreetMap – je Lage nur einmal gefragt', async () => {
+		const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ address: { town: 'Wolkersdorf im Weinviertel', county: 'Mistelbach' } })));
+		vi.stubGlobal('fetch', fetch);
+		expect(await placeName(48.38, 16.52)).toBe('Wolkersdorf im Weinviertel');
+		expect(await placeName(48.38, 16.52)).toBe('Wolkersdorf im Weinviertel');
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(fetch.mock.calls[0][0]).toContain('nominatim.openstreetmap.org/reverse?format=jsonv2&lat=48.38&lon=16.52');
+		expect(fetch.mock.calls[0][1].headers['User-Agent']).toContain('Monsipan-Intern');
 	});
 
 	it('ohne Dienst gibt es keine Vorhersage – und keinen Fehler', async () => {

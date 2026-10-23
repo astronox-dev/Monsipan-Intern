@@ -11,7 +11,7 @@ vi.mock('$app/environment', () => ({ dev: true, browser: false, building: false,
 const { db, client, ensureDatabase } = await import('$lib/server/db');
 const { eq } = await import('drizzle-orm');
 const { invoices, offers, users } = await import('$lib/server/db/schema');
-const { createOffer, listOffers, offerDetail, positionMemory, releaseProblem, saveOffer } = await import('./offers');
+const { createOffer, duplicateOffer, listOffers, offerDetail, positionMemory, releaseProblem, saveOffer } = await import('./offers');
 const { createCustomer } = await import('./customers');
 const { createOrderFromOffer, orderDetail } = await import('./orders');
 const { invoiceDraft, invoiceNotice, draftLines } = await import('./invoices');
@@ -336,5 +336,25 @@ describe('Nachlass', () => {
 		await db.update(invoices).set({ stage: 'ausgestellt' }).where(eq(invoices.id, row.id));
 		await expect(db.update(invoices).set({ discountPercent: 10 }).where(eq(invoices.id, row.id))).rejects.toThrow();
 		await expect(db.update(invoices).set({ discountAmount: 100 }).where(eq(invoices.id, row.id))).rejects.toThrow();
+	});
+});
+
+describe('Angebot duplizieren', () => {
+	it('übernimmt Kunde, Texte, Konditionen und alle Zeilen – Nummer, Datum und BV neu, in Arbeit', async () => {
+		const id = await offerWith('26900', [
+			{ kind: 'titel', text: 'Markierung', quantity: '', unit: '', unitPrice: '' },
+			{ kind: 'position', text: 'Leitlinie', note: 'weiß', quantity: '100', unit: 'lfm', unitPrice: '2,5' },
+			{ kind: 'position', text: 'Pfeil', quantity: '2', unit: 'Stk', unitPrice: '40', alternative: true }
+		]);
+		await db.update(offers).set({ status: 'angenommen', discountPercent: 5, skontoPercent: 3, skontoDays: 14, intro: 'Hallo', customerToken: 'x'.repeat(20) }).where(eq(offers.id, id));
+		const me = (await db.select({ id: users.id }).from(users).get())!.id;
+
+		const copyId = (await duplicateOffer({ id: me } as never, id, { number: '26901', date: '2026-11-02', title: 'Bodenmarkierungen Halle 2' }))!;
+		const [a, b] = [(await offerDetail(id))!, (await offerDetail(copyId))!];
+		expect(b).toMatchObject({ number: '26901', date: '2026-11-02', title: 'Bodenmarkierungen Halle 2', status: 'entwurf', customerToken: null, acceptedAt: null, createdBy: me });
+		expect(b).toMatchObject({ customerName: a.customerName, intro: 'Hallo', discountPercent: 5, skontoPercent: 3, skontoDays: 14, paymentDays: 30, vatRate: 20 });
+		const strip = (o: typeof a) => o.lines.map(({ kind, text, note, quantity, unit, unitPrice, alternative }) => ({ kind, text, note, quantity, unit, unitPrice, alternative }));
+		expect(strip(b)).toEqual(strip(a));
+		expect(strip(b)).toHaveLength(3);
 	});
 });

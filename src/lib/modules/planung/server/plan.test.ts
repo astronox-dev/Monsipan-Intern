@@ -70,7 +70,7 @@ describe('Besetzung, Verschieben und Spalten', () => {
 		expect(await setCrew(admin, { userId: max.id, partyId: sued.id, weekStart: MON })).toBeNull();
 		expect(await setCrew(admin, { userId: eva.id, partyId: sued.id, date: TUE })).toBeNull();
 		expect((await membersOf(MON, nord.id)).map((m) => m.name)).toEqual(['Eva']);
-		expect(await membersOf(MON, sued.id)).toEqual([{ id: max.id, name: 'Max', fromName: 'Nord' }]);
+		expect(await membersOf(MON, sued.id)).toEqual([{ id: max.id, name: 'Max', fromName: 'Nord', canLead: true, leadUntil: null }]);
 		const week = await planWeek(admin, MON);
 		expect(week.dayMoves).toEqual([
 			expect.objectContaining({ userId: eva.id, date: TUE, partyId: sued.id, fromPartyId: nord.id, name: 'Eva', partyName: 'Süd', fromPartyName: 'Nord' })

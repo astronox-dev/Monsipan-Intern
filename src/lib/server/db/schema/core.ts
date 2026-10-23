@@ -46,6 +46,8 @@ export const users = sqliteTable('users', {
 	timesheetExempt: integer('timesheet_exempt', { mode: 'boolean' }).notNull().default(false),
 	/** Ohne Urlaubskonto (etwa Admin- oder Büro-Konten) – fehlt in den Urlaubskonten, kein Resturlaub */
 	leaveAccountExempt: integer('leave_account_exempt', { mode: 'boolean' }).notNull().default(false),
+	/** Vorübergehend Partieführer bis einschließlich diesem Tag „JJJJ-MM-TT" – nur bei Arbeitern (siehe server/lead.ts) */
+	leadUntil: text('lead_until'),
 	lastLoginAt: integer('last_login_at', { mode: 'timestamp_ms' }),
 	/** Zuletzt die App geöffnet – bei Anfragen höchstens alle paar Minuten fortgeschrieben */
 	lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }),

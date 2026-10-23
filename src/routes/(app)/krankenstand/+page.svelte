@@ -160,7 +160,11 @@
 							</span>
 							{#if r.leave.length}
 								<span class="block text-[0.8125rem] text-info">
-									Im Urlaub {r.leave.map((l) => rangeLabel(l.from, l.to)).join(', ')} – der Urlaub ist unterbrochen, diese Tage zählen nicht als Urlaub
+									Im Urlaub {r.leave.map((l) => rangeLabel(l.from, l.to)).join(', ')} – {r.interrupts
+										? 'länger als 3 Tage krank: der Urlaub ist unterbrochen, diese Tage zählen nicht als Urlaub'
+										: r.to
+											? 'nicht länger als 3 Tage krank: der Urlaub läuft weiter'
+											: 'dauert der Krankenstand länger als 3 Tage, ist der Urlaub unterbrochen'}
 								</span>
 							{/if}
 						</span>

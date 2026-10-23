@@ -272,33 +272,20 @@ export function spacedNumber(n: string): string {
 	return m ? `${m[1].slice(0, -3)} ${m[1].slice(-3)}${m[2] ?? ''}` : n;
 }
 
-/**
- * Nächste Angebotsnummer: Jahr und laufende Nummer, „26001", „26002" … – im
- * neuen Jahr beginnt die Zählung wieder bei „27001".
- */
-export function nextOfferNumber(existing: string[], year: number): string {
-	const yy = String(year % 100).padStart(2, '0');
-	const max = existing.reduce((m, n) => {
-		const hit = /^(\d{2})(\d{3,})$/.exec(n);
-		return hit && hit[1] === yy && Number(hit[2]) > m ? Number(hit[2]) : m;
-	}, 0);
-	return `${yy}${String(max + 1).padStart(3, '0')}`;
+/** BV eines neuen Angebots – vorausgefüllt, zum Weiterschreiben bzw. Ändern */
+export const OFFER_TITLE_DEFAULT = 'Bodenmarkierungen ';
+
+/** Ins noch unveränderte BV geklickt: Cursor ans Ende – zum Weiterschreiben */
+export function titleToEnd(e: FocusEvent) {
+	const el = e.currentTarget as HTMLInputElement;
+	// Erst nach dem Klick – der setzt den Cursor sonst wieder dorthin, wo geklickt wurde
+	if (el.value === OFFER_TITLE_DEFAULT) setTimeout(() => el.setSelectionRange(el.value.length, el.value.length));
 }
 
 /** Rechnungsnummer, wie sie auf der Rechnung steht: „26 659" bzw. mit Kostenstelle „42 041/9526053" */
 export function invoiceNo(i: { number: string; costCenter?: string | null }): string {
 	const n = spacedNumber(i.number);
 	return i.costCenter ? `${n}/${i.costCenter}` : n;
-}
-
-/** Nächste Projektnummer im Jahr: „26-00785" → „26-00786" */
-export function nextProjectNumber(existing: string[], year: number): string {
-	const yy = String(year % 100).padStart(2, '0');
-	const max = existing.reduce((m, n) => {
-		const hit = /^(\d{2})-(\d+)$/.exec(n);
-		return hit && hit[1] === yy && Number(hit[2]) > m ? Number(hit[2]) : m;
-	}, 0);
-	return `${yy}-${String(max + 1).padStart(5, '0')}`;
 }
 
 /** Anschrift als Zeilen, leere fallen weg */

@@ -6,8 +6,9 @@
  * Die Belege sehen nur die Person selbst, wer gemeldet hat, und wer alle
  * Krankenstände sieht (das Büro).
  *
- * Fällt ein Krankenstand in einen genehmigten Urlaub, ist der Urlaub
- * unterbrochen – diese Tage verbrauchen keinen Urlaub (siehe urlaub.ts).
+ * Fällt ein Krankenstand von mehr als drei Kalendertagen in einen genehmigten
+ * Urlaub, ist der Urlaub unterbrochen – diese Tage verbrauchen keinen Urlaub
+ * (siehe urlaub.ts). Ein kürzerer unterbricht ihn nicht.
  */
 import fs from 'node:fs';
 import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
@@ -20,7 +21,7 @@ import type { SessionUser } from '$lib/server/auth';
 import { notify } from '$lib/server/notifications';
 import { fullName } from '$lib/format';
 import { isValidIsoDate } from '$lib/modules/stunden/week';
-import { overlaps, rangeLabel } from '../days';
+import { overlaps, rangeLabel, sickSpells, spellOf, type SickSpell } from '../days';
 import { belegFile, BelegError, storeBeleg } from './belege';
 
 export const MAX_BELEGE = 10;
@@ -99,6 +100,8 @@ export async function listSick(user: SessionUser, year: number) {
 				.orderBy(asc(sickDocuments.id))
 				.all()
 		: [];
+	const spells = new Map<number, SickSpell[]>();
+	for (const id of new Set(rows.map((r) => r.userId))) spells.set(id, sickSpells(rows.filter((r) => r.userId === id)));
 	return rows.map(({ firstName, lastName, username, reporterFirst, reporterLast, ...r }) => {
 		const mine = docs.filter((d) => d.reportId === r.id);
 		const visible = seesDocs(user, r);
@@ -109,8 +112,10 @@ export async function listSick(user: SessionUser, year: number) {
 			docCount: mine.length,
 			docs: visible ? mine.map(({ reportId: _, ...d }) => d) : [],
 			canEdit: mayEditSick(user, r),
-			/** Urlaub, der dadurch unterbrochen ist */
-			leave: leave.filter((l) => l.userId === r.userId && overlaps(l.from, l.to, r.from, r.to)).map(({ from, to }) => ({ from, to }))
+			/** Genehmigter Urlaub in der Zeit */
+			leave: leave.filter((l) => l.userId === r.userId && overlaps(l.from, l.to, r.from, r.to)).map(({ from, to }) => ({ from, to })),
+			/** Unterbricht ihn: zusammen mit anschließenden Meldungen länger als drei Tage */
+			interrupts: !!spellOf(spells.get(r.userId) ?? [], r.from)?.interrupts
 		};
 	});
 }
@@ -216,6 +221,7 @@ export async function createSick(user: SessionUser, input: SickInput, files: Fil
 		for (const s of stored) await tx.insert(sickDocuments).values({ reportId: row.id, ...s, createdBy: user.id });
 		return row.id;
 	});
+	const spell = spellOf(sickSpells([...existing, input]), input.from);
 	const inLeave = await db
 		.select({ id: leaveRequests.id })
 		.from(leaveRequests)
@@ -236,7 +242,7 @@ export async function createSick(user: SessionUser, input: SickInput, files: Fil
 		body: [
 			input.to ? rangeLabel(input.from, input.to) : `seit ${rangeLabel(input.from, null)}`,
 			stored.length ? 'mit Krankmeldung' : 'Krankmeldung folgt',
-			inLeave && 'unterbricht den Urlaub'
+			inLeave && (spell?.interrupts ? 'unterbricht den Urlaub' : spell?.to ? 'im Urlaub – bis 3 Tage, der Urlaub läuft weiter' : 'im Urlaub – länger als 3 Tage unterbricht ihn')
 		]
 			.filter(Boolean)
 			.join(' · '),

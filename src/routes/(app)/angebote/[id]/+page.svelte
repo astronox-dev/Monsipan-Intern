@@ -5,6 +5,7 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
+	import Copy from '@lucide/svelte/icons/copy';
 	import Printer from '@lucide/svelte/icons/printer';
 	import FileText from '@lucide/svelte/icons/file-text';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -56,33 +57,31 @@
 	type Line = { key: number; kind: 'position' | 'titel'; text: string; note: string; quantity: string; unit: string; price: string; alternative: boolean };
 
 	let nextKey = 1;
-	// Das Angebot wird nur beim Öffnen übernommen – danach gehört der Stand dem Formular
-	// svelte-ignore state_referenced_locally
-	let head = $state({
-		number: data.offer.number,
-		date: data.offer.date,
-		title: data.offer.title,
-		location: data.offer.location,
-		customerId: data.offer.customerId == null ? '' : String(data.offer.customerId),
-		name: data.offer.customerName,
-		addition: data.offer.customerAddition,
-		street: data.offer.customerStreet,
-		zip: data.offer.customerZip,
-		city: data.offer.customerCity,
-		uid: data.offer.customerUid,
-		intro: data.offer.intro,
-		closing: data.offer.closing,
-		vat: String(data.offer.vatRate).replace('.', ','),
-		reverse: data.offer.reverseCharge,
-		days: String(data.offer.paymentDays ?? data.defaultPaymentDays),
-		skonto: data.offer.skontoPercent ? String(data.offer.skontoPercent).replace('.', ',') : '',
-		skontoDays: data.offer.skontoDays ? String(data.offer.skontoDays) : '',
-		discount: discountInput(data.offer).value,
-		discountKind: discountInput(data.offer).kind
+	type Offer = typeof data.offer;
+	const headOf = (o: Offer) => ({
+		number: o.number,
+		date: o.date,
+		title: o.title,
+		location: o.location,
+		customerId: o.customerId == null ? '' : String(o.customerId),
+		name: o.customerName,
+		addition: o.customerAddition,
+		street: o.customerStreet,
+		zip: o.customerZip,
+		city: o.customerCity,
+		uid: o.customerUid,
+		intro: o.intro,
+		closing: o.closing,
+		vat: String(o.vatRate).replace('.', ','),
+		reverse: o.reverseCharge,
+		days: String(o.paymentDays ?? data.defaultPaymentDays),
+		skonto: o.skontoPercent ? String(o.skontoPercent).replace('.', ',') : '',
+		skontoDays: o.skontoDays ? String(o.skontoDays) : '',
+		discount: discountInput(o).value,
+		discountKind: discountInput(o).kind
 	});
-	// svelte-ignore state_referenced_locally
-	let lines = $state<Line[]>(
-		data.offer.lines.map((l) => ({
+	const linesOf = (o: Offer): Line[] =>
+		o.lines.map((l) => ({
 			key: nextKey++,
 			kind: l.kind,
 			text: l.text,
@@ -91,8 +90,21 @@
 			unit: canonicalUnit(data.units, l.unit),
 			price: amountInput(l.unitPrice),
 			alternative: l.alternative
-		}))
-	);
+		}));
+	// Das Angebot wird nur beim Öffnen übernommen – danach gehört der Stand dem Formular
+	// svelte-ignore state_referenced_locally
+	let head = $state(headOf(data.offer));
+	// svelte-ignore state_referenced_locally
+	let lines = $state<Line[]>(linesOf(data.offer));
+	// Ein anderes Angebot geöffnet (Suche, Duplizieren): SvelteKit behält die Seite – dann dessen Stand übernehmen
+	// svelte-ignore state_referenced_locally
+	let openedId = data.offer.id;
+	$effect.pre(() => {
+		if (data.offer.id === openedId) return;
+		openedId = data.offer.id;
+		head = headOf(data.offer);
+		lines = linesOf(data.offer);
+	});
 
 	const numbers = $derived(lineNumbers(lines));
 	const parsed = $derived(lines.map((l) => ({ kind: l.kind, quantity: parseAmount(l.quantity), unitPrice: parseAmount(l.price), alternative: l.alternative })));
@@ -108,6 +120,8 @@
 	let deleteOpen = $state(false);
 	let customerOpen = $state(false);
 	let customerBusy = $state(false);
+	let copyOpen = $state(false);
+	let copyBusy = $state(false);
 	let listBox = $state<HTMLElement>();
 
 	/** Kunde gewählt: seine Anschrift kommt ins Angebot (danach hier noch änderbar) */
@@ -187,6 +201,9 @@
 		<span class="badge {st.tone}">{#if offer.status === 'angenommen'}<CircleCheck size={13} aria-hidden="true" />{/if}{st.label}</span>
 		<PdfButton href="/angebote/{offer.id}/pdf"><FileText size={18} aria-hidden="true" />PDF</PdfButton>
 		<a href="/angebote/{offer.id}/druck" class="btn btn-secondary"><Printer size={18} aria-hidden="true" />Drucken</a>
+		{#if data.canDuplicate}
+			<button type="button" class="btn btn-secondary" onclick={() => (copyOpen = true)}><Copy size={18} aria-hidden="true" />Duplizieren</button>
+		{/if}
 	</div>
 </div>
 
@@ -662,6 +679,52 @@
 		</div>
 	</form>
 </Dialog>
+
+{#if data.canDuplicate}
+	<Dialog bind:open={copyOpen} title="Angebot duplizieren">
+		<form
+			method="POST"
+			action="?/duplicate"
+			class="space-y-4"
+			use:enhance={() => {
+				copyBusy = true;
+				return async ({ result, update }) => {
+					copyBusy = false;
+					if (result.type === 'redirect') {
+						copyOpen = false;
+						toast.success('Angebot dupliziert');
+					}
+					await update({ reset: false });
+				};
+			}}
+		>
+			<p class="text-sm text-ink-2">
+				Ein neues Angebot in Arbeit – mit Kunde, Ausführungsort, Einleitung und Schluss, Konditionen und allen Positionen. Fotos und Unterlagen bleiben bei diesem
+				Angebot.
+			</p>
+			{#if data.editable}<p class="field-hint">Nicht gespeicherte Änderungen gehen nicht mit – vorher speichern.</p>{/if}
+			<label class="block">
+				<span class="field-label">Bauvorhaben (BV)</span>
+				<input class="input" name="titel" maxlength="300" value={offer.title} />
+			</label>
+			<div class="grid grid-cols-2 gap-4">
+				<label class="block">
+					<span class="field-label">Angebotsnummer *</span>
+					<input class="input num" name="nummer" required maxlength="30" />
+				</label>
+				<label class="block">
+					<span class="field-label">Datum *</span>
+					<input class="input num" type="date" name="datum" required value={data.today} />
+				</label>
+			</div>
+			{#if form && 'copyMessage' in form && form.copyMessage}<p class="field-error" role="alert">{form.copyMessage}</p>{/if}
+			<div class="flex justify-end gap-2 pt-1">
+				<button type="button" class="btn btn-ghost" onclick={() => (copyOpen = false)}>Abbrechen</button>
+				<button class="btn btn-primary" disabled={copyBusy}><Copy size={18} aria-hidden="true" />Duplizieren</button>
+			</div>
+		</form>
+	</Dialog>
+{/if}
 
 <Dialog bind:open={customerOpen} title="Neuer Kunde" wide>
 	<form

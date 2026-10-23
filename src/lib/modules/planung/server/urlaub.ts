@@ -3,8 +3,8 @@
  * Wer genehmigen darf, kann auch für andere eintragen – das gilt dann gleich
  * als genehmigt. Ein Urlaubstag verbraucht so viele Stunden, wie in den
  * Einstellungen für seinen Wochentag stehen (Feiertage nicht); beim Genehmigen
- * werden diese Stunden am Antrag festgehalten. Krankenstand im Urlaub
- * unterbricht ihn – diese Tage zählen nicht.
+ * werden diese Stunden am Antrag festgehalten. Ein Krankenstand im Urlaub von
+ * mehr als drei Kalendertagen unterbricht ihn – diese Tage zählen nicht.
  *
  * Sehen: die eigenen, die der eigenen Partie oder alle – je nach Recht.
  */
@@ -17,7 +17,7 @@ import type { SessionUser } from '$lib/server/auth';
 import { notify } from '$lib/server/notifications';
 import { getSettings } from '$lib/server/settings';
 import { fullName } from '$lib/format';
-import { isValidIsoDate } from '$lib/modules/stunden/week';
+import { addDays, isValidIsoDate } from '$lib/modules/stunden/week';
 import { hoursText, leaveDays, leaveUsage, overlaps, rangeLabel, validLeaveHours, type LeaveUsage } from '../days';
 
 /** Längster Antrag am Stück – schützt vor Tippfehlern im Jahr */
@@ -95,11 +95,20 @@ export async function listLeave(user: SessionUser, year: number) {
 /** Genehmigt: die beim Genehmigen festgehaltenen Stunden; sonst (und bei alten Anträgen) die aktuellen */
 export const hoursFor = (status: LeaveStatus, dayHours: number[] | null, current: number[]) => (status === 'genehmigt' && dayHours ? validLeaveHours(dayHours) : current);
 
-/** Krankenstände der Leute, die in diesen Zeiträumen liegen */
+/**
+ * Krankenstände der Leute, die in diesen Zeiträumen liegen – mit einem Monat
+ * Rand, damit anschließende Meldungen bei der Dauer mitzählen
+ */
 export async function sickOf(ranges: { userId: number; from: string; to: string }[]) {
 	if (!ranges.length) return [];
-	const from = ranges.reduce((m, r) => (r.from < m ? r.from : m), ranges[0].from);
-	const to = ranges.reduce((m, r) => (r.to > m ? r.to : m), ranges[0].to);
+	const from = addDays(
+		ranges.reduce((m, r) => (r.from < m ? r.from : m), ranges[0].from),
+		-31
+	);
+	const to = addDays(
+		ranges.reduce((m, r) => (r.to > m ? r.to : m), ranges[0].to),
+		31
+	);
 	return db
 		.select({ userId: sickReports.userId, from: sickReports.from, to: sickReports.to })
 		.from(sickReports)

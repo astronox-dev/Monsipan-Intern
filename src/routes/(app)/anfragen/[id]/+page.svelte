@@ -21,7 +21,7 @@
 	import PhotoGallery from '$lib/components/PhotoGallery.svelte';
 	import { date as dateLabel, dateTime } from '$lib/format';
 	import { MAX_INQUIRY_TEXT } from '$lib/modules/auftraege/inquiry';
-	import { OFFER_STATUS_LABELS, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { OFFER_STATUS_LABELS, OFFER_TITLE_DEFAULT, spacedNumber, titleToEnd } from '$lib/modules/auftraege/offer';
 	import { toast } from '$lib/stores/toast.svelte';
 
 	let { data, form } = $props();
@@ -253,12 +253,12 @@
 			</label>
 			<label class="block">
 				<span class="field-label">Bauvorhaben (BV)</span>
-				<input class="input" name="titel" maxlength="300" value={inquiry.subject} />
+				<input class="input" name="titel" maxlength="300" value={inquiry.subject || OFFER_TITLE_DEFAULT} onfocus={titleToEnd} />
 			</label>
 			<div class="grid grid-cols-2 gap-4">
 				<label class="block">
 					<span class="field-label">Angebotsnummer *</span>
-					<input class="input num" name="nummer" required maxlength="30" value={data.suggestion.number} />
+					<input class="input num" name="nummer" required maxlength="30" />
 				</label>
 				<label class="block">
 					<span class="field-label">Datum *</span>

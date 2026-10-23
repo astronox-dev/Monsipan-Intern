@@ -5,6 +5,7 @@ import { and, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
 import { dev } from '$app/environment';
 import { db } from './db';
 import { passwordResets, sessions, users, type User } from './db/schema';
+import { effectiveRole } from './lead';
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number, opts: object) => Promise<Buffer>;
 
@@ -54,7 +55,10 @@ const SEEN_EVERY = 5 * 60_000;
 export type SessionUser = Pick<
 	User,
 	'id' | 'username' | 'email' | 'firstName' | 'lastName' | 'role' | 'partyId' | 'owner' | 'mustChangePassword'
->;
+> & {
+	/** Vorübergehend Partieführer bis zu diesem Tag (dann ist `role` schon „partiefuehrer") */
+	leadUntil?: string | null;
+};
 
 export async function createSession(userId: number, persistent: boolean, userAgent: string | null) {
 	const token = newToken();
@@ -98,6 +102,7 @@ export async function validateSession(token: string): Promise<{ user: SessionUse
 			lastName: users.lastName,
 			role: users.role,
 			partyId: users.partyId,
+			leadUntil: users.leadUntil,
 			owner: users.owner,
 			active: users.active,
 			mustChangePassword: users.mustChangePassword,
@@ -124,7 +129,10 @@ export async function validateSession(token: string): Promise<{ user: SessionUse
 	if (!row.lastSeenAt || now - row.lastSeenAt.getTime() > SEEN_EVERY) {
 		await db.update(users).set({ lastSeenAt: new Date(now) }).where(eq(users.id, row.id));
 	}
-	const { sessionId, expiresAt: _e, persistent: _p, active: _a, lastSeenAt: _s, ...user } = row;
+	const { sessionId, expiresAt: _e, persistent: _p, active: _a, lastSeenAt: _s, ...rest } = row;
+	// Vorübergehend Partieführer: bis dahin gelten dessen Rechte
+	const role = effectiveRole(rest.role, rest.leadUntil);
+	const user: SessionUser = { ...rest, role, leadUntil: role !== rest.role ? rest.leadUntil : null };
 	return { user, sessionId };
 }
 

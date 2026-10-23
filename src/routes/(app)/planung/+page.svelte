@@ -31,6 +31,7 @@
 	import Printer from '@lucide/svelte/icons/printer';
 	import HardHat from '@lucide/svelte/icons/hard-hat';
 	import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
+	import UserStar from '@lucide/svelte/icons/user-star';
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -136,6 +137,11 @@
 	}
 
 	/* ------------------------------------------------ Dialog Person einteilen */
+	/** Vorübergehend Partieführer: wer es werden kann und bis wann er es ist – aus den Leuten der Woche */
+	const leadOf = (userId: number) => data.parties.flatMap((p) => p.members).find((m) => m.id === userId);
+	/** Vorschlag fürs „bis": Ende der gezeigten Woche, frühestens heute */
+	const leadDefault = $derived(data.days[6] < data.today ? data.today : data.days[6]);
+	const leadText = (until: string) => `Partieführer bis ${short(until)}`;
 	let crewOpen = $state(false);
 	let crewPerson = $state<{ userId: number; name: string; weekParty: number; fromName: string | null } | null>(null);
 	let crewWhen = $state('woche');
@@ -303,7 +309,10 @@
 	{#each data.parties as p (p.id)}
 		{#if p.members.length}
 			<p class="mb-1.5 text-sm text-ink-2">
-				{multi ? `${p.name}: ` : 'Diese Woche: '}{p.members.map((m) => (m.fromName ? `${m.name} (aus ${m.fromName})` : m.name)).join(' · ')}
+				{multi ? `${p.name}: ` : 'Diese Woche: '}{p.members
+					.map((m) => [m.name, m.fromName && `aus ${m.fromName}`, m.leadUntil && leadText(m.leadUntil)].filter(Boolean))
+					.map(([n, ...more]) => (more.length ? `${n} (${more.join(', ')})` : n))
+					.join(' · ')}
 			</p>
 		{/if}
 	{/each}
@@ -380,14 +389,22 @@
 											<button
 												type="button"
 												class="person {m.fromName ? 'guest' : ''}"
-												title={m.fromName ? `Diese Woche hier, fest: ${m.fromName}` : 'Zu einer anderen Partie ziehen – in die Spalte (Woche) oder ein Feld (Tag)'}
+												title={[m.leadUntil && `Vorübergehend ${leadText(m.leadUntil)}`, m.fromName ? `Diese Woche hier, fest: ${m.fromName}` : 'Zu einer anderen Partie ziehen – in die Spalte (Woche) oder ein Feld (Tag)']
+													.filter(Boolean)
+													.join(' · ')}
 												onclick={() => openCrew({ userId: m.id, name: m.name, weekParty: p.id, fromName: m.fromName })}
 												use:draggable={{ kind: 'person', data: { userId: m.id, name: m.name, weekParty: p.id } satisfies PersonDrag }}
 											>
-												{#if m.fromName}<ArrowRightLeft size={11} aria-hidden="true" />{/if}{m.name}
+												{#if m.fromName}<ArrowRightLeft size={11} aria-hidden="true" />{/if}{m.name}{#if m.leadUntil}<UserStar
+														size={12}
+														class="text-ink"
+														aria-label="vorübergehend {leadText(m.leadUntil)}"
+													/>{/if}
 											</button>
 										{:else}
-											<span class="person {m.fromName ? 'guest' : ''}" title={m.fromName ? `Diese Woche hier, fest: ${m.fromName}` : undefined}>{m.name}</span>
+											<span class="person {m.fromName ? 'guest' : ''}" title={m.fromName ? `Diese Woche hier, fest: ${m.fromName}` : undefined}
+												>{m.name}{#if m.leadUntil}<UserStar size={12} class="text-ink" aria-label="vorübergehend {leadText(m.leadUntil)}" />{/if}</span
+											>
 										{/if}
 									{/each}
 								</span>
@@ -633,6 +650,37 @@
 				<button type="button" class="btn btn-ghost" onclick={() => (crewOpen = false)}>Abbrechen</button>
 			</div>
 		</form>
+		{@const lead = leadOf(person.userId)}
+		{#if lead?.canLead}
+			<form
+				method="POST"
+				action="?/lead"
+				class="mt-3 space-y-2 border-t border-line pt-3"
+				use:enhance={() => async ({ result, update }) => {
+					if (result.type === 'success') {
+						crewOpen = false;
+						toast.success(result.data?.lead ? `${person.name} ist bis ${short(String(result.data.lead))} Partieführer` : `${person.name} ist wieder Arbeiter`);
+					}
+					await update();
+				}}
+			>
+				<input type="hidden" name="person" value={person.userId} />
+				<p class="flex items-center gap-1.5 font-medium"><UserStar size={16} aria-hidden="true" />Vorübergehend Partieführer</p>
+				<p class="field-hint">
+					{lead.leadUntil ? `Bis ${dateLabel(lead.leadUntil)} – ` : ''}darf wie ein Partieführer Tagesberichte und Stundenzettel seiner festen Partie schreiben und freigeben.
+					Danach ist {person.name} von selbst wieder Arbeiter.
+				</p>
+				<div class="flex flex-wrap items-end gap-2">
+					<label class="block">
+						<span class="field-label">Bis einschließlich</span>
+						<input class="input num" type="date" name="bis" required min={data.today} value={lead.leadUntil ?? leadDefault} />
+					</label>
+					<button class="btn btn-secondary">{lead.leadUntil ? 'Ändern' : 'Zum Partieführer machen'}</button>
+					{#if lead.leadUntil}<button class="btn btn-ghost" name="ende" value="1" formnovalidate>Beenden</button>{/if}
+				</div>
+				{#if form && 'leadMessage' in form && form.leadMessage}<p class="text-sm text-danger" role="alert">{form.leadMessage}</p>{/if}
+			</form>
+		{/if}
 		{#if person.fromName}
 			<form
 				method="POST"

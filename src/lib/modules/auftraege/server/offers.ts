@@ -13,7 +13,7 @@ import { customers, offerPositions, offers, orders, planEntries, users, type Off
 import { col } from '$lib/server/db/sql';
 import { getSettings } from '$lib/server/settings';
 import type { SessionUser } from '$lib/server/auth';
-import { MAX_OFFER_LINES, nextOfferNumber, nextProjectNumber, parseAmount } from '../offer';
+import { MAX_OFFER_LINES, parseAmount } from '../offer';
 
 const creator = alias(users, 'creator');
 const releaser = alias(users, 'releaser');
@@ -142,12 +142,6 @@ export async function positionMemory(limit = 500) {
 	return rows.map((r) => ({ ...r, uses: Number(r.uses) }));
 }
 
-/** Vorschlag für das nächste Angebot: Nummer und Projektnummer */
-export async function suggestNumbers(year = new Date().getFullYear()) {
-	const rows = await db.select({ n: offers.number, p: offers.projectNumber }).from(offers).all();
-	return { number: nextOfferNumber(rows.map((r) => r.n), year), projectNumber: nextProjectNumber(rows.map((r) => r.p), year) };
-}
-
 export async function numberTaken(number: string, exceptId?: number): Promise<boolean> {
 	const row = await db.select({ id: offers.id }).from(offers).where(eq(offers.number, number)).get();
 	return !!row && row.id !== exceptId;
@@ -198,6 +192,50 @@ export async function createOffer(
 			.returning({ id: offers.id })
 			.get();
 		await tx.insert(offerPositions).values({ offerId: row.id, sortOrder: 0, unit: 'Pauschal', quantity: 1 });
+		return row.id;
+	});
+}
+
+/**
+ * Angebot duplizieren: ein neues in Arbeit mit Kunde (wie er im Angebot steht),
+ * Ausführungsort, Texten, Konditionen und allen Zeilen – Nummer, Datum und BV
+ * neu. Fotos, Unterlagen, Freigabe und Annahme gehen nicht mit.
+ */
+export async function duplicateOffer(user: SessionUser, sourceId: number, data: { number: string; date: string; title: string }): Promise<number | null> {
+	const source = await db.select().from(offers).where(eq(offers.id, sourceId)).get();
+	if (!source) return null;
+	const lines = await db.select().from(offerPositions).where(eq(offerPositions.offerId, sourceId)).orderBy(asc(offerPositions.sortOrder), asc(offerPositions.id)).all();
+	return db.transaction(async (tx) => {
+		const row = await tx
+			.insert(offers)
+			.values({
+				number: data.number.slice(0, 30),
+				date: data.date,
+				title: data.title.slice(0, 300),
+				location: source.location,
+				customerId: source.customerId,
+				customerName: source.customerName,
+				customerAddition: source.customerAddition,
+				customerStreet: source.customerStreet,
+				customerZip: source.customerZip,
+				customerCity: source.customerCity,
+				customerUid: source.customerUid,
+				intro: source.intro,
+				closing: source.closing,
+				vatRate: source.vatRate,
+				reverseCharge: source.reverseCharge,
+				paymentDays: source.paymentDays,
+				skontoPercent: source.skontoPercent,
+				skontoDays: source.skontoDays,
+				discountPercent: source.discountPercent,
+				discountAmount: source.discountAmount,
+				createdBy: user.id,
+				updatedAt: new Date()
+			})
+			.returning({ id: offers.id })
+			.get();
+		const copy = lines.map(({ id: _id, offerId: _offer, ...l }) => ({ ...l, offerId: row.id }));
+		await tx.insert(offerPositions).values(copy.length ? copy : [{ offerId: row.id, sortOrder: 0, unit: 'Pauschal', quantity: 1 }]);
 		return row.id;
 	});
 }

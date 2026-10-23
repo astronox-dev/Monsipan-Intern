@@ -14,7 +14,9 @@ import { db } from '$lib/server/db';
 import { leaveRequests, orders, parties, planCrewDays, planCrewWeeks, planEntries, planNotes, settings, sickReports, users, workOrders } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
 import { notify } from '$lib/server/notifications';
-import { isoWeek, isValidIsoDate, mondayOf, weekDays } from '$lib/modules/stunden/week';
+import { addDays, isoWeek, isValidIsoDate, mondayOf, today, weekDays } from '$lib/modules/stunden/week';
+import { effectiveRole } from '$lib/server/lead';
+import { date as dateLabel } from '$lib/format';
 import { readContent } from '$lib/modules/auftraege/work-order';
 import { termDays } from '../days';
 
@@ -69,14 +71,29 @@ export async function weekCrew(weekStart: string) {
 	]);
 	const moved = [...new Set([...weekRows, ...dayRows].map((r) => r.userId))];
 	const people = await db
-		.select({ id: users.id, partyId: users.partyId, firstName: users.firstName, lastName: users.lastName, username: users.username })
+		.select({
+			id: users.id,
+			partyId: users.partyId,
+			role: users.role,
+			leadUntil: users.leadUntil,
+			firstName: users.firstName,
+			lastName: users.lastName,
+			username: users.username
+		})
 		.from(users)
 		.where(and(activeUser, moved.length ? or(isNotNull(users.partyId), inArray(users.id, moved)) : isNotNull(users.partyId)))
 		.orderBy(asc(users.firstName), asc(users.lastName))
 		.all();
 	const weekOf = new Map(weekRows.map((r) => [r.userId, r.partyId]));
 	const persons = people
-		.map((p) => ({ id: p.id, name: p.firstName || p.lastName || p.username, home: p.partyId, week: weekOf.get(p.id) ?? p.partyId }))
+		.map((p) => ({
+			id: p.id,
+			name: p.firstName || p.lastName || p.username,
+			home: p.partyId,
+			week: weekOf.get(p.id) ?? p.partyId,
+			role: p.role,
+			leadUntil: effectiveRole(p.role, p.leadUntil) !== p.role ? p.leadUntil : null
+		}))
 		.filter((p): p is typeof p & { week: number } => p.week != null);
 	const weekParty = new Map(persons.map((p) => [p.id, p.week]));
 	const dayMoves = dayRows
@@ -221,7 +238,11 @@ export async function planWeek(user: SessionUser, weekStart: string) {
 					id: m.id,
 					name: m.name,
 					/** Diese Woche hier, fest aber woanders (oder ohne Partie) */
-					fromName: m.home !== p.id ? (m.home ? (partyName.get(m.home) ?? '') : 'ohne Partie') : null
+					fromName: m.home !== p.id ? (m.home ? (partyName.get(m.home) ?? '') : 'ohne Partie') : null,
+					/** Kann vorübergehend Partieführer werden: ein Arbeiter mit fester Partie */
+					canLead: m.role === 'arbeiter' && m.home != null,
+					/** Vorübergehend Partieführer bis … */
+					leadUntil: m.leadUntil
 				}))
 		})),
 		dayMoves,
@@ -516,6 +537,36 @@ export async function notifyCrewChange(actor: SessionUser | null, userId: number
 		userIds: [userId],
 		actorId: actor?.id ?? null
 	});
+}
+
+/**
+ * Vorübergehend Partieführer machen – bis einschließlich `until` – bzw. mit
+ * null wieder beenden. Nur für Arbeiter mit fester Partie; die Person bekommt
+ * Bescheid.
+ */
+export async function setActingLead(actor: SessionUser, userId: number, until: string | null): Promise<true | { message: string }> {
+	const person = await db.select({ role: users.role, partyId: users.partyId, leadUntil: users.leadUntil }).from(users).where(and(eq(users.id, userId), activeUser)).get();
+	if (!person) return { message: 'Diese Person gibt es nicht (mehr).' };
+	if (person.role !== 'arbeiter') return { message: 'Vorübergehend Partieführer werden kann nur ein Arbeiter.' };
+	if (!person.partyId) return { message: 'Ohne feste Partie geht das nicht – erst im Benutzerkonto eine Partie eintragen.' };
+	const day = today();
+	if (until != null) {
+		if (!isValidIsoDate(until) || until < day) return { message: 'Bitte ein Datum ab heute wählen.' };
+		if (until > addDays(day, 366)) return { message: 'Höchstens ein Jahr – sonst im Benutzerkonto die Rolle ändern.' };
+	}
+	const wasLead = effectiveRole(person.role, person.leadUntil, day) !== person.role;
+	await db.update(users).set({ leadUntil: until }).where(eq(users.id, userId));
+	if (until || wasLead) {
+		notify({
+			event: 'planung.partiefuehrer',
+			title: until ? `Bis ${dateLabel(until)} vorübergehend Partieführer` : 'Nicht mehr vorübergehend Partieführer',
+			body: until ? 'Du kannst Tagesberichte und Stundenzettel deiner Partie schreiben und freigeben.' : '',
+			url: until ? '/tagesberichte' : '/',
+			userIds: [userId],
+			actorId: actor.id
+		});
+	}
+	return true;
 }
 
 export async function setCrew(

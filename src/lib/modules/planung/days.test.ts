@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_LEAVE_HOURS, easterSunday, holidayName, hoursText, isWorkday, leaveDays, leaveUsage, overlaps, rangeLabel, termDays, validLeaveHours, workdays } from './days';
+import {
+	DEFAULT_LEAVE_HOURS,
+	easterSunday,
+	holidayName,
+	hoursText,
+	isWorkday,
+	leaveDays,
+	leaveUsage,
+	overlaps,
+	rangeLabel,
+	sickSpells,
+	termDays,
+	validLeaveHours,
+	workdays
+} from './days';
 
 describe('Feiertage', () => {
 	it('kennt Ostern', () => {
@@ -55,15 +69,45 @@ describe('Urlaub in Stunden', () => {
 		expect(leaveDays('2026-10-24', '2026-10-24', [8, 8, 8, 8, 7, 4.5, 0])).toEqual([{ date: '2026-10-24', hours: 4.5 }]);
 	});
 
-	it('Krankenstand im Urlaub unterbricht ihn', () => {
-		// Krank Mi 21. – Do 22.10.: 16 Stunden zurück
-		const u = leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-21', to: '2026-10-22' }]);
-		expect(u).toMatchObject({ days: 3, hours: 23, sickDays: 2, sickHours: 16 });
-		expect(u.interruptions).toEqual([{ from: '2026-10-21', to: '2026-10-22' }]);
+	it('Krankenstand von mehr als drei Tagen unterbricht den Urlaub', () => {
+		// Krank Mi 21. – Sa 24.10. (4 Tage): Mi, Do, Fr zählen nicht – 23 Stunden zurück
+		const u = leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-21', to: '2026-10-24' }]);
+		expect(u).toMatchObject({ days: 2, hours: 16, sickDays: 3, sickHours: 23 });
+		expect(u.interruptions).toEqual([{ from: '2026-10-21', to: '2026-10-23' }]);
 		// Schon vorher krank und noch offen: ab Urlaubsbeginn bis zum Ende
-		expect(leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-15', to: null }])).toMatchObject({ days: 0, hours: 0, sickDays: 5, sickHours: 39, interruptions: [{ from: '2026-10-19', to: '2026-10-23' }] });
+		expect(leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-15', to: null }], '2026-10-20')).toMatchObject({
+			days: 0,
+			hours: 0,
+			sickDays: 5,
+			sickHours: 39,
+			interruptions: [{ from: '2026-10-19', to: '2026-10-23' }]
+		});
 		// Krankenstand außerhalb zählt nicht
-		expect(leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-26', to: '2026-10-27' }]).interruptions).toEqual([]);
+		expect(leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-26', to: '2026-10-29' }]).interruptions).toEqual([]);
+	});
+
+	it('bis zu drei Tage krank: der Urlaub läuft weiter', () => {
+		// Mi 21. – Fr 23.10.: genau drei Kalendertage
+		expect(leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-21', to: '2026-10-23' }])).toMatchObject({ days: 5, hours: 39, sickDays: 0, interruptions: [] });
+		// Noch offen, aber bis heute erst zwei Tage – (noch) keine Unterbrechung
+		expect(leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-21', to: null }], '2026-10-22')).toMatchObject({ days: 5, sickDays: 0 });
+		expect(leaveUsage('2026-10-19', '2026-10-23', H, [{ from: '2026-10-21', to: null }], '2026-10-24')).toMatchObject({ days: 2, sickDays: 3 });
+	});
+
+	it('aneinander anschließende Meldungen sind ein Krankenstand', () => {
+		const sick = [
+			{ from: '2026-10-23', to: '2026-10-24' },
+			{ from: '2026-10-21', to: '2026-10-22' }
+		];
+		expect(sickSpells(sick)).toEqual([{ from: '2026-10-21', to: '2026-10-24', days: 4, interrupts: true }]);
+		expect(leaveUsage('2026-10-19', '2026-10-23', H, sick)).toMatchObject({ days: 2, sickDays: 3, interruptions: [{ from: '2026-10-21', to: '2026-10-23' }] });
+		// Mit einem Tag Pause: zwei kurze
+		expect(
+			sickSpells([
+				{ from: '2026-10-19', to: '2026-10-20' },
+				{ from: '2026-10-22', to: '2026-10-23' }
+			]).map((s) => s.interrupts)
+		).toEqual([false, false]);
 	});
 
 	it('nimmt nur gültige Wochenstunden', () => {

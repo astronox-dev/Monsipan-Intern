@@ -2,7 +2,7 @@
  * Tage für Urlaub und Krankenstand: gesetzliche Feiertage in Österreich und
  * Arbeitstage (Montag bis Freitag ohne Feiertage). Alles als „JJJJ-MM-TT".
  */
-import { addDays, isValidIsoDate, weekdayIndex } from '$lib/modules/stunden/week';
+import { addDays, daysBetween, isValidIsoDate, today as todayIso, weekdayIndex } from '$lib/modules/stunden/week';
 
 /** Ostersonntag nach der Gaußschen Osterformel (gregorianisch) */
 export function easterSunday(year: number): string {
@@ -103,18 +103,57 @@ export interface LeaveUsage {
 	/** Durch Krankenstand unterbrochen – diese Tage und Stunden zählen nicht */
 	sickDays: number;
 	sickHours: number;
-	/** Die Krankenstände im Urlaub, auf dessen Zeitraum gekürzt */
+	/** Die Krankenstände im Urlaub, die ihn unterbrechen – auf seinen Zeitraum gekürzt */
 	interruptions: { from: string; to: string }[];
 }
 
+/** Ein Krankenstand unterbricht den Urlaub erst, wenn er länger als so viele Kalendertage dauert (§ 5 Urlaubsgesetz) */
+export const SICK_INTERRUPTS_AFTER = 3;
+
+export interface SickSpell {
+	from: string;
+	/** null: noch krank */
+	to: string | null;
+	/** Kalendertage – bei offenem Ende bis heute */
+	days: number;
+	/** Länger als drei Kalendertage: unterbricht einen Urlaub */
+	interrupts: boolean;
+}
+
 /**
- * Was ein Urlaub verbraucht. Ein Krankenstand während des Urlaubs unterbricht
- * ihn: Tage, an denen jemand krank gemeldet ist, zählen nicht. Ein offenes
- * Ende („noch krank") gilt bis zum Urlaubsende.
+ * Krankenstände als zusammenhängende Zeiten: Meldungen, die direkt
+ * aneinander anschließen, gelten als ein Krankenstand. Er unterbricht einen
+ * Urlaub nur, wenn er länger als drei Kalendertage dauert – sonst läuft der
+ * Urlaub weiter. Ein offenes Ende („noch krank") zählt bis heute.
  */
-export function leaveUsage(from: string, to: string, hours: readonly number[], sick: readonly { from: string; to: string | null }[]): LeaveUsage {
-	const interruptions = sick
-		.filter((s) => overlaps(s.from, s.to, from, to))
+export function sickSpells(sick: readonly { from: string; to: string | null }[], today = todayIso()): SickSpell[] {
+	const spells: SickSpell[] = [];
+	for (const s of [...sick].sort((a, b) => a.from.localeCompare(b.from))) {
+		const last = spells.at(-1);
+		if (last && (last.to == null || s.from <= addDays(last.to, 1))) last.to = last.to == null || s.to == null ? null : s.to > last.to ? s.to : last.to;
+		else spells.push({ from: s.from, to: s.to, days: 0, interrupts: false });
+	}
+	for (const s of spells) {
+		s.days = daysBetween(s.from, s.to ?? (today > s.from ? today : s.from)) + 1;
+		s.interrupts = s.days > SICK_INTERRUPTS_AFTER;
+	}
+	return spells;
+}
+
+/** Der zusammenhängende Krankenstand, in dem dieser Tag liegt */
+export function spellOf(spells: readonly SickSpell[], date: string): SickSpell | undefined {
+	return spells.find((s) => s.from <= date && (s.to == null || date <= s.to));
+}
+
+/**
+ * Was ein Urlaub verbraucht. Ein Krankenstand von mehr als drei Kalendertagen
+ * unterbricht ihn: Tage, an denen jemand krank gemeldet ist, zählen dann nicht.
+ * Ein kürzerer zählt nicht – der Urlaub läuft weiter. Ein offenes Ende
+ * („noch krank") gilt bis zum Urlaubsende, sobald er bis heute länger dauert.
+ */
+export function leaveUsage(from: string, to: string, hours: readonly number[], sick: readonly { from: string; to: string | null }[], today = todayIso()): LeaveUsage {
+	const interruptions = sickSpells(sick, today)
+		.filter((s) => s.interrupts && overlaps(s.from, s.to, from, to))
 		.map((s) => ({ from: s.from < from ? from : s.from, to: !s.to || s.to > to ? to : s.to }))
 		.sort((a, b) => a.from.localeCompare(b.from));
 	const usage: LeaveUsage = { days: 0, hours: 0, sickDays: 0, sickHours: 0, interruptions };

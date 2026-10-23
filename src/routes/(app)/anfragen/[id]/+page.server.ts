@@ -13,7 +13,7 @@ import {
 	setInquiryInProgress,
 	updateInquiry
 } from '$lib/modules/auftraege/server/inquiries';
-import { numberTaken, suggestNumbers } from '$lib/modules/auftraege/server/offers';
+import { numberTaken } from '$lib/modules/auftraege/server/offers';
 import { isValidIsoDate, today } from '$lib/modules/stunden/week';
 import { DocumentError, storeDocument, takeUploads } from '$lib/server/documents';
 import {
@@ -50,7 +50,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		canSeeOffer: can(user.role, 'angebote.sehen'),
 		canAddCustomer: canEdit && can(user.role, 'kunden.erstellen'),
 		customers: canEdit || canCreateOffer ? (await listCustomers()).map((c) => ({ id: c.id, name: c.name, city: c.city })) : [],
-		suggestion: canCreateOffer ? { ...(await suggestNumbers()), date: today() } : null,
+		// Die Nummer trägt man selbst ein – nur das Datum ist vorausgefüllt
+		suggestion: canCreateOffer ? { date: today() } : null,
 		// Pläne und Fotos des ganzen Vorgangs – auch was später am Angebot oder Auftrag dazukam
 		documents: await caseDocuments(chain),
 		photos: await casePhotos(chain, 'anfrage')
