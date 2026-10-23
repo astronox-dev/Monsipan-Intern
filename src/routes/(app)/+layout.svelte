@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { invalidate } from '$app/navigation';
+	import { page } from '$app/state';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import BottomNav from '$lib/components/BottomNav.svelte';
@@ -105,7 +106,14 @@
 		class="mx-auto w-full px-4 pt-4 pb-28 outline-none sm:px-6 lg:px-8 lg:pt-2 lg:pb-12 print:max-w-none print:px-0 print:pt-0 print:pb-0"
 		style="view-transition-name: main"
 	>
-		{@render children()}
+		<!--
+			Ein anderer Datensatz derselben Seite (über die Suche, „Duplizieren", „Zum Teil …"):
+			neu aufbauen. Sonst behält SvelteKit die Seite samt Formular, Fotos und Handschrift
+			des vorigen – und Speichern schriebe dessen Stand in den neuen.
+		-->
+		{#key page.params.id}
+			{@render children()}
+		{/key}
 	</main>
 </div>
 

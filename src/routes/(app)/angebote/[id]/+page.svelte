@@ -57,31 +57,33 @@
 	type Line = { key: number; kind: 'position' | 'titel'; text: string; note: string; quantity: string; unit: string; price: string; alternative: boolean };
 
 	let nextKey = 1;
-	type Offer = typeof data.offer;
-	const headOf = (o: Offer) => ({
-		number: o.number,
-		date: o.date,
-		title: o.title,
-		location: o.location,
-		customerId: o.customerId == null ? '' : String(o.customerId),
-		name: o.customerName,
-		addition: o.customerAddition,
-		street: o.customerStreet,
-		zip: o.customerZip,
-		city: o.customerCity,
-		uid: o.customerUid,
-		intro: o.intro,
-		closing: o.closing,
-		vat: String(o.vatRate).replace('.', ','),
-		reverse: o.reverseCharge,
-		days: String(o.paymentDays ?? data.defaultPaymentDays),
-		skonto: o.skontoPercent ? String(o.skontoPercent).replace('.', ',') : '',
-		skontoDays: o.skontoDays ? String(o.skontoDays) : '',
-		discount: discountInput(o).value,
-		discountKind: discountInput(o).kind
+	// Das Angebot wird nur beim Öffnen übernommen – danach gehört der Stand dem Formular
+	// svelte-ignore state_referenced_locally
+	let head = $state({
+		number: data.offer.number,
+		date: data.offer.date,
+		title: data.offer.title,
+		location: data.offer.location,
+		customerId: data.offer.customerId == null ? '' : String(data.offer.customerId),
+		name: data.offer.customerName,
+		addition: data.offer.customerAddition,
+		street: data.offer.customerStreet,
+		zip: data.offer.customerZip,
+		city: data.offer.customerCity,
+		uid: data.offer.customerUid,
+		intro: data.offer.intro,
+		closing: data.offer.closing,
+		vat: String(data.offer.vatRate).replace('.', ','),
+		reverse: data.offer.reverseCharge,
+		days: String(data.offer.paymentDays ?? data.defaultPaymentDays),
+		skonto: data.offer.skontoPercent ? String(data.offer.skontoPercent).replace('.', ',') : '',
+		skontoDays: data.offer.skontoDays ? String(data.offer.skontoDays) : '',
+		discount: discountInput(data.offer).value,
+		discountKind: discountInput(data.offer).kind
 	});
-	const linesOf = (o: Offer): Line[] =>
-		o.lines.map((l) => ({
+	// svelte-ignore state_referenced_locally
+	let lines = $state<Line[]>(
+		data.offer.lines.map((l) => ({
 			key: nextKey++,
 			kind: l.kind,
 			text: l.text,
@@ -90,21 +92,8 @@
 			unit: canonicalUnit(data.units, l.unit),
 			price: amountInput(l.unitPrice),
 			alternative: l.alternative
-		}));
-	// Das Angebot wird nur beim Öffnen übernommen – danach gehört der Stand dem Formular
-	// svelte-ignore state_referenced_locally
-	let head = $state(headOf(data.offer));
-	// svelte-ignore state_referenced_locally
-	let lines = $state<Line[]>(linesOf(data.offer));
-	// Ein anderes Angebot geöffnet (Suche, Duplizieren): SvelteKit behält die Seite – dann dessen Stand übernehmen
-	// svelte-ignore state_referenced_locally
-	let openedId = data.offer.id;
-	$effect.pre(() => {
-		if (data.offer.id === openedId) return;
-		openedId = data.offer.id;
-		head = headOf(data.offer);
-		lines = linesOf(data.offer);
-	});
+		}))
+	);
 
 	const numbers = $derived(lineNumbers(lines));
 	const parsed = $derived(lines.map((l) => ({ kind: l.kind, quantity: parseAmount(l.quantity), unitPrice: parseAmount(l.price), alternative: l.alternative })));
