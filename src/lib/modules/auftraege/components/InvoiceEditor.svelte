@@ -539,7 +539,7 @@
 	<p class="mt-2 text-[0.8125rem] text-ink-3">Darüber stehen auf der Rechnung die Zahlungsbedingungen; die Bankverbindung steht in der Fußzeile.</p>
 </section>
 
-<div class="card sticky bottom-24 mt-4 flex flex-wrap items-center gap-3 p-3 lg:bottom-6">
+<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-3 p-3 lg:bottom-6">
 	<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : submitLabel}</button>
 	<span class="num text-sm text-ink-2">Gesamtbetrag {money(totals.gross)}</span>
 	{#if message}<p class="w-full text-sm text-danger" role="alert">{message}</p>{/if}

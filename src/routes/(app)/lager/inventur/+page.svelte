@@ -229,7 +229,7 @@
 			</ul>
 		</div>
 
-		<div class="card sticky bottom-24 mt-4 flex flex-wrap items-center gap-3 p-3 lg:bottom-6">
+		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-3 p-3 lg:bottom-6">
 			<button class="btn btn-primary" disabled={busy || !lines.length}>
 				{busy ? 'Wird gebucht …' : `Inventur buchen (${lines.length})`}
 			</button>

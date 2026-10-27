@@ -260,7 +260,8 @@ export async function offerFromInquiry(
 	inquiry: InquiryDetail,
 	data: { number: string; projectNumber: string; date: string; title: string; customerId: number | null }
 ): Promise<number> {
-	const id = await createOffer(user, { ...data, location: inquiry.location });
+	const contact = { name: inquiry.senderName, phone: inquiry.senderPhone, email: inquiry.senderEmail };
+	const id = await createOffer(user, { ...data, location: inquiry.location, contact });
 	await db.update(inquiries).set({ offerId: id, customerId: data.customerId ?? inquiry.customerId, updatedAt: new Date() }).where(eq(inquiries.id, inquiry.id));
 	return id;
 }

@@ -142,7 +142,7 @@
 		<WorkOrderBack bind:form={f} />
 	</div>
 
-	<div class="card sticky bottom-24 mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
+	<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 		<button class="btn btn-primary" disabled={busy}>
 			<ClipboardList size={18} aria-hidden="true" />{share !== null ? `Pläne hochladen … ${Math.floor(share * 100)} %` : busy ? 'Wird erstellt …' : submitLabel}
 		</button>

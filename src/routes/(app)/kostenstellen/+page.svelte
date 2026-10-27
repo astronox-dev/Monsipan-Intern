@@ -46,7 +46,7 @@
 	<h1 class="flex items-center gap-2 text-[2rem] leading-tight"><Tags size={26} aria-hidden="true" />Kostenstellen</h1>
 	<p class="text-ink-2">
 		Wie lange auf welcher Kostenstelle gearbeitet wurde – alle Partien zusammen, aus den Stundenzetteln (Norm und Überstunden; Urlaub, Feiertag, Regen und Krankenstand
-		zählen nicht). Die Kostenstellen kommen aus dem, was dort eingetragen ist.
+		zählen nicht). Die Kostenstellen kommen aus dem, was dort eingetragen ist. Stehen an einem Tag mehrere, teilen sie sich dessen Stunden zu gleichen Teilen.
 	</p>
 </div>
 

@@ -25,7 +25,7 @@ import { col } from '$lib/server/db/sql';
 import { parties, timesheetDays, timesheets, users } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
 import type { InkPages } from '$lib/ink';
-import { mondayOf, monthsOfWeek, normalizeRanges, parseHours, weekDaysInMonth, type TimeRange, type WEEKDAY_LABELS } from '../week';
+import { entryLines, mondayOf, monthsOfWeek, normalizeRanges, parseHours, weekDaysInMonth, type TimeRange, type WEEKDAY_LABELS } from '../week';
 import { guestDaysAt, guestsOfParty } from '$lib/modules/planung/server/plan';
 
 /** Darf andere Partien sehen – wer andere bearbeiten darf, darf sie auch sehen */
@@ -335,8 +335,9 @@ async function writeDays(tx: Tx, id: number, days: DayInput[]) {
 		await tx
 			.update(timesheetDays)
 			.set({
-				costCenter: String(d.costCenter ?? '').slice(0, 60),
-				site: String(d.site ?? '').slice(0, 200),
+				// Mehrere Baustellen am Tag stehen zeilenweise (siehe placesOf)
+				costCenter: String(d.costCenter ?? '').slice(0, 400),
+				site: String(d.site ?? '').slice(0, 1200),
 				// Mehr als 12 Zeiträume am Tag sind ein Tippfehler, keine Arbeitszeit
 				times: normalizeRanges(d.times).slice(0, 12),
 				normalHours: parseHours(d.normalHours),
@@ -548,7 +549,7 @@ export async function saveSheetInk(id: number, ink: InkPages) {
 		.where(eq(timesheets.id, id));
 }
 
-/** Zuletzt verwendete Baustellen als Vorschlagsliste (später kommen hier Aufträge her) */
+/** Zuletzt verwendete Baustellen als Vorschlagsliste – mehrere an einem Tag einzeln */
 export async function recentSites(limit = 50): Promise<string[]> {
 	const rows = await db
 		.selectDistinct({ site: timesheetDays.site })
@@ -557,7 +558,7 @@ export async function recentSites(limit = 50): Promise<string[]> {
 		.orderBy(sql`${timesheetDays.date} desc`)
 		.limit(limit)
 		.all();
-	return rows.map((r) => r.site);
+	return [...new Set(rows.flatMap((r) => entryLines(r.site)))].slice(0, limit);
 }
 
 export function totals(days: { [k: string]: unknown }[]) {

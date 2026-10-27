@@ -471,7 +471,7 @@
 
 	<!-- Die Leiste erscheint erst, wenn es etwas zu speichern gibt -->
 	{#if canEdit && (changed || busy)}
-		<div class="sticky bottom-24 mt-2 flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface/95 p-3 shadow-[var(--shadow-1)] backdrop-blur lg:bottom-6">
+		<div class="lg:sticky mt-2 flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface/95 p-3 shadow-[var(--shadow-1)] backdrop-blur lg:bottom-6">
 			<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Änderungen speichern'}</button>
 			<button type="button" class="btn btn-ghost" disabled={busy} onclick={() => (allowed = fromMatrix(data.matrix))}>Verwerfen</button>
 			<p class="text-sm text-ink-2">

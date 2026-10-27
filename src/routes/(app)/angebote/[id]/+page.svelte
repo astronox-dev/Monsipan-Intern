@@ -71,6 +71,9 @@
 		zip: data.offer.customerZip,
 		city: data.offer.customerCity,
 		uid: data.offer.customerUid,
+		contact: data.offer.contactName,
+		phone: data.offer.contactPhone,
+		email: data.offer.contactEmail,
 		intro: data.offer.intro,
 		closing: data.offer.closing,
 		vat: String(data.offer.vatRate).replace('.', ','),
@@ -124,6 +127,12 @@
 		head.zip = c.zip;
 		head.city = c.city;
 		head.uid = c.uid;
+		// Ansprechperson des Kunden – nur, wenn im Kundenstamm eine steht
+		if (c.contact || c.phone || c.email) {
+			head.contact = c.contact;
+			head.phone = c.phone;
+			head.email = c.email;
+		}
 		// Bauunternehmen: ohne Umsatzsteuer (Übergang der Steuerschuld)
 		head.reverse = c.reverseCharge;
 	}
@@ -160,7 +169,7 @@
 	);
 </script>
 
-{#snippet field(label: string, nameAttr: string, value: string, set: (v: string) => void, opts: { cls?: string; max?: number; list?: string; mode?: 'decimal' } = {})}
+{#snippet field(label: string, nameAttr: string, value: string, set: (v: string) => void, opts: { cls?: string; max?: number; list?: string; mode?: 'decimal'; type?: 'text' | 'tel' | 'email' } = {})}
 	<label class="block {opts.cls ?? ''}">
 		<span class="field-label">{label}</span>
 		<input
@@ -168,6 +177,7 @@
 			name={nameAttr}
 			maxlength={opts.max ?? 160}
 			list={opts.list}
+			type={opts.type ?? 'text'}
 			inputmode={opts.mode}
 			{value}
 			oninput={(e) => set(e.currentTarget.value)}
@@ -281,7 +291,7 @@
 		shareTitle={`Angebot ${spacedNumber(offer.number)}`}
 		shareText={offer.status === 'angenommen' ? 'Ihr angenommenes Angebot:' : 'Unser Angebot – bitte ansehen und annehmen:'}
 		mailConfigured={data.mailConfigured}
-		email={String((form && 'email' in form && form.email) || offer.customerEmail || offer.masterEmail || '')}
+		email={String((form && 'email' in form && form.email) || offer.customerEmail || offer.contactEmail || offer.masterEmail || '')}
 		sentTo={offer.customerEmail}
 		sentAt={offer.customerLinkSentAt}
 	/>
@@ -335,6 +345,13 @@
 						cls: 'col-span-6',
 						max: 30
 					})}
+				</div>
+				<h3 class="mt-5 text-base">Ansprechperson</h3>
+				<p class="field-hint mt-0.5">Geht in den Auftrag – für die Partie vor Ort.</p>
+				<div class="mt-2 grid grid-cols-6 gap-3">
+					{@render field('Name', 'k_ansprech', head.contact, (v) => (head.contact = v), { cls: 'col-span-6', max: 100 })}
+					{@render field('Telefon', 'k_telefon', head.phone, (v) => (head.phone = v), { cls: 'col-span-6 sm:col-span-3', max: 60, type: 'tel' })}
+					{@render field('E-Mail', 'k_email', head.email, (v) => (head.email = v), { cls: 'col-span-6 sm:col-span-3', max: 200, type: 'email' })}
 				</div>
 			</section>
 
@@ -497,7 +514,7 @@
 	</fieldset>
 
 	{#if data.editable || data.canRelease || data.canWithdraw || data.canAccept}
-		<div class="card sticky bottom-24 mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
+		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			{#if data.editable}
 				<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
 			{/if}

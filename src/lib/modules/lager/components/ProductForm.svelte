@@ -300,7 +300,7 @@
 			{/if}
 		</section>
 
-		<div class="card sticky bottom-24 space-y-2 p-4 lg:bottom-6">
+		<div class="card lg:sticky space-y-2 p-4 lg:bottom-6">
 			<button class="btn btn-primary w-full" name="intent" value="save" disabled={busy}>{mode === 'new' ? 'Artikel anlegen' : 'Änderungen speichern'}</button>
 			{#if mode === 'new'}
 				<button class="btn btn-secondary w-full" name="intent" value="next" disabled={busy}>Anlegen und nächsten erfassen</button>

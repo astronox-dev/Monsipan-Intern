@@ -33,8 +33,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		content: await prefill({
 			title: offer.title,
 			location: offer.location,
-			customerContact: customer?.contact ?? '',
-			customerPhone: customer?.phone ?? '',
+			customerContact: offer.contactName || customer?.contact || '',
+			customerPhone: offer.contactPhone || customer?.phone || '',
 			lines: offer.lines
 		}),
 		colors: (await colorOptions()).filter((c) => c.ral).map((c) => ({ ral: c.ral as string, name: c.name })),

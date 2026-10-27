@@ -9,6 +9,8 @@
 	import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '$lib/modules/stunden/signature';
 	import {
 		costCenterLines,
+		entryLines,
+		placesOf,
 		hoursLabel,
 		isoWeek,
 		monthLabel,
@@ -139,7 +141,7 @@
 						<td class="num kst" class:zweizeilig={kst.length > 1}>
 							{#each kst as zeile, i (i)}<span>{zeile}</span>{/each}
 						</td>
-						<td>{day?.site ?? ''}</td>
+						<td class="baustelle">{entryLines(day?.site).join('\n')}</td>
 						{#each HOURS as h (h.key)}
 							<td rowspan="2" class="num zahl">{day ? hoursLabel(day[h.key]) : ''}</td>
 						{/each}
@@ -230,7 +232,9 @@
 						<span class="num font-semibold">{total ? `${hoursLabel(total)} Std.` : '–'}</span>
 					</div>
 					{#if day.site || day.costCenter}
-						<p class="text-sm">{day.site}{day.site && day.costCenter ? ' · ' : ''}{day.costCenter ? `KSt ${day.costCenter}` : ''}</p>
+						{#each placesOf(day.site, day.costCenter) as p, i (i)}
+							<p class="text-sm">{p.site}{p.site && p.costCenter ? ' · ' : ''}{p.costCenter ? `KSt ${p.costCenter}` : ''}</p>
+						{/each}
 					{/if}
 					{#if day.times.length}<p class="num text-sm text-ink-2">{timeRangeLabel(day.times)}</p>{/if}
 					{#if dayHours(day)}<p class="num text-[0.8125rem] text-ink-3">{dayHours(day)}</p>{/if}
@@ -398,6 +402,11 @@
 	}
 	.kst span {
 		display: block;
+	}
+	/* Mehrere Baustellen am Tag: je eine Zeile */
+	.tag td.baustelle {
+		white-space: pre-line;
+		line-height: 1.1;
 	}
 	.zeit td,
 	.zeit th {

@@ -18,6 +18,7 @@ import {
 	type DayInput
 } from '$lib/modules/stunden/server/timesheets';
 import { isValidSignature } from '$lib/modules/stunden/signature';
+import { joinPlaces } from '$lib/modules/stunden/week';
 import { notifySheet } from '$lib/modules/stunden/server/notify';
 import { knownCostCenters } from '$lib/modules/stunden/server/kostenstellen';
 import type { Actions, PageServerLoad } from './$types';
@@ -64,10 +65,15 @@ function readDays(form: FormData, dates: string[]): DayInput[] {
 		const to = form.getAll(`ende.${date}`).map(String);
 		return Array.from({ length: Math.max(from.length, to.length) }, (_, i) => ({ from: from[i] ?? '', to: to[i] ?? '' }));
 	};
+	// Baustelle und Kostenstelle kommen je Zeile einmal, paarweise
+	const places = (date: string) => {
+		const sites = form.getAll(`baustelle.${date}`).map(String);
+		const costs = form.getAll(`kostenstelle.${date}`).map(String);
+		return joinPlaces(Array.from({ length: Math.max(sites.length, costs.length) }, (_, i) => ({ site: sites[i] ?? '', costCenter: costs[i] ?? '' })));
+	};
 	return dates.map((date) => ({
 		date,
-		costCenter: value('kostenstelle', date),
-		site: value('baustelle', date),
+		...places(date),
 		times: times(date),
 		normalHours: value('norm', date),
 		overtime50: value('ue50', date),

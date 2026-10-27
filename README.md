@@ -64,6 +64,9 @@ seine Seiten unter `src/routes/(app)/<bereich>/` und seinen Code unter
 haben **Aufträge** und **Planung**, die Partien **Tagesberichte** und **Stundenzettel**; was eine
 Rolle nicht öffnen darf, rückt nach (`bottomTabs` in [`src/lib/nav.ts`](src/lib/nav.ts)). **Mehr**
 zeigt alle Seiten gegliedert wie die Seitenleiste, dazu Konto, Darstellung und Abmelden.
+Die Knöpfe zum Speichern und Freigeben (Tagesbericht, Stundenzettel, Angebot, Rechnung …) stehen
+am Handy und Tablet am Ende des Formulars, damit beim Scrollen nichts verdeckt wird; erst am PC
+bleiben sie unten am Rand stehen.
 
 ## Lagermanagement
 
@@ -272,6 +275,10 @@ häufigste.
 - Stunden ohne Kostenstelle stehen eigens am Ende – zum Nachtragen.
 - Im Stundenzettel schlägt das Feld **Kostenstelle** die bekannten vor (so geschrieben wie in
   der Auswertung), damit dieselbe Kostenstelle gleich geschrieben wird.
+- **Mehrere Baustellen an einem Tag:** Im Stundenzettel fügt **+ Baustelle** eine weitere Zeile
+  mit Baustelle/Tätigkeit und eigener Kostenstelle hinzu (bis zu fünf). Ausdruck und PDF zeigen
+  sie untereinander; in der Auswertung teilen sich die Kostenstellen eines Tages dessen Stunden
+  zu gleichen Teilen.
 
 **Keine Stundenzettel:** Konten, die keine Stunden schreiben – etwa Admin- oder
 Büro-Konten –, bekommen unter **Benutzer** das Häkchen **Keine Stundenzettel**. Sie fehlen
@@ -666,6 +673,10 @@ bleibt sie frei eintippbar.
   Kunde, Ausführungsort, Einleitung und Schluss, Konditionen (Zahlungsziel, Skonto, Nachlass,
   Umsatzsteuer) und allen Positionen. Nummer, Datum und BV gibt man im Dialog an; Fotos und
   Unterlagen bleiben beim alten Angebot.
+- **Ansprechperson** (Name, Telefon, E-Mail) beim Kunden im Angebot: vorbelegt aus dem
+  Kundenstamm bzw. aus der Anfrage (Absender), änderbar. Sie geht in den Auftrag (Ansprechpartner
+  und Telefon für die Partie, auch im Arbeitsauftrag), die E-Mail wird beim Verschicken des Links
+  vorgeschlagen.
 - Einleitung und Schlusstext kommen aus der Vorlage unter **Einstellungen → Angebote,
   Aufträge und Rechnungen** – je Art eine eigene; die für Aufträge stehen im Auftrags-PDF,
   leer bleibt dort nichts stehen – und lassen sich im einzelnen Angebot ändern. Dort stehen auch die drei Spalten

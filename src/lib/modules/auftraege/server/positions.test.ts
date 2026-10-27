@@ -39,6 +39,9 @@ const head = (number: string) => ({
 	customerZip: '',
 	customerCity: '',
 	customerUid: '',
+	contactName: 'Herr Huber',
+	contactPhone: '0664 1234567',
+	contactEmail: 'huber@example.at',
 	intro: '',
 	closing: '',
 	vatRate: 20,
@@ -83,6 +86,8 @@ describe('Bemerkung zur Position', () => {
 		const me = (await db.select({ id: users.id }).from(users).get())!.id;
 		const orderId = (await createOrderFromOffer(id, null, '', me))!;
 		expect((await orderDetail(orderId))!.lines.map((l) => l.note)).toEqual(['', 'inkl. Vorreinigung', '']);
+		// Die Ansprechperson aus dem Angebot steht im Auftrag – für die Partie
+		expect(await orderDetail(orderId)).toMatchObject({ customerContact: 'Herr Huber', customerPhone: '0664 1234567' });
 
 		// Rechnung als Entwurf – auch wenn der Auftrag noch nicht begonnen hat
 		const draft = (await invoiceDraft(orderId))!;
@@ -353,6 +358,7 @@ describe('Angebot duplizieren', () => {
 		const [a, b] = [(await offerDetail(id))!, (await offerDetail(copyId))!];
 		expect(b).toMatchObject({ number: '26901', date: '2026-11-02', title: 'Bodenmarkierungen Halle 2', status: 'entwurf', customerToken: null, acceptedAt: null, createdBy: me });
 		expect(b).toMatchObject({ customerName: a.customerName, intro: 'Hallo', discountPercent: 5, skontoPercent: 3, skontoDays: 14, paymentDays: 30, vatRate: 20 });
+		expect(b).toMatchObject({ contactName: 'Herr Huber', contactPhone: '0664 1234567', contactEmail: 'huber@example.at' });
 		const strip = (o: typeof a) => o.lines.map(({ kind, text, note, quantity, unit, unitPrice, alternative }) => ({ kind, text, note, quantity, unit, unitPrice, alternative }));
 		expect(strip(b)).toEqual(strip(a));
 		expect(strip(b)).toHaveLength(3);

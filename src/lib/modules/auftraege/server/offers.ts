@@ -160,6 +160,9 @@ async function customerSnapshot(customerId: number | null) {
 		customerZip: c.zip,
 		customerCity: c.city,
 		customerUid: c.uid,
+		contactName: c.contact,
+		contactPhone: c.phone,
+		contactEmail: c.email,
 		// Bauunternehmen: gleich ohne Umsatzsteuer
 		reverseCharge: c.reverseCharge
 	};
@@ -167,10 +170,20 @@ async function customerSnapshot(customerId: number | null) {
 
 export async function createOffer(
 	user: SessionUser,
-	data: { number: string; projectNumber: string; date: string; title: string; customerId: number | null; location?: string }
+	data: {
+		number: string;
+		projectNumber: string;
+		date: string;
+		title: string;
+		customerId: number | null;
+		location?: string;
+		/** Ansprechperson, wenn sie woanders herkommt (Anfrage) – sonst die aus dem Kundenstamm */
+		contact?: { name: string; phone: string; email: string };
+	}
 ): Promise<number> {
 	const settings = await getSettings();
 	const snapshot = await customerSnapshot(data.customerId);
+	const given = data.contact;
 	return db.transaction(async (tx) => {
 		const row = await tx
 			.insert(offers)
@@ -181,6 +194,9 @@ export async function createOffer(
 				title: data.title.slice(0, 300),
 				location: (data.location ?? '').slice(0, 300),
 				...(snapshot ?? {}),
+				...(given?.name || given?.phone || given?.email
+					? { contactName: given.name.slice(0, 100), contactPhone: given.phone.slice(0, 60), contactEmail: given.email.slice(0, 200) }
+					: {}),
 				intro: settings.offerIntro,
 				closing: settings.offerClosing,
 				paymentDays: settings.invoicePaymentDays,
@@ -220,6 +236,9 @@ export async function duplicateOffer(user: SessionUser, sourceId: number, data: 
 				customerZip: source.customerZip,
 				customerCity: source.customerCity,
 				customerUid: source.customerUid,
+				contactName: source.contactName,
+				contactPhone: source.contactPhone,
+				contactEmail: source.contactEmail,
 				intro: source.intro,
 				closing: source.closing,
 				vatRate: source.vatRate,
@@ -267,6 +286,9 @@ async function loadOffer(where: SQL) {
 			customerZip: offers.customerZip,
 			customerCity: offers.customerCity,
 			customerUid: offers.customerUid,
+			contactName: offers.contactName,
+			contactPhone: offers.contactPhone,
+			contactEmail: offers.contactEmail,
 			intro: offers.intro,
 			closing: offers.closing,
 			vatRate: offers.vatRate,
@@ -346,6 +368,9 @@ export interface SaveOffer {
 		customerZip: string;
 		customerCity: string;
 		customerUid: string;
+		contactName: string;
+		contactPhone: string;
+		contactEmail: string;
 		intro: string;
 		closing: string;
 		vatRate: number;
@@ -385,6 +410,9 @@ export async function saveOffer(id: number, data: SaveOffer) {
 				customerZip: h.customerZip.slice(0, 12),
 				customerCity: h.customerCity.slice(0, 120),
 				customerUid: h.customerUid.replace(/\s+/g, '').toUpperCase().slice(0, 30),
+				contactName: h.contactName.slice(0, 100),
+				contactPhone: h.contactPhone.slice(0, 60),
+				contactEmail: h.contactEmail.slice(0, 200),
 				intro: h.intro.slice(0, 3000),
 				closing: h.closing.slice(0, 5000),
 				vatRate: h.vatRate,

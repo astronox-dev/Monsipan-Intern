@@ -181,7 +181,7 @@ export type OrderDetail = NonNullable<Awaited<ReturnType<typeof orderDetail>>>;
 
 /**
  * Auftrag aus dem angenommenen Angebot: Nummer, Anschrift und Positionen
- * werden übernommen, Ansprechpartner und Telefon aus dem Kundenstamm.
+ * werden übernommen, Ansprechpartner und Telefon aus dem Angebot (sonst aus dem Kundenstamm).
  * Gibt die ID zurück – oder null, wenn das Angebot nicht (mehr) passt.
  */
 export async function createOrderFromOffer(offerId: number, partyId: number | null, note: string, userId: number): Promise<number | null> {
@@ -205,8 +205,8 @@ export async function createOrderFromOffer(offerId: number, partyId: number | nu
 				customerStreet: offer.customerStreet,
 				customerZip: offer.customerZip,
 				customerCity: offer.customerCity,
-				customerContact: customer?.contact ?? '',
-				customerPhone: customer?.phone ?? '',
+				customerContact: offer.contactName || customer?.contact || '',
+				customerPhone: offer.contactPhone || customer?.phone || '',
 				note: note.slice(0, 2000),
 				createdBy: userId,
 				updatedAt: new Date()

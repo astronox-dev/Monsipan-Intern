@@ -8,7 +8,7 @@ import { db } from '$lib/server/db';
 import { col } from '$lib/server/db/sql';
 import { parties, timesheetDays, timesheets, users } from '$lib/server/db/schema';
 import { costCenterKey, sumByCostCenter } from '../kostenstellen';
-import { isValidIsoDate, today } from '../week';
+import { entryLines, isValidIsoDate, today } from '../week';
 import type { TimesheetStatus } from '$lib/server/db/schema';
 
 /** Welche Zettel zählen: alle, freigegebene und geprüfte, oder nur geprüfte */
@@ -50,7 +50,14 @@ export async function costCenterHours(from: string, to: string, scope: CostCente
 		.innerJoin(users, sql`${users.id} = ${timesheets.userId}`)
 		.where(and(gte(timesheetDays.date, from), lte(timesheetDays.date, to), inArray(timesheets.status, STATUS[scope]), sql`${worked} > 0`))
 		.all();
-	return sumByCostCenter(rows);
+	// Mehrere Kostenstellen an einem Tag: die Stunden zu gleichen Teilen
+	return sumByCostCenter(
+		rows.flatMap((r) => {
+			const costs = entryLines(r.costCenter);
+			if (costs.length < 2) return [{ ...r, costCenter: costs[0] ?? '' }];
+			return costs.map((costCenter) => ({ ...r, costCenter, normal: r.normal / costs.length, o50: r.o50 / costs.length, o100: r.o100 / costs.length }));
+		})
+	);
 }
 
 /**
@@ -66,7 +73,7 @@ export async function knownCostCenters(limit = 200): Promise<string[]> {
 		.groupBy(timesheetDays.costCenter)
 		.all();
 	const best = new Map<string, { label: string; uses: number; last: string }>();
-	for (const r of rows) {
+	for (const r of rows.flatMap((row) => entryLines(row.costCenter).map((costCenter) => ({ ...row, costCenter })))) {
 		const key = costCenterKey(r.costCenter);
 		const label = r.costCenter.trim().replace(/\s+/g, ' ');
 		const had = best.get(key);

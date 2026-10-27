@@ -14,7 +14,7 @@ import { bufferResponse, drawInk, drawLogo, startPdf } from '$lib/server/pdf';
 import { inkInRect } from '$lib/ink';
 import { fullName } from '$lib/format';
 import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '../signature';
-import { costCenterLines, hoursLabel, isoWeek, monthLabel, monthsOfWeek, timeRangeLabel, WEEKDAY_LABELS, weekdayIndex, weekDays } from '../week';
+import { costCenterLines, entryLines, hoursLabel, isoWeek, monthLabel, monthsOfWeek, timeRangeLabel, WEEKDAY_LABELS, weekdayIndex, weekDays } from '../week';
 import type { SheetDetail } from './timesheets';
 import { totals } from './timesheets';
 
@@ -164,7 +164,8 @@ export async function lohnzettelPdf(
 				const lines = costCenterLines(d.costCenter);
 				const room = colW(1) - 6;
 				doc.fontSize(9);
-				const size = Math.max(6, Math.min(9, ...lines.map((l) => (9 * room) / Math.max(1, doc.widthOfString(l)))));
+				// Auch in der Höhe: mehrere Kostenstellen am Tag müssen ins Feld passen
+				const size = Math.max(5, Math.min(9, (DAY_H - 4) / lines.length - 2, ...lines.map((l) => (9 * room) / Math.max(1, doc.widthOfString(l)))));
 				doc.fontSize(size);
 				const lineH = size + 2;
 				const top = y + DAY_H / 2 - (lines.length * lineH) / 2 + 1;
@@ -172,7 +173,16 @@ export async function lohnzettelPdf(
 				lines.forEach((l, i) => doc.text(l, colX(1) + 3, top + i * lineH, { width: room, height: lineH, ellipsis: true }));
 			}
 			if (!inked(colX(2), y, colW(2), DAY_H)) {
-				doc.fontSize(9.5).text(d.site, colX(2) + 5, y + DAY_H / 2 - 6, { width: colW(2) - 10, lineBreak: false, ellipsis: true });
+				// Mehrere Baustellen am Tag untereinander, etwas kleiner
+				const sites = entryLines(d.site);
+				if (sites.length < 2) doc.fontSize(9.5).text(sites[0] ?? '', colX(2) + 5, y + DAY_H / 2 - 6, { width: colW(2) - 10, lineBreak: false, ellipsis: true });
+				else {
+					const size = Math.min(8, (DAY_H - 4) / sites.length - 1.5);
+					const lineH = size + 1.5;
+					const top = y + DAY_H / 2 - (sites.length * lineH) / 2 + 1;
+					doc.fontSize(size);
+					sites.forEach((s, i) => doc.text(s, colX(2) + 5, top + i * lineH, { width: colW(2) - 10, height: lineH, lineBreak: false, ellipsis: true }));
+				}
 			}
 
 			for (const h of HOURS) {

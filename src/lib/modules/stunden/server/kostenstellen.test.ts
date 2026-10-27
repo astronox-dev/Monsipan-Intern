@@ -35,6 +35,8 @@ beforeAll(async () => {
 		{ timesheetId: a.id, date: '2026-10-20', costCenter: 'Lager', normalHours: 4 },
 		// Urlaub zählt nicht als gearbeitet
 		{ timesheetId: a.id, date: '2026-10-21', costCenter: '24117', vacationHours: 8 },
+		// Zwei Baustellen an einem Tag: die Stunden je zur Hälfte
+		{ timesheetId: a.id, date: '2026-10-22', site: 'Halle\nLager', costCenter: '24117\nLager', normalHours: 8 },
 		{ timesheetId: b.id, date: '2026-10-19', costCenter: '24 117', normalHours: 7.5 },
 		{ timesheetId: b.id, date: '2026-10-20', costCenter: '', normalHours: 6 }
 	]);
@@ -53,17 +55,17 @@ describe('Stunden je Kostenstelle', () => {
 	it('alle Partien zusammen, die Aushilfe bei der schreibenden Partie', async () => {
 		const rows = await costCenterHours('2026-10-01', '2026-10-31');
 		expect(rows.map((r) => [r.label, r.total])).toEqual([
-			['24117', 16.5],
-			['Lager', 4],
+			['24117', 20.5],
+			['Lager', 8],
 			['', 6]
 		]);
-		expect(rows[0]).toMatchObject({ people: 2, parties: [{ name: 'Nord', hours: 16.5 }] });
+		expect(rows[0]).toMatchObject({ people: 2, days: 2, parties: [{ name: 'Nord', hours: 20.5 }] });
 	});
 
 	it('nur freigegebene bzw. geprüfte Zettel, nur im Zeitraum', async () => {
 		expect((await costCenterHours('2026-10-01', '2026-10-31', 'freigegeben')).map((r) => [r.label, r.total])).toEqual([
-			['24117', 9],
-			['Lager', 4]
+			['24117', 13],
+			['Lager', 8]
 		]);
 		expect(await costCenterHours('2026-10-01', '2026-10-31', 'geprueft')).toEqual([]);
 		expect((await costCenterHours('2026-10-20', '2026-10-20')).map((r) => r.label)).toEqual(['Lager', '']);

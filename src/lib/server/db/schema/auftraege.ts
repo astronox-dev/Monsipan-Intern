@@ -64,6 +64,10 @@ export const offers = sqliteTable(
 		customerZip: text('customer_zip').notNull().default(''),
 		customerCity: text('customer_city').notNull().default(''),
 		customerUid: text('customer_uid').notNull().default(''),
+		/** Ansprechperson beim Kunden – geht in den Auftrag, damit die Partie weiß, wen sie anruft */
+		contactName: text('contact_name').notNull().default(''),
+		contactPhone: text('contact_phone').notNull().default(''),
+		contactEmail: text('contact_email').notNull().default(''),
 		intro: text('intro').notNull().default(''),
 		closing: text('closing').notNull().default(''),
 		/** Umsatzsteuer in Prozent */

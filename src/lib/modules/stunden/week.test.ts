@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
 	addDays,
 	costCenterLines,
+	entryLines,
+	joinPlaces,
+	placesOf,
 	hoursLabel,
 	isoWeek,
 	mondayOf,
@@ -89,5 +92,29 @@ describe('Kostenstelle', () => {
 		expect(costCenterLines('24117/')).toEqual(['24117/']);
 		expect(costCenterLines('  ')).toEqual([]);
 		expect(costCenterLines(null)).toEqual([]);
+		// Mehrere Kostenstellen am Tag: je eine Zeile
+		expect(costCenterLines('24117\nLager')).toEqual(['24117', 'Lager']);
+	});
+
+	it('mehrere Baustellen am Tag – zeilenweise, paarweise mit der Kostenstelle', () => {
+		expect(placesOf('Halle\nLager', '24117')).toEqual([
+			{ site: 'Halle', costCenter: '24117' },
+			{ site: 'Lager', costCenter: '' }
+		]);
+		expect(placesOf('', '')).toEqual([{ site: '', costCenter: '' }]);
+		// Leere Paare fallen weg, die Zuordnung bleibt
+		expect(
+			joinPlaces([
+				{ site: 'A', costCenter: '' },
+				{ site: ' ', costCenter: '' },
+				{ site: 'B', costCenter: ' 2 ' }
+			])
+		).toEqual({ site: 'A\nB', costCenter: '\n2' });
+		expect(joinPlaces([{ site: 'A', costCenter: '' }])).toEqual({ site: 'A', costCenter: '' });
+		expect(placesOf('A\nB', '\n2')).toEqual([
+			{ site: 'A', costCenter: '' },
+			{ site: 'B', costCenter: '2' }
+		]);
+		expect(entryLines(' A \n\n B ')).toEqual(['A', 'B']);
 	});
 });

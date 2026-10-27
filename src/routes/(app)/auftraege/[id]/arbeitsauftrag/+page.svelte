@@ -401,7 +401,7 @@
 	</div>
 
 	{#if editable}
-		<div class="card sticky bottom-24 mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
+		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
 			<span class="ml-auto text-sm text-ink-3">
 				{data.work.updatedAt ? `Zuletzt gespeichert ${dateTime(data.work.updatedAt)}${data.work.updatedByName ? ` von ${data.work.updatedByName}` : ''}` : ''}

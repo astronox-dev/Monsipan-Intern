@@ -188,12 +188,46 @@ export function timeRangeLabel(ranges: readonly TimeRange[] | null | undefined):
 		.join(', ');
 }
 
+/** Höchstens so viele Baustellen (mit Kostenstelle) an einem Tag */
+export const MAX_PLACES = 5;
+
+/**
+ * Mehrere Baustellen bzw. Kostenstellen eines Tages stehen zeilenweise im
+ * selben Feld – Zeile 1 der Baustelle gehört zu Zeile 1 der Kostenstelle.
+ * Hier nur die ausgefüllten, ohne Leerzeichen am Rand.
+ */
+export function entryLines(value: string | null | undefined): string[] {
+	return String(value ?? '')
+		.split('\n')
+		.map((l) => l.trim())
+		.filter(Boolean);
+}
+
+/** Die Paare Baustelle – Kostenstelle eines Tages; mindestens eines (zum Ausfüllen) */
+export function placesOf(site: string | null | undefined, costCenter: string | null | undefined): { site: string; costCenter: string }[] {
+	const sites = String(site ?? '').split('\n');
+	const costs = String(costCenter ?? '').split('\n');
+	const pairs = Array.from({ length: Math.max(sites.length, costs.length) }, (_, i) => ({ site: (sites[i] ?? '').trim(), costCenter: (costs[i] ?? '').trim() }));
+	const used = pairs.filter((p) => p.site || p.costCenter).slice(0, MAX_PLACES);
+	return used.length ? used : [{ site: '', costCenter: '' }];
+}
+
+/** Zurück in die beiden Felder – leere Paare fallen weg */
+export function joinPlaces(places: readonly { site: string; costCenter: string }[]): { site: string; costCenter: string } {
+	const used = places.map((p) => ({ site: p.site.trim(), costCenter: p.costCenter.trim() })).filter((p) => p.site || p.costCenter).slice(0, MAX_PLACES);
+	const join = (key: 'site' | 'costCenter') => (used.some((p) => p[key]) ? used.map((p) => p[key]).join('\n') : '');
+	return { site: join('site'), costCenter: join('costCenter') };
+}
+
 /**
  * Kostenstelle für Ausdruck und PDF: Was nach dem ersten „/" kommt, steht in
  * einer zweiten Zeile – "24117/Halle 3" wird zu "24117/" und "Halle 3".
+ * Mehrere Kostenstellen am Tag stehen je in einer eigenen Zeile.
  */
 export function costCenterLines(value: string | null | undefined): string[] {
-	const text = String(value ?? '').trim();
+	const lines = entryLines(value);
+	if (lines.length > 1) return lines;
+	const text = lines[0] ?? '';
 	const cut = text.indexOf('/');
 	if (cut < 0) return text ? [text] : [];
 	const rest = text.slice(cut + 1).trim();

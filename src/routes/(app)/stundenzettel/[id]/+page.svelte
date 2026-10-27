@@ -21,7 +21,9 @@
 	import { dateTime, fullName } from '$lib/format';
 	import {
 		hoursLabel,
+		MAX_PLACES,
 		monthLabel,
+		placesOf,
 		parseHours,
 		segmentLabel,
 		WEEKDAY_LABELS,
@@ -54,8 +56,8 @@
 
 	type Row = {
 		date: string;
-		costCenter: string;
-		site: string;
+		/** Baustelle mit Kostenstelle – mehrere, wenn man an einem Tag an mehreren Stellen war */
+		places: { site: string; costCenter: string }[];
 		/** Zeiträume Beginn – Ende; mindestens einer steht zum Ausfüllen da */
 		times: TimeRange[];
 		normalHours: string;
@@ -69,8 +71,7 @@
 
 	const toRow = (d: (typeof data.sheet.days)[number]): Row => ({
 		date: d.date,
-		costCenter: d.costCenter,
-		site: d.site,
+		places: placesOf(d.site, d.costCenter),
 		times: d.times.length ? d.times.map((t) => ({ ...t })) : [{ from: '', to: '' }],
 		normalHours: hoursLabel(d.normalHours),
 		overtime50: hoursLabel(d.overtime50),
@@ -146,6 +147,8 @@
 	}
 
 	const setTime = (i: number, j: number, key: keyof TimeRange, value: string) => changeTimes(i, (t) => (t[j][key] = value));
+	const addPlace = (i: number) => rows[i].places.push({ site: '', costCenter: '' });
+	const removePlace = (i: number, j: number) => rows[i].places.splice(j, 1);
 	const addRange = (i: number) => changeTimes(i, (t) => t.push({ from: '', to: '' }));
 	/** Den letzten Zeitraum nicht entfernen, nur leeren – einer steht immer da */
 	const removeRange = (i: number, j: number) =>
@@ -162,7 +165,7 @@
 	};
 	const status = $derived(STATUS[sheet.status]);
 
-	const GRID = 'lg:grid-cols-[4rem_minmax(9rem,1fr)_5.5rem_12.75rem_repeat(7,3.7rem)_3.2rem]';
+	const GRID = 'lg:grid-cols-[4rem_minmax(9rem,1fr)_7rem_12.75rem_repeat(7,3.7rem)_3.2rem]';
 </script>
 
 <svelte:head><title>{pageTitle(`${fullName(sheet)} – ${weekLabel(sheet.weekStart)}`)}</title></svelte:head>
@@ -301,7 +304,7 @@
 				Kostenstelle und die vier Zeiten, dann die Stunden als Raster. Ab lg
 				klappen die Zwischenebenen per `contents` weg und alles steht in einer Zeile.
 			-->
-			<div class="hidden min-w-[66rem] gap-1.5 border-b border-line px-3 py-2 text-[0.75rem] text-ink-3 lg:grid {GRID}">
+			<div class="hidden min-w-[67.5rem] gap-1.5 border-b border-line px-3 py-2 text-[0.75rem] text-ink-3 lg:grid {GRID}">
 				<span>Tag</span>
 				<span>Baustelle / Tätigkeit</span>
 				<span>Kostenstelle</span>
@@ -313,7 +316,7 @@
 			{#each rows as row, i (row.date)}
 				{@const day = WEEKDAY_LABELS[weekdayIndex(row.date)]}
 				<div
-					class="grid gap-2 border-b border-line px-3 py-3 last:border-0 lg:min-w-[66rem] {GRID} lg:items-center lg:gap-1.5 lg:py-2 {dayEditable(row.date)
+					class="grid gap-2 border-b border-line px-3 py-3 last:border-0 lg:min-w-[67.5rem] {GRID} lg:items-center lg:gap-1.5 lg:py-2 {dayEditable(row.date)
 						? ''
 						: 'opacity-60'}"
 				>
@@ -326,16 +329,58 @@
 						</span>
 					</div>
 
-					<label class="block">
+					<!-- Je Zeile Baustelle und Kostenstelle; „+ Baustelle" für eine weitere am selben Tag -->
+					<div class="space-y-1.5">
 						<span class="field-label lg:sr-only">Baustelle / Tätigkeit</span>
-						<input class="input input-sm" name="baustelle.{row.date}" maxlength="200" list="baustellen" bind:value={row.site} />
-					</label>
+						{#each row.places as p, j (j)}
+							<input
+								class="input input-sm"
+								name="baustelle.{row.date}"
+								maxlength="200"
+								list="baustellen"
+								aria-label="{day} Baustelle{row.places.length > 1 ? ` ${j + 1}` : ''}"
+								placeholder={j > 0 ? `Baustelle ${j + 1}` : ''}
+								bind:value={p.site}
+							/>
+						{/each}
+						{#if dayEditable(row.date) && row.places.length < MAX_PLACES}
+							<button
+								type="button"
+								class="inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[0.8125rem] font-medium text-ink-2 hover:bg-surface-2 hover:text-ink"
+								onclick={() => addPlace(i)}
+							>
+								<Plus size={14} aria-hidden="true" />Baustelle
+							</button>
+						{/if}
+					</div>
 
 					<div class="grid gap-2 lg:contents">
-						<label class="block">
+						<div class="space-y-1.5">
 							<span class="field-label lg:sr-only">Kostenstelle</span>
-							<input class="input input-sm" name="kostenstelle.{row.date}" maxlength="60" list="kostenstellen" bind:value={row.costCenter} />
-						</label>
+							{#each row.places as p, j (j)}
+								<div class="flex items-center gap-1">
+									<input
+										class="input input-sm min-w-0 flex-1"
+										name="kostenstelle.{row.date}"
+										maxlength="60"
+										list="kostenstellen"
+										aria-label="{day} Kostenstelle{row.places.length > 1 ? ` ${j + 1}` : ''}"
+										placeholder={j > 0 ? `KSt ${j + 1}` : ''}
+										bind:value={p.costCenter}
+									/>
+									{#if j > 0 && dayEditable(row.date)}
+										<button
+											type="button"
+											class="grid size-7 shrink-0 place-items-center rounded-lg text-ink-3 hover:bg-surface-2 hover:text-ink"
+											onclick={() => removePlace(i, j)}
+											aria-label="{day}: Baustelle {j + 1} entfernen"
+										>
+											<X size={15} aria-hidden="true" />
+										</button>
+									{/if}
+								</div>
+							{/each}
+						</div>
 
 						<!-- Beliebig viele Zeiträume Beginn – Ende; Beginn und Ende gehen paarweise ans Formular -->
 						<div class="space-y-1.5">
@@ -407,7 +452,7 @@
 				</div>
 			{/each}
 
-			<div class="flex items-center justify-between gap-2 bg-surface-2 px-3 py-2.5 font-semibold lg:grid lg:min-w-[66rem] {GRID} lg:items-center lg:gap-1.5">
+			<div class="flex items-center justify-between gap-2 bg-surface-2 px-3 py-2.5 font-semibold lg:grid lg:min-w-[67.5rem] {GRID} lg:items-center lg:gap-1.5">
 				<span class="lg:col-span-4">Gesamtstunden</span>
 				{#each HOUR_FIELDS as f (f.key)}
 					<span class="num hidden text-center lg:block">{hoursLabel(columnTotal(f.key)) || '–'}</span>
@@ -464,7 +509,7 @@
 	</fieldset>
 
 	{#if data.editable || data.guestDays.length}
-		<div class="card sticky bottom-24 mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
+		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
 			{#if sheet.status === 'entwurf' && data.canRelease && data.editable}
 				<button type="button" class="btn btn-secondary" disabled={busy} onclick={() => (signOpen = true)}>
