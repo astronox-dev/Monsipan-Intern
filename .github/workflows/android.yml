@@ -46,6 +46,11 @@ jobs:
         env:
           APP_URL: ${{ inputs.url || vars.APP_URL || 'https://intern.monsipan.at' }}
         run: |
+          # Nur eine https-Adresse ohne Leer- und Sonderzeichen – sonst ließe sich über die Eingabe mehr in $GITHUB_ENV schreiben
+          if ! printf '%s' "$APP_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$'; then
+            echo "Ungültige Adresse: $APP_URL" >&2
+            exit 1
+          fi
           npx cap sync android
           echo "Adresse: $APP_URL"
           echo "APP_URL=$APP_URL" >> "$GITHUB_ENV"

@@ -14,8 +14,9 @@ import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import type { Actions, PageServerLoad } from './$types';
 
+/** Nur Pfade im Portal – „//fremd.at" und „/\fremd.at" (Browser lesen beides als fremde Adresse) nicht */
 function safeNext(next: string | null): string {
-	if (!next || !next.startsWith('/') || next.startsWith('//')) return '/';
+	if (!next || !next.startsWith('/') || next[1] === '/' || next[1] === '\\' || /[\u0000-\u001f]/.test(next)) return '/';
 	return next;
 }
 

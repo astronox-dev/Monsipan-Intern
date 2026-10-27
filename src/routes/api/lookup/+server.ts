@@ -2,10 +2,12 @@ import { error, json } from '@sveltejs/kit';
 import { allCandidates, pickBestParse } from '$lib/modules/lager/scan/parse';
 import { lookupByCandidates, productWithLocations } from '$lib/modules/lager/server/products';
 import type { LookupResult } from '$lib/modules/lager/types';
+import { requirePermission } from '$lib/server/guard';
 import type { RequestHandler } from './$types';
 
 /** GET /api/lookup?v=<Lesart 1>&v=<Lesart 2> → Artikel zum gescannten Code */
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
+	requirePermission(locals, 'lager.artikel.sehen');
 	const variants = url.searchParams
 		.getAll('v')
 		.map((v) => v.slice(0, 1000))
