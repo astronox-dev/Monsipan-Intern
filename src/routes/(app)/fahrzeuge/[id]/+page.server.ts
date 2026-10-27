@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { requirePermission } from '$lib/server/guard';
 import { dayPoints, getVehicle, KEEP_DAYS } from '$lib/modules/fuhrpark/server/vehicles';
-import { kilometers, stops, vehicleState } from '$lib/modules/fuhrpark/track';
+import { kilometers, smoothTrack, stops, vehicleState } from '$lib/modules/fuhrpark/track';
 import { addDays, isValidIsoDate } from '$lib/modules/stunden/week';
 import { viennaTime } from '$lib/weather';
 import type { PageServerLoad } from './$types';
@@ -15,7 +15,8 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const oldest = addDays(today, -KEEP_DAYS);
 	const asked = url.searchParams.get('tag') ?? '';
 	const day = isValidIsoDate(asked) && asked <= today && asked >= oldest ? asked : today;
-	const points = await dayPoints(vehicle.id, day);
+	// Geglättet: ohne GPS-Rauschen im Stehen und ohne Ausreißer
+	const points = smoothTrack(await dayPoints(vehicle.id, day));
 	return {
 		vehicle: { id: vehicle.id, name: vehicle.name, plate: vehicle.plate, partyName: vehicle.partyName, state: vehicleState(vehicle) },
 		day,

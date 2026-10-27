@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { distance, kilometers, stops, vehicleState, viennaDayStart, type TrackPoint } from './track';
+import { distance, kilometers, smoothTrack, stops, vehicleState, viennaDayStart, type TrackPoint } from './track';
 
 const MIN = 60_000;
+const rad = (d: number) => (d * Math.PI) / 180;
 const at = (min: number, lat: number, lon: number, accuracy: number | null = 10): TrackPoint => ({ at: Date.UTC(2026, 9, 27, 6) + min * MIN, lat, lon, speed: null, accuracy });
 
 describe('Fuhrpark – Strecke', () => {
@@ -34,6 +35,37 @@ describe('Fuhrpark – Strecke', () => {
 		const found = stops(points);
 		expect(found).toHaveLength(1);
 		expect(found[0]).toMatchObject({ from: points[0].at, to: points[2].at, minutes: 43 });
+	});
+});
+
+describe('Fuhrpark – Glätten', () => {
+	it('in der Wohnung: aus dem Stern wird ein Punkt mit Standzeit, ohne Kilometer', () => {
+		const home = { lat: 48.3608, lon: 16.4925 };
+		// Etwa eine Stunde jede Minute ein Standort, 10–40 m daneben (WLAN), dazu Ausreißer
+		const jitter: TrackPoint[] = Array.from({ length: 60 }, (_, i) => {
+			const angle = (i * 137) % 360;
+			const r = (10 + ((i * 7) % 30)) / 111_000;
+			return at(i, home.lat + r * Math.cos(rad(angle)), home.lon + (r * Math.sin(rad(angle))) / 0.66, 20 + (i % 15));
+		});
+		// Ausreißer: 150 m in den Hof, genau genug gemeldet – und gleich wieder zurück
+		jitter[20] = at(20, home.lat - 0.00135, home.lon, 30);
+		jitter[41] = at(41, home.lat - 0.0014, home.lon + 0.0002, 35);
+		// Ganz ungenau (Funkmast)
+		jitter[33] = at(33, home.lat + 0.004, home.lon, 300);
+
+		expect(kilometers(jitter)).toBeGreaterThan(1);
+		const smooth = smoothTrack(jitter);
+		expect(kilometers(smooth)).toBe(0);
+		// Nur der Ort und eine Kopie mit der letzten Zeit
+		expect(new Set(smooth.map((p) => `${p.lat},${p.lon}`)).size).toBe(1);
+		expect(stops(smooth)).toMatchObject([{ minutes: 59 }]);
+	});
+
+	it('eine echte Fahrt bleibt eine Fahrt', () => {
+		const route = Array.from({ length: 9 }, (_, i) => ({ ...at(i, 48.3608 + (0.0204 * i) / 8, 16.4925 + (0.0238 * i) / 8, 6), speed: 13 }));
+		const smooth = smoothTrack(route);
+		expect(smooth).toHaveLength(9);
+		expect(kilometers(smooth)).toBe(kilometers(route));
 	});
 });
 

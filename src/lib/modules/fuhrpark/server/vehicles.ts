@@ -12,7 +12,7 @@ import { and, asc, eq, gte, isNotNull, lt, lte, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { parties, vehiclePositions, vehicles } from '$lib/server/db/schema';
 import { addDays } from '$lib/modules/stunden/week';
-import { viennaDayStart, type TrackPoint } from '../track';
+import { GOOD_ACCURACY, viennaDayStart, type TrackPoint } from '../track';
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 /** Ohne Zeichen, die man verwechselt (0/O, 1/I/L) */
@@ -203,7 +203,8 @@ export async function recordPositions(vehicle: { id: number; lastAt: Date | null
 				positions.map((p) => ({ vehicleId: vehicle.id, at: new Date(p.t), lat: p.lat, lon: p.lon, speed: p.spd ?? null, heading: p.hdg ?? null, accuracy: p.acc ?? null }))
 			);
 		}
-		const newest = positions.at(-1);
+		// Für die Live-Karte nur ein genauer Standort – sonst springt das Auto im Stehen herum
+		const newest = positions.findLast((p) => p.acc == null || p.acc <= GOOD_ACCURACY);
 		const fresher = newest && (!vehicle.lastAt || newest.t >= vehicle.lastAt.getTime());
 		await tx
 			.update(vehicles)

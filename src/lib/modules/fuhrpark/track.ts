@@ -41,6 +41,61 @@ const STOP_RADIUS = 100;
 /** … und ab so lange ist es eine Standzeit */
 const STOP_MINUTES = 5;
 
+/** Genauer als das (m) muss ein Standort sein, damit er in den Verlauf kommt */
+export const GOOD_ACCURACY = 50;
+
+/**
+ * Den Verlauf glätten. Ohne freien Himmel (Halle, Garage, Tiefgarage) schätzt
+ * das Tablet den Standort über WLAN und Funkmasten – jede Schätzung liegt ein
+ * paar Dutzend Meter daneben, einzelne viel weiter. Roh verbunden wird daraus
+ * ein Stern mit „Fahrten" ins Nichts. Darum:
+ * 1. ungenaue Standorte (über 50 m) fallen weg,
+ * 2. ein Sprung hin und gleich wieder zurück fällt weg,
+ * 3. wer nicht fährt und innerhalb der Ungenauigkeit bleibt, bleibt am selben
+ *    Ort – die Zeit läuft weiter (für die Standzeit), die Lage nicht.
+ */
+export function smoothTrack(points: readonly TrackPoint[]): TrackPoint[] {
+	const good = points.filter((p) => p.accuracy == null || p.accuracy <= GOOD_ACCURACY);
+	const noSpikes = good.filter((p, i) => {
+		const a = good[i - 1];
+		const c = good[i + 1];
+		if (!a || !c || (p.speed ?? 0) > 3) return true;
+		const ab = distance(a, p);
+		const bc = distance(p, c);
+		return !(ab > 40 && bc > 40 && distance(a, c) < Math.min(ab, bc) / 2);
+	});
+	const out: TrackPoint[] = [];
+	/** Der Ort, an dem das Auto gerade steht: die Mitte der Punkte dort */
+	let place: { lat: number; lon: number; n: number; accuracy: number | null; index: number } | null = null;
+	for (const p of noSpikes) {
+		if (!place) {
+			out.push(p);
+			place = { lat: p.lat, lon: p.lon, n: 1, accuracy: p.accuracy, index: out.length - 1 };
+			continue;
+		}
+		const d = distance(place, p);
+		const seconds = (p.at - out[out.length - 1].at) / 1000;
+		if (seconds > 0 && d / seconds > MAX_SPEED) continue;
+		// Spielraum: beide Ungenauigkeiten und etwas dazu, höchstens 100 m
+		const radius = Math.min(100, Math.max(40, (place.accuracy ?? 15) + (p.accuracy ?? 15) + 20));
+		if ((p.speed ?? 0) <= 2 && d <= radius) {
+			place.lat = (place.lat * place.n + p.lat) / (place.n + 1);
+			place.lon = (place.lon * place.n + p.lon) / (place.n + 1);
+			place.n++;
+			// Der Ort rückt in die Mitte; ein zweiter Punkt hält die Zeit fest
+			const first = out[place.index];
+			out[place.index] = { ...first, lat: place.lat, lon: place.lon };
+			const hold = { ...first, lat: place.lat, lon: place.lon, at: p.at };
+			if (out.length - 1 > place.index) out[out.length - 1] = hold;
+			else out.push(hold);
+			continue;
+		}
+		out.push(p);
+		place = { lat: p.lat, lon: p.lon, n: 1, accuracy: p.accuracy, index: out.length - 1 };
+	}
+	return out;
+}
+
 /** Gefahrene Kilometer – ungenaue Punkte und Sprünge zählen nicht */
 export function kilometers(points: readonly TrackPoint[]): number {
 	let meters = 0;
