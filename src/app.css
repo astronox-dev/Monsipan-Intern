@@ -762,9 +762,22 @@ body.dnd-active * {
 }
 
 @media print {
+	/*
+	   Gedruckt wird im Hochformat. Querformat nur, wo eine Ansicht es ausdrücklich
+	   will (Wochenplan, Summenblatt: class="quer") – als eigene Seitenart. Ein
+	   @page im Stil einer Seite gälte sonst überall: SvelteKit behält den Stil
+	   nach dem Weiterklicken, und danach käme jeder Druck quer.
+	*/
 	@page {
-		size: A4;
+		size: A4 portrait;
 		margin: 14mm 11mm;
+	}
+	@page quer {
+		size: A4 landscape;
+		margin: 8mm;
+	}
+	.quer {
+		page: quer;
 	}
 	.no-print {
 		display: none !important;

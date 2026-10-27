@@ -24,10 +24,6 @@
 		max-width: 280mm;
 	}
 	@media print {
-		@page {
-			size: A4 landscape;
-			margin: 8mm;
-		}
 		/* Die Höhe begrenzt: so passt jede Seite auf ein Blatt */
 		.quer :global(.seite) {
 			width: auto;
