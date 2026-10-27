@@ -3,6 +3,7 @@
 @import '@fontsource/barlow/latin-500.css';
 @import '@fontsource/barlow/latin-600.css';
 @import '@fontsource/barlow-semi-condensed/latin-600.css';
+@import '@fontsource/barlow-semi-condensed/latin-700.css';
 /* Nur für den großen Schriftzug auf der Anmeldeseite – geladen wird sie erst dort */
 @import '@fontsource/barlow-semi-condensed/latin-800-italic.css';
 
@@ -107,6 +108,75 @@
 	--shadow-3: 0 28px 70px -16px rgb(0 0 0 / 0.75);
 }
 
+/*
+   Asphalt: die Navigation (Seitenleiste, Leiste unten am Handy) ist immer die
+   Fahrbahn – dunkel wie auf der Anmeldeseite, darauf die gelbe Markierung, wo
+   man gerade ist. Innerhalb gelten dieselben Namen (ink, surface, line …), nur
+   dunkel – die Bausteine darin brauchen nichts Eigenes.
+*/
+.asphalt {
+	color-scheme: dark;
+	--c-bg: #15191d;
+	--c-surface: #1b1f24;
+	--c-surface-2: #22272d;
+	--c-surface-3: #2c3239;
+	--c-line: #2d333a;
+	--c-line-strong: #3e464f;
+	--c-ink: #eef0f2;
+	--c-ink-2: #b6bdc5;
+	--c-ink-3: #8f98a2;
+	--c-brand: #f3eb1c;
+	--c-brand-hover: #fff64a;
+	--c-brand-ink: #15191d;
+	--c-brand-soft: rgb(243 235 28 / 0.1);
+	--c-mark: #f3eb1c;
+	--c-ok: #4cc58f;
+	--c-ok-soft: rgb(76 197 143 / 0.13);
+	--c-warn: #f1a84e;
+	--c-warn-soft: rgb(241 168 78 / 0.15);
+	--c-danger: #f47b80;
+	--c-danger-soft: rgb(244 123 128 / 0.13);
+	--c-info: #82b4ef;
+	--c-info-soft: rgb(130 180 239 / 0.13);
+	--c-focus: #f3eb1c;
+	--shadow-2: 0 8px 24px -8px rgb(0 0 0 / 0.6);
+	--shadow-3: 0 28px 70px -16px rgb(0 0 0 / 0.75);
+	/* Die Farben der Utilities sind an der Wurzel schon aufgelöst – hier neu verweisen */
+	--color-bg: var(--c-bg);
+	--color-surface: var(--c-surface);
+	--color-surface-2: var(--c-surface-2);
+	--color-surface-3: var(--c-surface-3);
+	--color-line: var(--c-line);
+	--color-line-strong: var(--c-line-strong);
+	--color-ink: var(--c-ink);
+	--color-ink-2: var(--c-ink-2);
+	--color-ink-3: var(--c-ink-3);
+	--color-brand: var(--c-brand);
+	--color-brand-hover: var(--c-brand-hover);
+	--color-brand-ink: var(--c-brand-ink);
+	--color-brand-soft: var(--c-brand-soft);
+	--color-mark: var(--c-mark);
+	--color-ok: var(--c-ok);
+	--color-ok-soft: var(--c-ok-soft);
+	--color-warn: var(--c-warn);
+	--color-warn-soft: var(--c-warn-soft);
+	--color-danger: var(--c-danger);
+	--color-danger-soft: var(--c-danger-soft);
+	--color-info: var(--c-info);
+	--color-info-soft: var(--c-info-soft);
+}
+/* Im dunklen Design ist die Seite selbst schon Asphalt – die Navigation liegt eine Spur tiefer */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) .asphalt {
+		--c-surface: #121519;
+		--c-line: #252b31;
+	}
+}
+:root[data-theme='dark'] .asphalt {
+	--c-surface: #121519;
+	--c-line: #252b31;
+}
+
 @theme {
 	--font-sans: 'Barlow', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
 	--font-display: 'Barlow Semi Condensed', 'Barlow', ui-sans-serif, system-ui, sans-serif;
@@ -199,6 +269,10 @@
 		font-weight: 600;
 		letter-spacing: -0.005em;
 		text-wrap: balance;
+	}
+	h1 {
+		font-weight: 700;
+		letter-spacing: -0.015em;
 	}
 	:focus-visible {
 		outline: 2px solid var(--c-focus);
@@ -447,10 +521,12 @@
 		align-items: center;
 		gap: 0.3rem;
 		height: 1.5rem;
-		padding: 0 0.5rem;
-		border-radius: 999px;
-		font-size: 0.8125rem;
-		font-weight: 500;
+		padding: 0 0.4375rem;
+		border-radius: 5px;
+		font-family: var(--font-display);
+		font-size: 0.875rem;
+		font-weight: 600;
+		letter-spacing: 0.01em;
 		white-space: nowrap;
 		background: var(--c-surface-3);
 		color: var(--c-ink-2);

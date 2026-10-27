@@ -114,9 +114,9 @@
 	const SHEET_STATUS: Record<string, string> = { entwurf: 'In Arbeit', freigegeben: 'Freigegeben', geprueft: 'Geprüft' };
 </script>
 
-<!-- Eine Kennzahl als Karte; Beträge (Text) etwas kleiner, damit sie auch am Handy passen -->
+<!-- Eine Kennzahl als Feld im Streifen; Beträge (Text) etwas kleiner, damit sie auch am Handy passen -->
 {#snippet tile(href: string, label: string, value: number | string, sub: string, tone = '', wordy = false)}
-	<a {href} class="card min-w-0 p-4 transition-shadow hover:shadow-[var(--shadow-2)] lg:p-5">
+	<a {href} class="min-w-0 bg-surface p-4 transition-colors hover:bg-surface-2 lg:flex-1 lg:p-5">
 		<p class="text-sm text-ink-2">{label}</p>
 		<p
 			class="mt-1 font-display leading-none font-semibold {typeof value === 'number'
@@ -221,7 +221,7 @@
 <!-- Auftragsmanagement -->
 {#if auftrag}
 	{@render heading('Auftragsmanagement', has('auftraege.sehen') ? '/auftraege' : has('angebote.sehen') ? '/angebote' : has('anfragen.sehen') ? '/anfragen' : '/rechnungen')}
-	<section class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" aria-label="Kennzahlen Auftragsmanagement">
+	<section class="card grid grid-cols-2 gap-px overflow-hidden bg-line lg:flex [&>*:last-child:nth-child(odd)]:col-span-2" aria-label="Kennzahlen Auftragsmanagement">
 		{#if auftrag.inquiries}
 			{@render tile('/anfragen', 'Offene Anfragen', auftrag.inquiries.open, `${auftrag.inquiries.fresh} ohne Angebot`)}
 		{/if}
@@ -275,7 +275,7 @@
 <!-- Dokumentation -->
 {#if doku}
 	{@render heading('Dokumentation', doku.reports ? '/tagesberichte' : '/stundenzettel')}
-	<section class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" aria-label="Kennzahlen Dokumentation">
+	<section class="card grid grid-cols-2 gap-px overflow-hidden bg-line lg:flex [&>*:last-child:nth-child(odd)]:col-span-2" aria-label="Kennzahlen Dokumentation">
 		{#if doku.reports}
 			{@render tile(
 				'/tagesberichte',
@@ -311,14 +311,12 @@
 {#if lager}
 	{@render heading('Lagermanagement', '/lager/bestand')}
 
-	<section class="grid grid-cols-2 gap-3 lg:gap-4 {lager.kpi.today !== null ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}" aria-label="Kennzahlen Lager">
+	<section class="card grid grid-cols-2 gap-px overflow-hidden bg-line lg:flex [&>*:last-child:nth-child(odd)]:col-span-2" aria-label="Kennzahlen Lager">
 		{@render tile('/lager/bestand', 'Aktive Artikel', lager.kpi.products, 'im Sortiment')}
 		{@render tile('/lager/bestand', 'Stück auf Lager', lager.kpi.units, `verteilt auf ${lager.kpi.locations} Lagerorte`)}
 		<a
 			href={lowHref}
-			class="card relative overflow-hidden p-4 transition-shadow hover:shadow-[var(--shadow-2)] lg:p-5 {lager.kpi.low > 0 ? 'border-warn/40' : ''} {lager.kpi.today === null
-				? 'col-span-2 lg:col-span-1'
-				: ''}"
+			class="relative min-w-0 overflow-hidden bg-surface p-4 transition-colors hover:bg-surface-2 lg:flex-1 lg:p-5"
 		>
 			{#if lager.kpi.low > 0}<span class="lane absolute inset-x-0 top-0 h-1" aria-hidden="true"></span>{/if}
 			<p class="text-sm text-ink-2">Nachbestellen</p>

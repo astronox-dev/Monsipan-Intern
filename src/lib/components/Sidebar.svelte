@@ -41,7 +41,7 @@
 	</li>
 {/snippet}
 
-<aside class="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface lg:flex">
+<aside class="asphalt no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface text-ink lg:flex">
 	<div class="px-5 pt-5 pb-6">
 		<a href="/" aria-label="Zur Übersicht" class="inline-block rounded-lg"><Logo /></a>
 	</div>

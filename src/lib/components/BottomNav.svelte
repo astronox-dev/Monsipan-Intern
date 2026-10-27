@@ -26,11 +26,12 @@
 	<a
 		href={t.href}
 		aria-current={active ? 'page' : undefined}
-		class="flex flex-1 flex-col items-center justify-center gap-0.5 pt-1.5 text-[0.6875rem] font-medium transition-colors {active
+		class="relative flex flex-1 flex-col items-center justify-center gap-0.5 pt-1.5 text-[0.6875rem] font-medium transition-colors {active
 			? 'text-ink'
 			: 'text-ink-3'}"
 	>
-		<span class="grid h-7 w-12 place-items-center rounded-full transition-colors {active ? 'bg-surface-3' : ''}">
+		{#if active}<span class="absolute top-0 h-[3px] w-7 rounded-b-[2px] bg-mark" aria-hidden="true"></span>{/if}
+		<span class="grid h-7 w-12 place-items-center">
 			<t.icon size={21} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
 		</span>
 		{t.label}
@@ -39,7 +40,7 @@
 
 <nav
 	aria-label="Hauptnavigation"
-	class="no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/92 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg lg:hidden"
+	class="asphalt no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
 >
 	<div class="mx-auto flex h-16 max-w-lg items-stretch px-1">
 		{@render tab(home)}
