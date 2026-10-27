@@ -68,6 +68,13 @@
 				clearTimeout(timer);
 				timer = setTimeout(() => invalidate('app:stock'), 250);
 			});
+			// Fahrzeuge: neuer Standort – offene Karten neu laden, höchstens alle 3 Sekunden
+			let fleetAt = 0;
+			es.addEventListener('fahrzeuge', () => {
+				if (!can(data.user.role, 'fahrzeuge.sehen') || Date.now() - fleetAt < 3000) return;
+				fleetAt = Date.now();
+				invalidate('app:fahrzeuge');
+			});
 			// Benachrichtigungen: nur die Nummern der Empfänger kommen mit – betrifft es mich, Glocke neu laden
 			es.addEventListener('notifications', (e) => {
 				try {

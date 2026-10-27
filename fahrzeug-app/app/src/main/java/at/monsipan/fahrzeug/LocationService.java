@@ -25,6 +25,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -36,8 +37,8 @@ import java.util.concurrent.TimeUnit;
  * - Parken: nach 5 Minuten ohne Fahrt sparsam (etwa jede Minute, über WLAN und
  *   Funk) – das GPS bleibt aus, der Akku hält. Entfernt sich das Tablet mehr
  *   als 150 m oder meldet es Fahrtgeschwindigkeit, geht es zurück ins Fahren.
- * Jede Minute geht gesammelt an das Portal, auch als Lebenszeichen ohne neue
- * Standorte.
+ * Beim Fahren geht alle 10 Sekunden an das Portal (die Karte dort ist dann
+ * fast live), sonst jede Minute – auch als Lebenszeichen ohne neue Standorte.
  */
 public class LocationService extends Service {
     private static final String CHANNEL = "standort";
@@ -53,8 +54,8 @@ public class LocationService extends Service {
 
     private FusedLocationProviderClient fused;
     private ScheduledExecutorService sender;
-    private int mode = 0;
-    private long lastMove = System.currentTimeMillis();
+    private volatile int mode = 0;
+    private volatile long lastMove = System.currentTimeMillis();
     private Location anchor;
     private final LocationCallback callback = new LocationCallback() {
         @Override
@@ -71,7 +72,6 @@ public class LocationService extends Service {
             return new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L)
                     .setMinUpdateIntervalMillis(2_000L)
                     .setMinUpdateDistanceMeters(10f)
-                    .setMaxUpdateDelayMillis(30_000L)
                     .setWaitForAccurateLocation(true)
                     .build();
         }
@@ -152,16 +152,32 @@ public class LocationService extends Service {
         }
         if (sender == null) {
             sender = Executors.newSingleThreadScheduledExecutor();
-            sender.scheduleWithFixedDelay(() -> {
-                // Ein Fehler hier darf den Takt nicht beenden – nächste Minute wieder
-                try {
-                    if (!Portal.flush(this)) stopSelf();
-                } catch (RuntimeException ignored) {
-                    Prefs.error(this, "Fehler beim Senden – nächster Versuch in einer Minute.");
-                }
-            }, 5, 60, TimeUnit.SECONDS);
+            sendIn(5);
         }
         return START_STICKY;
+    }
+
+    /** Nächster Versand: beim Fahren nach 10 Sekunden, sonst nach einer Minute */
+    private void sendIn(long seconds) {
+        ScheduledExecutorService s = sender;
+        if (s == null || s.isShutdown()) return;
+        try {
+            s.schedule(() -> {
+                // Ein Fehler hier darf den Takt nicht beenden – es geht danach weiter
+                try {
+                    if (!Portal.flush(this)) {
+                        stopSelf();
+                        return;
+                    }
+                } catch (RuntimeException ignored) {
+                    Prefs.error(this, "Fehler beim Senden – nächster Versuch gleich.");
+                }
+                boolean driving = mode == FAHREN && System.currentTimeMillis() - lastMove < 2 * 60_000L;
+                sendIn(driving ? 10 : 60);
+            }, seconds, TimeUnit.SECONDS);
+        } catch (RejectedExecutionException ignored) {
+            // Dienst wird gerade beendet
+        }
     }
 
     private Notification notification() {

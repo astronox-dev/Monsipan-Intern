@@ -13,17 +13,40 @@
 		vehicles?: MapVehicle[];
 		track?: { lat: number; lon: number }[];
 		stops?: { lat: number; lon: number; label: string }[];
-		/** Hervorgehobenes Fahrzeug – die Karte schwenkt hin */
+		/** Hervorgehobenes Fahrzeug – die Karte schwenkt hin und fährt mit */
 		focus?: number | null;
+		/** Wer die Karte selbst verschiebt, will nicht mehr mitfahren */
+		onrelease?: () => void;
 		class?: string;
 	}
-	let { vehicles = [], track = [], stops = [], focus = null, class: cls = '' }: Props = $props();
+	let { vehicles = [], track = [], stops = [], focus = null, onrelease, class: cls = '' }: Props = $props();
 
 	let box: HTMLDivElement;
 	let leaflet: typeof L | null = $state(null);
 	let map: L.Map | null = null;
 	let layer: L.LayerGroup | null = null;
 	let fitted = false;
+	/** Die Autos bleiben dieselben Marker – so gleiten sie zum neuen Standort, statt zu springen */
+	const markers = new Map<number, { marker: L.Marker; html: string; frame: number }>();
+	const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	/** In einer Sekunde von der alten zur neuen Lage */
+	function glide(entry: { marker: L.Marker; frame: number }, to: [number, number]) {
+		cancelAnimationFrame(entry.frame);
+		const from = entry.marker.getLatLng();
+		if (still || (from.lat === to[0] && from.lng === to[1])) {
+			entry.marker.setLatLng(to);
+			return;
+		}
+		const start = performance.now();
+		const step = (now: number) => {
+			const t = Math.min(1, (now - start) / 1000);
+			const e = 1 - (1 - t) ** 3;
+			entry.marker.setLatLng([from.lat + (to[0] - from.lat) * e, from.lng + (to[1] - from.lng) * e]);
+			if (t < 1) entry.frame = requestAnimationFrame(step);
+		};
+		entry.frame = requestAnimationFrame(step);
+	}
 
 	/** Mitte Österreichs, falls noch nichts da ist */
 	const AUSTRIA: [number, number] = [47.7, 13.9];
@@ -39,10 +62,13 @@
 				attribution: 'Grundkarte: <a href="https://basemap.at" target="_blank" rel="noopener noreferrer">basemap.at</a>'
 			}).addTo(map);
 			layer = Lf.layerGroup().addTo(map);
+			map.on('dragstart', () => onrelease?.());
 			leaflet = Lf;
 		});
 		return () => {
 			gone = true;
+			for (const m of markers.values()) cancelAnimationFrame(m.frame);
+			markers.clear();
 			map?.remove();
 			map = null;
 		};
@@ -50,7 +76,7 @@
 
 	const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-	// Neu zeichnen, sobald sich Autos, Strecke oder Standzeiten ändern
+	// Neu zeichnen, sobald sich Strecke, Standzeiten oder Autos ändern
 	$effect(() => {
 		const Lf = leaflet;
 		if (!Lf || !map || !layer) return;
@@ -70,19 +96,33 @@
 		for (const s of stops) {
 			Lf.circleMarker([s.lat, s.lon], { radius: 8, color: '#1b1f24', weight: 2, fillColor: '#82b4ef', fillOpacity: 0.9 }).bindTooltip(esc(s.label)).addTo(layer);
 		}
+		const seen = new Set<number>();
 		for (const v of vehicles) {
+			seen.add(v.id);
 			const arrow = v.state === 'faehrt' && v.heading != null ? `<span class="pfeil" style="transform: rotate(${Math.round(v.heading)}deg)">▲</span>` : '';
-			const icon = Lf.divIcon({
-				className: `fz fz-${v.state}`,
-				html: `<a href="${esc(v.href)}"><span class="punkt">${arrow}</span><span class="name">${esc(v.name)}</span></a>`,
-				iconSize: [0, 0]
-			});
-			Lf.marker([v.lat, v.lon], { icon, keyboard: false }).addTo(layer);
+			const html = `<a href="${esc(v.href)}"><span class="punkt">${arrow}</span><span class="name">${esc(v.name)}</span></a>`;
+			const icon = () => Lf.divIcon({ className: `fz fz-${v.state}`, html, iconSize: [0, 0] });
+			const known = markers.get(v.id);
+			if (known) {
+				if (known.html !== html + v.state) known.marker.setIcon(icon());
+				known.html = html + v.state;
+				glide(known, [v.lat, v.lon]);
+			} else {
+				const marker = Lf.marker([v.lat, v.lon], { icon: icon(), keyboard: false }).addTo(map);
+				markers.set(v.id, { marker, html: html + v.state, frame: 0 });
+			}
 			bounds.push([v.lat, v.lon]);
+		}
+		for (const [id, m] of markers) {
+			if (seen.has(id)) continue;
+			cancelAnimationFrame(m.frame);
+			m.marker.remove();
+			markers.delete(id);
 		}
 
 		const target = focus != null ? vehicles.find((v) => v.id === focus) : null;
-		if (target) map.setView([target.lat, target.lon], Math.max(map.getZoom(), 14));
+		// Ausgewähltes Auto: die Karte fährt mit
+		if (target) map.setView([target.lat, target.lon], Math.max(map.getZoom(), 14), { animate: !still });
 		else if (!fitted && bounds.length) {
 			map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
 			fitted = true;

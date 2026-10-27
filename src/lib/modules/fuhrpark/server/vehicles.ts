@@ -10,6 +10,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { and, asc, eq, gte, isNotNull, lt, lte, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { broadcast } from '$lib/server/events';
 import { parties, vehiclePositions, vehicles } from '$lib/server/db/schema';
 import { addDays } from '$lib/modules/stunden/week';
 import { GOOD_ACCURACY, viennaDayStart, type TrackPoint } from '../track';
@@ -225,6 +226,8 @@ export async function recordPositions(vehicle: { id: number; lastAt: Date | null
 			})
 			.where(eq(vehicles.id, vehicle.id));
 	});
+	// Offene Karten laden neu – mitgeschickt wird nur die Nummer, die Lage holt jeder mit seinem Recht
+	if (positions.length) broadcast('fahrzeuge', { id: vehicle.id });
 }
 
 /** Die Standorte eines Tages (Wiener Zeit), in zeitlicher Folge */

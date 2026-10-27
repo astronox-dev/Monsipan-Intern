@@ -1,7 +1,9 @@
 <script lang="ts">
 	/**
-	 * Fahrzeuge: Wo die Autos gerade sind – Karte und Liste, alle 30 Sekunden
-	 * neu. Wer verwalten darf, legt Fahrzeuge an und koppelt die Tablets.
+	 * Fahrzeuge: Wo die Autos gerade sind – Karte und Liste, live: Jeder neue
+	 * Standort kommt über die Ereignis-Leitung (siehe Layout), dazu alle 30
+	 * Sekunden neu für „seit …". Wer verwalten darf, legt Fahrzeuge an und
+	 * koppelt die Tablets.
 	 */
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
@@ -96,7 +98,7 @@
 <div class="flex flex-wrap items-end justify-between gap-3 pb-5">
 	<div class="min-w-0">
 		<h1 class="flex items-center gap-2 text-[2rem] leading-tight"><Truck size={28} aria-hidden="true" />Fahrzeuge</h1>
-		<p class="text-ink-2">Wo die Autos gerade sind – laut Tablet im Fahrzeug, alle 30 Sekunden neu.</p>
+		<p class="text-ink-2">Wo die Autos gerade sind – live, laut Tablet im Fahrzeug. Ein Klick auf ein Auto in der Liste fährt mit.</p>
 	</div>
 	{#if data.canManage}
 		<button class="btn btn-primary" onclick={() => openEdit(null)}><Plus size={18} aria-hidden="true" />Fahrzeug anlegen</button>
@@ -112,7 +114,7 @@
 	</div>
 {:else}
 	<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-		<VehicleMap vehicles={onMap} {focus} class="h-[55vh] lg:h-[calc(100dvh-12rem)]" />
+		<VehicleMap vehicles={onMap} {focus} onrelease={() => (focus = null)} class="h-[55vh] lg:h-[calc(100dvh-12rem)]" />
 
 		<ul class="card divide-y divide-line self-start overflow-hidden" aria-label="Fahrzeuge">
 			{#each data.vehicles as v (v.id)}

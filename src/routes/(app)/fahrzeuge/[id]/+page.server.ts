@@ -7,7 +7,9 @@ import { viennaTime } from '$lib/weather';
 import type { PageServerLoad } from './$types';
 
 /** Verlauf eines Fahrzeugs an einem Tag: Strecke, Kilometer, Standzeiten */
-export const load: PageServerLoad = async ({ params, url, locals }) => {
+export const load: PageServerLoad = async ({ params, url, locals, depends }) => {
+	// Heute wächst die Strecke live mit (siehe app:fahrzeuge im Layout)
+	depends('app:fahrzeuge');
 	requirePermission(locals, 'fahrzeuge.sehen');
 	const vehicle = await getVehicle(Number(params.id));
 	if (!vehicle) error(404, 'Fahrzeug nicht gefunden');

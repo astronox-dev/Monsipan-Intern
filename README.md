@@ -565,7 +565,7 @@ In jedem Auto liegt ein Tablet mit der App **„Monsipan Fahrzeug"** (eigene And
 fester Download-Link: `…/releases/download/fahrzeug-app/monsipan-fahrzeug.apk`). Sie schickt
 den Standort **rund um die Uhr** – als Dienst im Hintergrund mit dauerhaftem Hinweis in der
 Statusleiste, nach einem Neustart des Tablets von selbst wieder. Alle 30 Sekunden ein Standort
-(im Stehen nur bei mehr als 15 m Bewegung), jede Minute gesammelt ans Portal, auch als
+(beim Fahren alle 5 Sekunden, geparkt sparsam), beim Fahren alle 10 Sekunden ans Portal, sonst jede Minute, auch als
 Lebenszeichen mit Akkustand und ob das Tablet lädt (= Zündung an). Ohne Netz sammelt die App
 und schickt später nach.
 
