@@ -155,6 +155,8 @@ export const DEFAULT_PERMISSIONS = {
 	'urlaub.beantragen': ['admin', 'geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer', 'arbeiter'],
 	'urlaub.genehmigen': LEITUNG,
 	'urlaub.konten.bearbeiten': ['admin', 'geschaeftsfuehrer', 'buchhaltung'],
+	'fahrzeuge.sehen': ['admin', 'geschaeftsfuehrer', 'bauleiter'],
+	'fahrzeuge.verwalten': ['admin', 'geschaeftsfuehrer'],
 	'krankenstand.eigene.sehen': ALL,
 	'krankenstand.sehen': ['admin', 'geschaeftsfuehrer', 'bauleiter', 'buchhaltung', 'partiefuehrer'],
 	'krankenstand.alle.sehen': BUERO,
@@ -405,6 +407,15 @@ export const PERMISSION_AREAS: PermissionArea[] = [
 			{ key: 'urlaub.konten.bearbeiten', label: 'Urlaubskonten', hint: 'An- und Abmeldung, Übertrag' }
 		],
 		implies: { 'urlaub.beantragen': 'urlaub.eigene.sehen', 'urlaub.genehmigen': 'urlaub.alle.sehen', 'urlaub.konten.bearbeiten': 'urlaub.alle.sehen' }
+	},
+	{
+		key: 'fahrzeuge',
+		title: 'Fahrzeuge',
+		section: 'Planung',
+		hint: 'Standort der Autos (Tablet im Fahrzeug) und Fahrten je Tag',
+		view: { all: 'fahrzeuge.sehen' },
+		edit: { all: 'fahrzeuge.verwalten', hint: 'Anlegen, Tablets koppeln und entkoppeln, löschen' },
+		implies: { 'fahrzeuge.verwalten': 'fahrzeuge.sehen' }
 	},
 	{
 		key: 'krankenstand',

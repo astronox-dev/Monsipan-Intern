@@ -123,7 +123,7 @@ Administration unter `/verwaltung/…`:
 | Stundenzettel, Kostenstellen | `/stundenzettel`, `/kostenstellen` (`?von=…&bis=…&stand=…`) |
 | Tagesberichte | `/tagesberichte` |
 | Rechner (Tools und Hilfestellung) | `/tools/rechner` |
-| Wochenplanung, Urlaub, Krankenstand, Urlaubskonten | `/planung` (`?woche=JJJJ-MM-TT`), `/urlaub`, `/krankenstand`, `/urlaubskonten` |
+| Wochenplanung, Urlaub, Krankenstand, Urlaubskonten, Fahrzeuge | `/planung` (`?woche=JJJJ-MM-TT`), `/urlaub`, `/krankenstand`, `/urlaubskonten`, `/fahrzeuge` (`/fahrzeuge/<id>?tag=…`) |
 | Richtlinien & Vorschriften | `/richtlinien` (`?ordner=<id>`, `?suche=…`), ein PDF unter `/richtlinien/<id>` |
 | Tagesbericht für den Kunden (ohne Anmeldung) | `/bericht/<link>` |
 | Anfragen, Angebote, Aufträge, Rechnungen, Kunden | `/anfragen`, `/angebote`, `/auftraege`, `/rechnungen`, `/kunden` |
@@ -557,6 +557,35 @@ Android-App) oder PDF dazu – oder wird später nachgereicht. Fotos werden am G
 
 Urlaub und Krankenstand landen **nicht** von selbst im Stundenzettel – die Stunden trägt man
 dort weiter ein.
+
+### Fahrzeuge (Standort der Autos)
+
+In jedem Auto liegt ein Tablet mit der App **„Monsipan Fahrzeug"** (eigene Android-App in
+[`fahrzeug-app/`](fahrzeug-app), gebaut von [`fahrzeug-app.yml`](.github/workflows/fahrzeug-app.yml);
+fester Download-Link: `…/releases/download/fahrzeug-app/monsipan-fahrzeug.apk`). Sie schickt
+den Standort **rund um die Uhr** – als Dienst im Hintergrund mit dauerhaftem Hinweis in der
+Statusleiste, nach einem Neustart des Tablets von selbst wieder. Alle 30 Sekunden ein Standort
+(im Stehen nur bei mehr als 15 m Bewegung), jede Minute gesammelt ans Portal, auch als
+Lebenszeichen mit Akkustand und ob das Tablet lädt (= Zündung an). Ohne Netz sammelt die App
+und schickt später nach.
+
+- **Fahrzeuge** (`/fahrzeuge`, unter Planung – Recht „Fahrzeuge sehen", von Haus aus Admin,
+  Geschäftsführung, Bauleitung): Karte (Grundkarte [basemap.at](https://basemap.at)) und Liste mit
+  **Fährt** (Geschwindigkeit), **Steht** (seit wann) oder **Keine Meldung**; alle 30 Sekunden neu.
+- **Fahrten** je Fahrzeug und Tag: Strecke auf der Karte, gefahrene Kilometer, erster und letzter
+  Standort, **Standzeiten** ab 5 Minuten (Umkreis 100 m).
+- **Verwalten** (Recht „Fahrzeuge verwalten", Admin und Geschäftsführung): Fahrzeug anlegen
+  (Name, Kennzeichen, Partie), **Koppeln** zeigt einen Code (8 Zeichen, 30 Minuten gültig), den man
+  am Tablet einträgt; danach Standort „Immer zulassen" und die Akku-Ausnahme bestätigen.
+  **Entkoppeln** bzw. Ausblenden – das Tablet hört dann auf zu senden; Löschen nimmt alle
+  Standorte mit.
+- Schnittstelle für die Tablets: `POST /api/fahrzeug/koppeln` (Code → Schlüssel) und
+  `POST /api/fahrzeug/standorte` (Bearer-Schlüssel, bis 500 Standorte je Sendung); gespeichert
+  wird nur die Prüfsumme des Schlüssels.
+- **Datenschutz:** Standorte bleiben **90 Tage** und werden dann von der nächtlichen Wartung
+  gelöscht. Die Ortung von Fahrzeugen, die Mitarbeiter fahren, ist eine Kontrollmaßnahme – mit
+  Betriebsrat braucht es eine Betriebsvereinbarung (§ 96 ArbVG), sonst die Zustimmung der
+  Mitarbeiter, dazu die Information nach DSGVO.
 
 ## Auftragsmanagement
 

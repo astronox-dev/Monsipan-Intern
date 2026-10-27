@@ -1,0 +1,18 @@
+// App „Monsipan Fahrzeug": läuft auf den Tablets in den Autos und schickt den
+// Standort an das Portal. Eigenständig – nicht Teil der Portal-App in android/.
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = 'monsipan-fahrzeug'
+include ':app'

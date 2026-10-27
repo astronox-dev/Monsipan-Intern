@@ -11,3 +11,4 @@ export * from './benachrichtigungen';
 export * from './planung';
 export * from './rechnungsarchiv';
 export * from './ablage';
+export * from './fuhrpark';

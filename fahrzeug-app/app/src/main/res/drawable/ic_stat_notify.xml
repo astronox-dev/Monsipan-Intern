@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Symbol für Benachrichtigungen in der Statusleiste: Fahrbahn wie im App-Symbol, einfarbig -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,0h2.4v32H4zM25.6,0H28v32h-2.4zM14.8,0h2.4v4.4h-2.4zM14.8,6.6h2.4v4.8h-2.4zM14.8,13.6h2.4v4.8h-2.4zM14.8,20.6h2.4v4.8h-2.4zM14.8,27.6h2.4V32h-2.4z" />
+</vector>

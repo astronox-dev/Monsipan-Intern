@@ -15,8 +15,9 @@ export const init: ServerInit = async () => {
 
 // /bericht/<token>: Tagesbericht für den Kunden – ohne Anmeldung, der Link selbst ist der Schlüssel;
 // /pruefen/<token>: Prüfseite hinter dem QR-Code einer Rechnung;
-// /api/anfragen/webseite: Kontaktformular der Webseite – prüft seinen Schlüssel selbst
-const PUBLIC_PATHS = ['/login', '/passwort-vergessen', '/passwort-zuruecksetzen', '/healthz', '/bericht', '/angebot', '/pruefen', '/api/anfragen/webseite'];
+// /api/anfragen/webseite: Kontaktformular der Webseite – prüft seinen Schlüssel selbst;
+// /api/fahrzeug: die Tablets in den Autos – Kopplungscode bzw. ihr eigener Schlüssel
+const PUBLIC_PATHS = ['/login', '/passwort-vergessen', '/passwort-zuruecksetzen', '/healthz', '/bericht', '/angebot', '/pruefen', '/api/anfragen/webseite', '/api/fahrzeug'];
 const isPublic = (path: string) => PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
 
 /**

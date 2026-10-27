@@ -1,0 +1,52 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = 'at.monsipan.fahrzeug'
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId 'at.monsipan.fahrzeug'
+        minSdk 26
+        targetSdk 36
+        // Versionen kommen beim Bauen aus der Umgebung (siehe .github/workflows/fahrzeug-app.yml)
+        versionCode System.getenv("APP_VERSION_CODE") ? System.getenv("APP_VERSION_CODE").toInteger() : 1
+        versionName System.getenv("APP_VERSION_NAME") ?: "1.0"
+        // Adresse des Portals – beim Koppeln änderbar
+        buildConfigField 'String', 'PORTAL_URL', "\"${System.getenv("APP_URL") ?: "https://intern.monsipan.at"}\""
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    signingConfigs {
+        release {
+            // Wie bei der Portal-App: mit hinterlegtem Schlüssel, sonst Debug-Schlüssel
+            def keystore = System.getenv("ANDROID_KEYSTORE_PATH")
+            if (keystore) {
+                storeFile file(keystore)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig System.getenv("ANDROID_KEYSTORE_PATH") ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.android.gms:play-services-location:21.3.0'
+}

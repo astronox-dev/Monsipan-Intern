@@ -4,6 +4,7 @@ import { client, DATA_DIR } from './db';
 import { purgeExpired } from './auth';
 import { tidyDocuments } from './documents';
 import { purgeOldNotifications } from './notifications';
+import { purgeOldPositions } from '$lib/modules/fuhrpark/server/vehicles';
 import { sweepParts } from './parts';
 import { notifyOverdueInvoices } from '$lib/modules/auftraege/server/invoices';
 import { checkArchive } from '$lib/modules/auftraege/server/signatur/verification';
@@ -149,6 +150,8 @@ export function scheduleMaintenance() {
 				const belege = await tidyBelege(now);
 				if (belege.removed) console.info(`[krankmeldungen] ${belege.removed} unbenutzte Belege gelöscht`);
 				await purgeOldNotifications(now);
+				const positions = await purgeOldPositions(now);
+				if (positions) console.info(`[fahrzeuge] ${positions} Standorte älter als 90 Tage gelöscht`);
 				// Ausgestellte Rechnungen: Dateien, Prüfsummen, Daten, Signaturen und die Protokoll-Kette
 				const archive = await checkArchive();
 				if (archive.problems.length || !archive.audit.ok) console.warn(`[rechnungen] Archivprüfung: ${archive.problems.length} mit Fehlern, Protokoll ${archive.audit.ok ? 'in Ordnung' : 'unterbrochen'}`);

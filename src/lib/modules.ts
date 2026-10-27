@@ -17,6 +17,7 @@ import CalendarDays from '@lucide/svelte/icons/calendar-days';
 import TreePalm from '@lucide/svelte/icons/tree-palm';
 import Thermometer from '@lucide/svelte/icons/thermometer';
 import PiggyBank from '@lucide/svelte/icons/piggy-bank';
+import Truck from '@lucide/svelte/icons/truck';
 import Users from '@lucide/svelte/icons/users';
 import Clock from '@lucide/svelte/icons/clock';
 import NotebookPen from '@lucide/svelte/icons/notebook-pen';
@@ -99,13 +100,14 @@ export const MODULES: AppModule[] = [
 		href: '/planung',
 		group: 'betrieb',
 		status: 'aktiv',
-		hint: 'Wochenplanung, Urlaub und Krankenstand',
+		hint: 'Wochenplanung, Urlaub, Krankenstand und Fahrzeuge',
 		cardsPerItem: true,
 		items: [
 			{ href: '/planung', label: 'Wochenplanung', icon: CalendarDays, permission: 'planung.sehen', hint: 'Aufträge je Partie und Tag' },
 			{ href: '/urlaub', label: 'Urlaub', icon: TreePalm, permission: 'urlaub.eigene.sehen', hint: 'Beantragen und genehmigen' },
 			{ href: '/krankenstand', label: 'Krankenstand', icon: Thermometer, permission: 'krankenstand.eigene.sehen', hint: 'Melden, mit Krankmeldung' },
-			{ href: '/urlaubskonten', label: 'Urlaubskonten', icon: PiggyBank, permission: 'urlaub.konten.bearbeiten', hint: 'An- und Abmeldung, Resturlaub' }
+			{ href: '/urlaubskonten', label: 'Urlaubskonten', icon: PiggyBank, permission: 'urlaub.konten.bearbeiten', hint: 'An- und Abmeldung, Resturlaub' },
+			{ href: '/fahrzeuge', label: 'Fahrzeuge', icon: Truck, permission: 'fahrzeuge.sehen', hint: 'Wo die Autos sind, Fahrten je Tag' }
 		]
 	},
 	{ key: 'partien', label: 'Partien', icon: Users, href: '/partien', group: 'betrieb', status: 'geplant', items: [] },

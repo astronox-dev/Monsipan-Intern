@@ -13,7 +13,8 @@ const config = {
 				// zxing-wasm kompiliert WebAssembly für den Kamera-Scanner
 				'script-src': ['self', 'wasm-unsafe-eval'],
 				'style-src': ['self', 'unsafe-inline'],
-				'img-src': ['self', 'data:', 'blob:'],
+				// Kartenkacheln für die Fahrzeuge: basemap.at (amtliche Grundkarte Österreichs)
+				'img-src': ['self', 'data:', 'blob:', 'https://mapsneu.wien.gv.at'],
 				'font-src': ['self'],
 				'connect-src': ['self'],
 				'media-src': ['self', 'blob:'],
