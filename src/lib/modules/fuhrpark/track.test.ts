@@ -61,6 +61,19 @@ describe('Fuhrpark – Glätten', () => {
 		expect(stops(smooth)).toMatchObject([{ minutes: 59 }]);
 	});
 
+	it('zu Fuß mit dem Tablet über die Baustelle: Standzeit, keine Fahrt', () => {
+		const site = { lat: 48.12, lon: 16.45 };
+		const arrive = { ...at(0, site.lat, site.lon, 6), speed: 0 };
+		// Eine halbe Stunde hin und her, bis 200 m weit, Schritttempo
+		const walk = Array.from({ length: 30 }, (_, i) => ({ ...at(i + 1, site.lat + ((i % 10) * 0.00018) * (i % 2 ? 1 : -1), site.lon + (i % 7) * 0.0002, 8), speed: 1.3 }));
+		const smooth = smoothTrack([arrive, ...walk]);
+		expect(kilometers(smooth)).toBe(0);
+		expect(stops(smooth)).toMatchObject([{ minutes: 30 }]);
+		// Wegfahren bleibt eine Fahrt
+		const leave = Array.from({ length: 5 }, (_, i) => ({ ...at(32 + i * 0.5, site.lat + 0.004 * (i + 1), site.lon, 6), speed: 15 }));
+		expect(kilometers(smoothTrack([arrive, ...walk, ...leave]))).toBeGreaterThan(2);
+	});
+
 	it('eine echte Fahrt bleibt eine Fahrt', () => {
 		const route = Array.from({ length: 9 }, (_, i) => ({ ...at(i, 48.3608 + (0.0204 * i) / 8, 16.4925 + (0.0238 * i) / 8, 6), speed: 13 }));
 		const smooth = smoothTrack(route);

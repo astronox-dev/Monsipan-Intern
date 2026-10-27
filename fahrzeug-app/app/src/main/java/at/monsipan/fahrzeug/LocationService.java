@@ -30,22 +30,83 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Läuft dauerhaft im Hintergrund – mit Hinweis in der Statusleiste, wie Android
- * es für ständige Ortung verlangt. Alle 30 Sekunden ein Standort (im Stehen
- * nur, wenn sich das Auto mehr als 15 m bewegt), jede Minute geht gesammelt
- * an das Portal, auch als Lebenszeichen ohne neue Standorte.
+ * es für ständige Ortung verlangt. Zwei Gänge:
+ * - Fahren: alle 5 Sekunden ein genauer GPS-Standort, damit die Strecke den
+ *   Straßen folgt (bei 30 Sekunden schneidet sie Kurven quer ab).
+ * - Parken: nach 5 Minuten ohne Fahrt sparsam (etwa jede Minute, über WLAN und
+ *   Funk) – das GPS bleibt aus, der Akku hält. Entfernt sich das Tablet mehr
+ *   als 150 m oder meldet es Fahrtgeschwindigkeit, geht es zurück ins Fahren.
+ * Jede Minute geht gesammelt an das Portal, auch als Lebenszeichen ohne neue
+ * Standorte.
  */
 public class LocationService extends Service {
     private static final String CHANNEL = "standort";
     private static final int NOTIFICATION_ID = 1;
 
+    private static final int FAHREN = 1;
+    private static final int PARKEN = 2;
+    /** Ab dieser Geschwindigkeit (m/s, rund 11 km/h) fährt das Auto */
+    private static final float DRIVE_SPEED = 3f;
+    /** So weit vom Abstellort ist es jedenfalls losgefahren (m) */
+    private static final float MOVED = 150f;
+    private static final long PARK_AFTER = 5 * 60_000L;
+
     private FusedLocationProviderClient fused;
     private ScheduledExecutorService sender;
+    private int mode = 0;
+    private long lastMove = System.currentTimeMillis();
+    private Location anchor;
     private final LocationCallback callback = new LocationCallback() {
         @Override
         public void onLocationResult(LocationResult result) {
-            for (Location l : result.getLocations()) store(l);
+            for (Location l : result.getLocations()) {
+                store(l);
+                follow(l);
+            }
         }
     };
+
+    private static LocationRequest request(int m) {
+        if (m == FAHREN) {
+            return new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L)
+                    .setMinUpdateIntervalMillis(2_000L)
+                    .setMinUpdateDistanceMeters(10f)
+                    .setMaxUpdateDelayMillis(30_000L)
+                    .setWaitForAccurateLocation(true)
+                    .build();
+        }
+        return new LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 60_000L)
+                .setMinUpdateIntervalMillis(30_000L)
+                .setMinUpdateDistanceMeters(50f)
+                .build();
+    }
+
+    /** In den anderen Gang schalten */
+    private void use(int m) {
+        if (fused == null || mode == m) return;
+        mode = m;
+        try {
+            fused.removeLocationUpdates(callback);
+            fused.requestLocationUpdates(request(m), callback, Looper.getMainLooper());
+        } catch (SecurityException e) {
+            stopSelf();
+        }
+    }
+
+    /** Fährt es (oder ist weit weg vom Abstellort), dann Fahren – sonst nach 5 Minuten Parken */
+    private void follow(Location l) {
+        boolean driving = l.hasSpeed() && l.getSpeed() > DRIVE_SPEED;
+        boolean usable = !l.hasAccuracy() || l.getAccuracy() < 100f;
+        if (anchor != null && usable && anchor.distanceTo(l) > MOVED) driving = true;
+        if (driving) {
+            lastMove = l.getTime();
+            anchor = l;
+            use(FAHREN);
+            return;
+        }
+        if (anchor == null && usable) anchor = l;
+        if (mode == FAHREN && l.getTime() - lastMove > PARK_AFTER) use(PARKEN);
+    }
 
     /** Startet den Dienst, wenn gekoppelt und der Standort erlaubt ist */
     static void start(Context c) {
@@ -85,17 +146,9 @@ public class LocationService extends Service {
         }
         if (fused == null) {
             fused = LocationServices.getFusedLocationProviderClient(this);
-            LocationRequest request = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30_000L)
-                    .setMinUpdateIntervalMillis(15_000L)
-                    .setMinUpdateDistanceMeters(15f)
-                    .setMaxUpdateDelayMillis(120_000L)
-                    .build();
-            try {
-                fused.requestLocationUpdates(request, callback, Looper.getMainLooper());
-            } catch (SecurityException e) {
-                stopSelf();
-                return START_NOT_STICKY;
-            }
+            // Erst einmal genau – nach 5 Minuten ohne Fahrt wird es sparsam
+            lastMove = System.currentTimeMillis();
+            use(FAHREN);
         }
         if (sender == null) {
             sender = Executors.newSingleThreadScheduledExecutor();

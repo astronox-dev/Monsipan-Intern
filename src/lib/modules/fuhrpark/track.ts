@@ -43,6 +43,10 @@ const STOP_MINUTES = 5;
 
 /** Genauer als das (m) muss ein Standort sein, damit er in den Verlauf kommt */
 export const GOOD_ACCURACY = 50;
+/** Bis zu dieser Geschwindigkeit (m/s, rund 10 km/h) ist es Gehen oder Rangieren – keine Fahrt */
+export const WALK_SPEED = 2.8;
+/** So weit darf man mit dem Tablet zu Fuß vom Abstellort weg (Baustelle), ohne dass es eine Fahrt wird */
+const WALK_RADIUS = 300;
 
 /**
  * Den Verlauf glätten. Ohne freien Himmel (Halle, Garage, Tiefgarage) schätzt
@@ -51,34 +55,38 @@ export const GOOD_ACCURACY = 50;
  * ein Stern mit „Fahrten" ins Nichts. Darum:
  * 1. ungenaue Standorte (über 50 m) fallen weg,
  * 2. ein Sprung hin und gleich wieder zurück fällt weg,
- * 3. wer nicht fährt und innerhalb der Ungenauigkeit bleibt, bleibt am selben
- *    Ort – die Zeit läuft weiter (für die Standzeit), die Lage nicht.
+ * 3. wer nicht fährt, bleibt am selben Ort – die Zeit läuft weiter (für die
+ *    Standzeit), die Lage nicht. Nicht fahren heißt: langsamer als rund
+ *    10 km/h und höchstens 300 m vom Abstellort. Damit wird auch, wer mit dem
+ *    Tablet über die Baustelle geht, keine Fahrt, sondern eine Standzeit.
  */
 export function smoothTrack(points: readonly TrackPoint[]): TrackPoint[] {
 	const good = points.filter((p) => p.accuracy == null || p.accuracy <= GOOD_ACCURACY);
 	const noSpikes = good.filter((p, i) => {
 		const a = good[i - 1];
 		const c = good[i + 1];
-		if (!a || !c || (p.speed ?? 0) > 3) return true;
+		if (!a || !c || (p.speed ?? 0) > WALK_SPEED) return true;
 		const ab = distance(a, p);
 		const bc = distance(p, c);
 		return !(ab > 40 && bc > 40 && distance(a, c) < Math.min(ab, bc) / 2);
 	});
 	const out: TrackPoint[] = [];
-	/** Der Ort, an dem das Auto gerade steht: die Mitte der Punkte dort */
-	let place: { lat: number; lon: number; n: number; accuracy: number | null; index: number } | null = null;
+	/** Der Ort, an dem das Auto gerade steht: wo es ankam (`start`) und die Mitte der Punkte dort */
+	let place: { start: { lat: number; lon: number }; lat: number; lon: number; n: number; index: number } | null = null;
+	const newPlace = (p: TrackPoint) => ({ start: { lat: p.lat, lon: p.lon }, lat: p.lat, lon: p.lon, n: 1, index: out.length - 1 });
 	for (const p of noSpikes) {
 		if (!place) {
 			out.push(p);
-			place = { lat: p.lat, lon: p.lon, n: 1, accuracy: p.accuracy, index: out.length - 1 };
+			place = newPlace(p);
 			continue;
 		}
-		const d = distance(place, p);
-		const seconds = (p.at - out[out.length - 1].at) / 1000;
-		if (seconds > 0 && d / seconds > MAX_SPEED) continue;
-		// Spielraum: beide Ungenauigkeiten und etwas dazu, höchstens 100 m
-		const radius = Math.min(100, Math.max(40, (place.accuracy ?? 15) + (p.accuracy ?? 15) + 20));
-		if ((p.speed ?? 0) <= 2 && d <= radius) {
+		const prev = out[out.length - 1];
+		const seconds = (p.at - prev.at) / 1000;
+		const step = distance(prev, p);
+		if (seconds > 0 && step / seconds > MAX_SPEED) continue;
+		// Ohne gemeldete Geschwindigkeit die aus dem Weg seit dem letzten Punkt
+		const speed = p.speed ?? (seconds > 0 ? step / seconds : 0);
+		if (speed <= WALK_SPEED && distance(place.start, p) <= WALK_RADIUS) {
 			place.lat = (place.lat * place.n + p.lat) / (place.n + 1);
 			place.lon = (place.lon * place.n + p.lon) / (place.n + 1);
 			place.n++;
@@ -91,7 +99,7 @@ export function smoothTrack(points: readonly TrackPoint[]): TrackPoint[] {
 			continue;
 		}
 		out.push(p);
-		place = { lat: p.lat, lon: p.lon, n: 1, accuracy: p.accuracy, index: out.length - 1 };
+		place = newPlace(p);
 	}
 	return out;
 }
@@ -154,7 +162,7 @@ export interface MapVehicle {
 }
 
 /**
- * Fährt (letzter Standort jünger als 5 Minuten, schneller als Schritttempo),
+ * Fährt (letzter Standort jünger als 5 Minuten, schneller als rund 10 km/h),
  * steht (das Tablet hat sich in der letzten halben Stunde gemeldet), offline
  * (länger nichts) – oder hat noch nie etwas geschickt.
  */
@@ -163,7 +171,7 @@ export function vehicleState(v: { lastAt: Date | number | null; lastSeenAt: Date
 	const at = ms(v.lastAt);
 	const seen = Math.max(ms(v.lastSeenAt) ?? 0, at ?? 0);
 	if (!seen) return 'nie';
-	if (at != null && now - at < 5 * 60_000 && (v.lastSpeed ?? 0) > 1.5) return 'faehrt';
+	if (at != null && now - at < 5 * 60_000 && (v.lastSpeed ?? 0) > WALK_SPEED) return 'faehrt';
 	if (now - seen < 30 * 60_000) return 'steht';
 	return 'offline';
 }
