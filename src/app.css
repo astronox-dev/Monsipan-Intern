@@ -619,6 +619,10 @@
 }
 
 /* ------------------------------------------------------------ Dialoge (nativ) */
+/* Die Seite dahinter bleibt stehen – fürs Wischen am Handy siehe lib/scroll-lock.ts */
+html:has(dialog[open]) {
+	overflow: hidden;
+}
 dialog.sheet {
 	margin: auto;
 	padding: 0;

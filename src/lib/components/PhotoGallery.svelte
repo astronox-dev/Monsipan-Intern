@@ -10,6 +10,7 @@
 	 * (mit ?vorschau klein, mit ?download zum Speichern; DELETE löscht).
 	 */
 	import { onMount, tick } from 'svelte';
+	import { lockScroll } from '$lib/scroll-lock';
 	import Camera from '@lucide/svelte/icons/camera';
 	import ImagePlus from '@lucide/svelte/icons/image-plus';
 	import Download from '@lucide/svelte/icons/download';
@@ -142,6 +143,10 @@
 	let confirmDelete = $state(false);
 	let deleting = $state(false);
 	const shown = $derived(current === null ? null : photos[current]);
+
+	$effect(() => {
+		if (current !== null) return lockScroll();
+	});
 
 	async function show(i: number) {
 		current = i;

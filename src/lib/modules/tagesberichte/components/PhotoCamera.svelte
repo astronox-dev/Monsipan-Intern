@@ -6,6 +6,7 @@
 	 * jedes Foto geht gleich weiter zum Hochladen.
 	 */
 	import { onMount } from 'svelte';
+	import { lockScroll } from '$lib/scroll-lock';
 	import X from '@lucide/svelte/icons/x';
 	import CameraOff from '@lucide/svelte/icons/camera-off';
 	import Flashlight from '@lucide/svelte/icons/flashlight';
@@ -29,6 +30,8 @@
 	let taken = $state(0);
 	let flash = $state(false);
 	let busy = $state(false);
+
+	$effect(() => lockScroll());
 
 	onMount(() => {
 		// Als Dialog in der obersten Ebene – sonst lägen Kopf- und Fußleiste der App darüber

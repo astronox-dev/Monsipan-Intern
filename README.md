@@ -64,6 +64,9 @@ seine Seiten unter `src/routes/(app)/<bereich>/` und seinen Code unter
 haben **Aufträge** und **Planung**, die Partien **Tagesberichte** und **Stundenzettel**; was eine
 Rolle nicht öffnen darf, rückt nach (`bottomTabs` in [`src/lib/nav.ts`](src/lib/nav.ts)). **Mehr**
 zeigt alle Seiten gegliedert wie die Seitenleiste, dazu Konto, Darstellung und Abmelden.
+Solange ein Dialog, die Fotoansicht, die Kamera oder das Zeit-Rad offen ist, bleibt die Seite
+dahinter stehen; auf iPhone und iPad zoomen Eingabefelder beim Antippen nicht heran.
+
 Die Knöpfe zum Speichern und Freigeben (Tagesbericht, Stundenzettel, Angebot, Rechnung …) stehen
 am Handy und Tablet am Ende des Formulars, damit beim Scrollen nichts verdeckt wird; erst am PC
 bleiben sie unten am Rand stehen.

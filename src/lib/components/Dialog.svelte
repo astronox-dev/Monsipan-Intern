@@ -1,6 +1,7 @@
 <script lang="ts">
 	import X from '@lucide/svelte/icons/x';
 	import type { Snippet } from 'svelte';
+	import { lockScroll } from '$lib/scroll-lock';
 
 	interface Props {
 		open: boolean;
@@ -34,6 +35,10 @@
 		if (!open && dialog.open) dialog.close();
 	});
 
+	$effect(() => {
+		if (open) return lockScroll();
+	});
+
 	function handleClose() {
 		open = false;
 		onclose?.();
@@ -63,7 +68,7 @@
 					<X size={18} />
 				</button>
 			</header>
-			<div class="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-6">
+			<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 sm:px-6">
 				{@render children()}
 			</div>
 			{#if footer}

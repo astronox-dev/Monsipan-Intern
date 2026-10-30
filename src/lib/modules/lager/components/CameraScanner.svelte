@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { lockScroll } from '$lib/scroll-lock';
 	import { fade, fly } from 'svelte/transition';
 	import X from '@lucide/svelte/icons/x';
 	import Flashlight from '@lucide/svelte/icons/flashlight';
@@ -77,6 +78,8 @@
 			await new Promise((r) => setTimeout(r, 110));
 		}
 	}
+
+	$effect(() => lockScroll());
 
 	onMount(() => {
 		unlockAudio();
