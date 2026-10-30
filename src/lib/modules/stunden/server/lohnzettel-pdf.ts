@@ -258,10 +258,10 @@ export async function lohnzettelPdf(
 	const ausloeseY = tableBottom + 58;
 	doc.font('Helvetica').fontSize(10).text('Auslöse', right - 330, ausloeseY, { lineBreak: false });
 	line(right - 285, ausloeseY + 11, right - 190, ausloeseY + 11);
-	if (!inked(right - 285, ausloeseY - 6, 95, 20)) doc.text(hoursLabel(sheet.allowanceDays), right - 280, ausloeseY, { lineBreak: false });
+	if (!inked(right - 285, ausloeseY - 6, 95, 20)) doc.text(hoursLabel(sheet.allowanceDays), right - 285, ausloeseY, { width: 95, align: 'center' });
 	doc.text('Tage', right - 180, ausloeseY, { lineBreak: false });
 	line(right - 145, ausloeseY + 11, right - 20, ausloeseY + 11);
-	if (!inked(right - 145, ausloeseY - 6, 125, 20)) doc.text(hoursLabel(sheet.allowanceAmount), right - 140, ausloeseY, { lineBreak: false });
+	if (!inked(right - 145, ausloeseY - 6, 125, 20)) doc.text(hoursLabel(sheet.allowanceAmount), right - 145, ausloeseY, { width: 125, align: 'center' });
 	doc.text('€', right - 12, ausloeseY, { lineBreak: false });
 
 	const signY = tableBottom + 140;
