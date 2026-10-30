@@ -74,7 +74,7 @@
 			</p>
 		{/if}
 	</div>
-	<div class="flex items-center gap-2">
+	<div class="flex flex-wrap items-center gap-2">
 		<a href="?jahr={data.year - 1}" class="btn btn-secondary btn-sm"><ChevronLeft size={16} aria-hidden="true" />{data.year - 1}</a>
 		{#if data.year !== data.thisYear}<a href="?" class="btn btn-ghost btn-sm">{data.thisYear}</a>{/if}
 		<a href="?jahr={data.year + 1}" class="btn btn-secondary btn-sm">{data.year + 1}<ChevronRight size={16} aria-hidden="true" /></a>

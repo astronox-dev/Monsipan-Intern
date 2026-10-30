@@ -68,7 +68,7 @@
 		<h1 class="text-[2rem] leading-tight">Bestand</h1>
 		<p class="text-ink-2"><span class="num">{data.count}</span> {data.count === 1 ? 'Artikel' : 'Artikel'}</p>
 	</div>
-	<div class="flex gap-2">
+	<div class="flex flex-wrap gap-2">
 		<a href="/lager/bestand/druck{page.url.search}" class="btn btn-secondary"><Printer size={18} aria-hidden="true" /><span class="hidden sm:inline">Drucken</span></a>
 		<PdfButton href="/export/bestand.pdf{page.url.search}" title="Bestand" compact><FileText size={18} aria-hidden="true" /><span class="hidden sm:inline">PDF</span></PdfButton>
 		<a href={exportHref} class="btn btn-secondary" download><Download size={18} aria-hidden="true" /><span class="hidden sm:inline">CSV</span></a>

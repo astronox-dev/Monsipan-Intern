@@ -47,7 +47,7 @@
 		</p>
 	</div>
 	{#if data.items.length}
-		<div class="no-print flex gap-2">
+		<div class="no-print flex flex-wrap gap-2">
 			<button class="btn btn-secondary" onclick={printPage}><Printer size={18} aria-hidden="true" />Drucken</button>
 			<PdfButton href={pdfHref}><FileText size={18} aria-hidden="true" />Als PDF</PdfButton>
 			<a href={exportHref} class="btn btn-primary" download><Download size={18} aria-hidden="true" />Als CSV</a>

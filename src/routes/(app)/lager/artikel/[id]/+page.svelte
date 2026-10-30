@@ -161,7 +161,7 @@
 	</div>
 </header>
 
-<div class="grid gap-4 lg:grid-cols-3">
+<div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
 	<div class="min-w-0 space-y-4 lg:col-span-2">
 		<!-- Bestand je Lagerort -->
 		<section class="card p-4 lg:p-6" aria-labelledby="h-stock">
@@ -225,7 +225,7 @@
 		</section>
 
 		<section class="card p-4 lg:p-6" aria-labelledby="h-docs">
-			<div class="flex items-center justify-between gap-3">
+			<div class="flex flex-wrap items-center justify-between gap-3">
 				<h2 id="h-docs" class="flex items-center gap-2 text-xl"><FileText size={20} aria-hidden="true" />Materialbeschreibungen</h2>
 				{#if canManage}
 					<button class="btn btn-secondary btn-sm" onclick={openUpload}><FileUp size={16} aria-hidden="true" />PDF hochladen</button>

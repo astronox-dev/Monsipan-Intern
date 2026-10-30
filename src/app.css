@@ -851,4 +851,27 @@ body.dnd-active * {
 	textarea {
 		font-size: 16px !important;
 	}
+
+	/*
+	 * Datumsfelder bringen auf iOS eine eigene Mindestbreite mit und ragen aus
+	 * ihrer Spalte – die Seite wird breiter als der Bildschirm. Ohne das
+	 * Aussehen des Systems halten sie sich an die Spalte.
+	 */
+	input[type='date'] {
+		-webkit-appearance: none;
+		appearance: none;
+		min-width: 0;
+		max-width: 100%;
+	}
+	input[type='date']::-webkit-date-and-time-value {
+		margin: 0;
+		text-align: left;
+	}
+	/* In Filterzeilen gäbe es sonst keine Breite: Die Zeile richtet sich nach dem Inhalt */
+	label:not(.flex):has(> input[type='date']) {
+		flex: 1 1 8.5rem;
+	}
+	input[type='date'].w-auto {
+		min-width: 8.5rem;
+	}
 }

@@ -79,7 +79,7 @@
 		<h1 class="text-[2rem] leading-tight">Bewegungen</h1>
 		<p class="text-ink-2"><span class="num">{data.count}</span> Buchungen im gewählten Zeitraum</p>
 	</div>
-	<div class="flex gap-2">
+	<div class="flex flex-wrap gap-2">
 		<a href="/lager/bewegungen/druck{page.url.search}" class="btn btn-secondary"><Printer size={18} aria-hidden="true" />Drucken</a>
 		<PdfButton href="/export/bewegungen.pdf{page.url.search}"><FileText size={18} aria-hidden="true" />PDF</PdfButton>
 		<a href="/export/bewegungen.csv{page.url.search}" class="btn btn-secondary" download><Download size={18} aria-hidden="true" />CSV</a>
@@ -88,8 +88,8 @@
 
 <section class="card overflow-visible">
 	<div class="space-y-3 border-b border-line p-3 lg:p-4">
-		<div class="flex gap-2">
-			<div class="relative flex-1">
+		<div class="flex flex-wrap gap-2">
+			<div class="relative min-w-48 flex-1">
 				<label for="mv-q" class="sr-only">Nach Artikel filtern</label>
 				<Search size={18} class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-3" aria-hidden="true" />
 				<input id="mv-q" type="search" class="input pl-10" placeholder="Artikel, Nummer, EAN …" autocomplete="off" bind:value={q} oninput={onSearch} />

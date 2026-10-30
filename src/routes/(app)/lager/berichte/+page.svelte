@@ -46,7 +46,7 @@
 			{data.view === 'bestand' ? `Bestand je Lagerort, Stand ${date(data.stand)}` : 'Verbrauch = Ausgaben minus Rückgaben, ohne Stornos'}
 		</p>
 	</div>
-	<div class="no-print flex gap-2">
+	<div class="no-print flex flex-wrap gap-2">
 		<button class="btn btn-secondary" onclick={printPage}><Printer size={18} aria-hidden="true" />Drucken</button>
 		<PdfButton href={data.view === 'bestand' ? '/export/bestand.pdf?status=alle' : `/export/verbrauch.pdf${page.url.search}`}>
 			<FileText size={18} aria-hidden="true" />Als PDF
