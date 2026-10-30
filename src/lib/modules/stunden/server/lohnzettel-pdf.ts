@@ -256,13 +256,16 @@ export async function lohnzettelPdf(
 	doc.font('Helvetica').fontSize(9).text('%', vazX + 54, tableBottom + 10, { lineBreak: false });
 
 	const ausloeseY = tableBottom + 58;
-	doc.font('Helvetica').fontSize(10).text('Auslöse', right - 330, ausloeseY, { lineBreak: false });
+	// Die größere Schrift sitzt 2 pt höher, sonst läge sie auf der Linie
+	const ausloeseText = ausloeseY - 2;
+	doc.font('Helvetica').fontSize(12).text('Auslöse', right - 336, ausloeseText, { lineBreak: false });
 	line(right - 285, ausloeseY + 11, right - 190, ausloeseY + 11);
-	if (!inked(right - 285, ausloeseY - 6, 95, 20)) doc.text(hoursLabel(sheet.allowanceDays), right - 285, ausloeseY, { width: 95, align: 'center' });
-	doc.text('Tage', right - 180, ausloeseY, { lineBreak: false });
+	if (!inked(right - 285, ausloeseY - 6, 95, 20)) doc.text(hoursLabel(sheet.allowanceDays), right - 285, ausloeseText, { width: 95, align: 'center' });
+	doc.text('Tage', right - 180, ausloeseText, { lineBreak: false });
 	line(right - 145, ausloeseY + 11, right - 20, ausloeseY + 11);
-	if (!inked(right - 145, ausloeseY - 6, 125, 20)) doc.text(hoursLabel(sheet.allowanceAmount), right - 145, ausloeseY, { width: 125, align: 'center' });
-	doc.text('€', right - 12, ausloeseY, { lineBreak: false });
+	if (!inked(right - 145, ausloeseY - 6, 125, 20)) doc.text(hoursLabel(sheet.allowanceAmount), right - 145, ausloeseText, { width: 125, align: 'center' });
+	doc.text('€', right - 12, ausloeseText, { lineBreak: false });
+	doc.fontSize(10);
 
 	const signY = tableBottom + 140;
 	const signW = 130;
