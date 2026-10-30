@@ -1,39 +1,35 @@
 /**
  * Anfragen: eine hineinkopierte E-Mail mit Absender, Betreff und Ort – oder
  * eine Anfrage über das Kontaktformular der Webseite (siehe ./website). Daraus
- * wird ein Angebot – mit Kunde, BV und Ausführungsort aus der Anfrage. Ist das
- * Angebot angenommen (oder die Anfrage von Hand abgelegt), ist sie erledigt und
- * steht nicht mehr bei den offenen.
+ * wird ein Angebot – mit Kunde, BV und Ausführungsort aus der Anfrage.
  *
- * Stand: Neu → In Arbeit (von Hand, noch ohne Angebot – oder das Angebot ist
- * noch ein Entwurf) → der Stand des Angebots → erledigt.
+ * Stand: offen oder erledigt. Erledigt ist sie, sobald das Angebot dazu
+ * erstellt ist – oder von Hand abgelegt (etwa wenn kein Angebot kommt).
  */
-import { and, desc, eq, isNotNull, isNull, like, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, like, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db } from '$lib/server/db';
+import { broadcast } from '$lib/server/events';
 import { customers, inquiries, offers, users } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
 import { companyDomain, MAX_INQUIRY_TEXT } from '../inquiry';
 import { createOffer } from './offers';
 
 const creator = alias(users, 'creator');
-const worker = alias(users, 'worker');
 
-/** Erledigt: Angebot angenommen oder von Hand abgelegt */
-const done = or(isNotNull(inquiries.closedAt), eq(offers.status, 'angenommen'));
-const open = and(isNull(inquiries.closedAt), or(isNull(offers.id), ne(offers.status, 'angenommen')));
-/** Noch niemand dran: kein Angebot, nicht in Arbeit genommen */
-const fresh = and(isNull(inquiries.closedAt), isNull(offers.id), isNull(inquiries.inProgressAt));
-/** In Arbeit: von Hand genommen (noch ohne Angebot) oder das Angebot ist ein Entwurf */
-const working = and(isNull(inquiries.closedAt), or(and(isNull(offers.id), isNotNull(inquiries.inProgressAt)), eq(offers.status, 'entwurf')));
+/** Erledigt: mit dem Angebot oder von Hand abgelegt – beides setzt `closedAt` */
+const done = isNotNull(inquiries.closedAt);
+const open = isNull(inquiries.closedAt);
 
-export const INQUIRY_STATES = ['offen', 'neu', 'inarbeit', 'erledigt'] as const;
+export const INQUIRY_STATES = ['offen', 'erledigt'] as const;
 export type InquiryState = (typeof INQUIRY_STATES)[number];
-const STATE_WHERE: Record<InquiryState, SQL | undefined> = { offen: open, neu: fresh, inarbeit: working, erledigt: done };
+const STATE_WHERE: Record<InquiryState, SQL | undefined> = { offen: open, erledigt: done };
+/** Offene Browser zählen die offenen Anfragen im Menü neu */
+const badgesChanged = () => broadcast('badges', {});
 
 export interface InquiryFilter {
 	q?: string;
-	/** „offen" (Standard), „neu", „inarbeit", „erledigt" oder „alle" (Suche oben) */
+	/** „offen" (Standard), „erledigt" oder „alle" (Suche oben) */
 	state?: string;
 }
 
@@ -65,7 +61,6 @@ export async function listInquiries(filter: InquiryFilter = {}, limit = 200) {
 			location: inquiries.location,
 			customerName: customers.name,
 			closedAt: inquiries.closedAt,
-			inProgressAt: inquiries.inProgressAt,
 			offerId: offers.id,
 			offerNumber: offers.number,
 			offerStatus: offers.status
@@ -79,20 +74,22 @@ export async function listInquiries(filter: InquiryFilter = {}, limit = 200) {
 		.all();
 }
 
-/** Wie viele je Stand – für die Zahlen an den Reitern; `fresh` = ohne Angebot (Übersicht) */
+/** Wie viele je Stand – für die Zahlen an den Reitern und im Menü */
 export async function countInquiries() {
 	const row = await db
 		.select({
 			open: sql<number>`sum(case when ${open} then 1 else 0 end)`.mapWith(Number),
-			neu: sql<number>`sum(case when ${fresh} then 1 else 0 end)`.mapWith(Number),
-			working: sql<number>`sum(case when ${working} then 1 else 0 end)`.mapWith(Number),
-			done: sql<number>`sum(case when ${done} then 1 else 0 end)`.mapWith(Number),
-			fresh: sql<number>`sum(case when ${inquiries.closedAt} is null and ${inquiries.offerId} is null then 1 else 0 end)`.mapWith(Number)
+			done: sql<number>`sum(case when ${done} then 1 else 0 end)`.mapWith(Number)
 		})
 		.from(inquiries)
-		.leftJoin(offers, eq(offers.id, inquiries.offerId))
 		.get();
-	return { open: row?.open ?? 0, neu: row?.neu ?? 0, working: row?.working ?? 0, done: row?.done ?? 0, fresh: row?.fresh ?? 0 };
+	return { open: row?.open ?? 0, done: row?.done ?? 0 };
+}
+
+/** Nur die offenen – für die Zahl im Menü */
+export async function openInquiryCount(): Promise<number> {
+	const row = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(inquiries).where(open).get();
+	return row?.n ?? 0;
 }
 
 export interface InquiryInput {
@@ -143,6 +140,7 @@ export async function createInquiry(user: Pick<SessionUser, 'id'> | null, data: 
 		.values({ ...data, source, createdBy: user?.id ?? null, updatedAt: new Date() })
 		.returning({ id: inquiries.id })
 		.get();
+	badgesChanged();
 	return row.id;
 }
 
@@ -172,9 +170,6 @@ export async function inquiryDetail(id: number) {
 			location: inquiries.location,
 			note: inquiries.note,
 			closedAt: inquiries.closedAt,
-			inProgressAt: inquiries.inProgressAt,
-			workerFirst: worker.firstName,
-			workerLast: worker.lastName,
 			offerId: offers.id,
 			offerNumber: offers.number,
 			offerStatus: offers.status,
@@ -186,7 +181,6 @@ export async function inquiryDetail(id: number) {
 		.leftJoin(customers, eq(customers.id, inquiries.customerId))
 		.leftJoin(offers, eq(offers.id, inquiries.offerId))
 		.leftJoin(creator, eq(creator.id, inquiries.createdBy))
-		.leftJoin(worker, eq(worker.id, inquiries.inProgressBy))
 		.where(eq(inquiries.id, id))
 		.get();
 	return row ?? null;
@@ -207,25 +201,19 @@ export async function setInquiryCustomer(id: number, customerId: number) {
 	await db.update(inquiries).set({ customerId, updatedAt: new Date() }).where(eq(inquiries.id, id));
 }
 
-/** In Arbeit nehmen (`userId`) bzw. zurück auf neu (`null`) */
-export async function setInquiryInProgress(id: number, userId: number | null) {
-	await db
-		.update(inquiries)
-		.set({ inProgressAt: userId ? new Date() : null, inProgressBy: userId, updatedAt: new Date() })
-		.where(eq(inquiries.id, id));
-}
-
 /** Von Hand ablegen bzw. wieder zu den offenen holen */
 export async function closeInquiry(id: number, closed: boolean) {
 	await db
 		.update(inquiries)
 		.set({ closedAt: closed ? new Date() : null, updatedAt: new Date() })
 		.where(eq(inquiries.id, id));
+	badgesChanged();
 }
 
 /** Das Angebot bleibt – es verliert nur den Verweis auf die Anfrage */
 export async function deleteInquiry(id: number) {
 	await db.delete(inquiries).where(eq(inquiries.id, id));
+	badgesChanged();
 }
 
 /**
@@ -253,7 +241,8 @@ export async function matchCustomer(email: string): Promise<number | null> {
 
 /**
  * Angebot aus der Anfrage: Kunde, BV (Betreff) und Ausführungsort gehen mit,
- * die Anfrage verweist danach auf das Angebot. Gibt die ID des Angebots zurück.
+ * die Anfrage verweist danach auf das Angebot und ist erledigt. Gibt die ID des
+ * Angebots zurück.
  */
 export async function offerFromInquiry(
 	user: SessionUser,
@@ -262,6 +251,10 @@ export async function offerFromInquiry(
 ): Promise<number> {
 	const contact = { name: inquiry.senderName, phone: inquiry.senderPhone, email: inquiry.senderEmail };
 	const id = await createOffer(user, { ...data, location: inquiry.location, contact });
-	await db.update(inquiries).set({ offerId: id, customerId: data.customerId ?? inquiry.customerId, updatedAt: new Date() }).where(eq(inquiries.id, inquiry.id));
+	await db
+		.update(inquiries)
+		.set({ offerId: id, customerId: data.customerId ?? inquiry.customerId, closedAt: inquiry.closedAt ?? new Date(), updatedAt: new Date() })
+		.where(eq(inquiries.id, inquiry.id));
+	badgesChanged();
 	return id;
 }

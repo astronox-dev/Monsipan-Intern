@@ -16,7 +16,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	};
 	const canCreate = can(user.role, 'tagesberichte.erstellen');
 	const [reports, places, number, orders] = await Promise.all([
-		listReports(user, filter),
+		// Geprüfte stehen nicht mehr in der Liste – man findet sie über den Auftrag (oder den Stand oben)
+		listReports(user, { ...filter, pendingOnly: true }),
 		recentPlaces(),
 		nextNumber(),
 		canCreate ? linkableOrders(user) : Promise.resolve([])

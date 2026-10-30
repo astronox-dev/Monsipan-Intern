@@ -1,7 +1,7 @@
 /**
- * Fuhrpark – das Rechnen: Entfernung zwischen Standorten, gefahrene Kilometer
- * und Standzeiten eines Tages, und ob ein Auto gerade fährt, steht oder sich
- * nicht meldet. Alles ohne Datenbank, damit es sich prüfen lässt.
+ * Fuhrpark – das Rechnen: Entfernung zwischen Standorten, gefahrene Kilometer,
+ * Fahrten und Standzeiten, feste Orte, und ob ein Auto gerade fährt, steht
+ * oder sich nicht meldet. Alles ohne Datenbank, damit es sich prüfen lässt.
  */
 import { viennaTime } from '$lib/weather';
 
@@ -38,8 +38,10 @@ const MAX_ACCURACY = 100;
 const MAX_SPEED = 70;
 /** Innerhalb dieses Umkreises gilt das Auto als stehend … */
 const STOP_RADIUS = 100;
-/** … und ab so lange ist es eine Standzeit */
-const STOP_MINUTES = 5;
+/** … und ab so lange ist es eine Standzeit – kürzer (Ampel, Tanken, kurz ausladen) gehört zur Fahrt */
+export const STOP_MINUTES = 10;
+/** Kürzer ist keine Fahrt, sondern Umparken */
+const MIN_TRIP_KM = 0.2;
 
 /** Genauer als das (m) muss ein Standort sein, damit er in den Verlauf kommt */
 export const GOOD_ACCURACY = 50;
@@ -122,7 +124,7 @@ export function kilometers(points: readonly TrackPoint[]): number {
 
 /**
  * Standzeiten: Folgen von Punkten im Umkreis von 100 m um den ersten, die
- * mindestens 5 Minuten umfassen. Weil das Tablet im Stehen kaum neue Punkte
+ * mindestens 10 Minuten umfassen. Weil das Tablet im Stehen kaum neue Punkte
  * schickt, reicht dafür auch eine Lücke zwischen zwei nahen Punkten.
  */
 export function stops(points: readonly TrackPoint[]): Stop[] {
@@ -148,12 +150,117 @@ export function stops(points: readonly TrackPoint[]): Stop[] {
 	return out;
 }
 
+export interface LatLon {
+	lat: number;
+	lon: number;
+}
+
+export interface Trip {
+	kind: 'fahrt';
+	from: number;
+	to: number;
+	start: LatLon;
+	end: LatLon;
+	km: number;
+	/** Höchste gemeldete Geschwindigkeit in m/s */
+	maxSpeed: number | null;
+}
+
+export type Segment = Trip | (Stop & { kind: 'stopp' });
+
+/**
+ * Den Verlauf in Fahrten und Standzeiten teilen – ohne Schnitt um Mitternacht:
+ * Was über den Tageswechsel geht, bleibt eine Fahrt bzw. eine Standzeit. Zwei
+ * Standzeiten ohne echte Fahrt dazwischen (nur umgeparkt) werden eine.
+ */
+export function segments(points: readonly TrackPoint[]): Segment[] {
+	if (!points.length) return [];
+	const out: Segment[] = [];
+	const trip = (from: number, to: number) => {
+		const part = points.filter((p) => p.at >= from && p.at <= to);
+		if (part.length < 2) return;
+		const km = kilometers(part);
+		if (km < MIN_TRIP_KM) return;
+		const speeds = part.map((p) => p.speed).filter((s): s is number => s != null && s <= MAX_SPEED);
+		const last = part[part.length - 1];
+		out.push({
+			kind: 'fahrt',
+			from,
+			to,
+			start: { lat: part[0].lat, lon: part[0].lon },
+			end: { lat: last.lat, lon: last.lon },
+			km,
+			maxSpeed: speeds.length ? Math.max(...speeds) : null
+		});
+	};
+	const stay = (s: Stop) => {
+		const prev = out[out.length - 1];
+		if (prev?.kind === 'stopp' && distance(prev, s) <= STOP_RADIUS * 2) {
+			const a = prev.minutes || 1;
+			const b = s.minutes || 1;
+			out[out.length - 1] = {
+				kind: 'stopp',
+				from: prev.from,
+				to: s.to,
+				lat: (prev.lat * a + s.lat * b) / (a + b),
+				lon: (prev.lon * a + s.lon * b) / (a + b),
+				minutes: Math.round((s.to - prev.from) / 60_000)
+			};
+		} else out.push({ kind: 'stopp', ...s });
+	};
+	let cursor = points[0].at;
+	for (const s of stops(points)) {
+		trip(cursor, s.from);
+		stay(s);
+		cursor = s.to;
+	}
+	trip(cursor, points[points.length - 1].at);
+	// Fahrten beginnen und enden am Ort der Standzeit daneben – so haben beide dieselbe Anschrift
+	return out.map((s, i) => {
+		if (s.kind !== 'fahrt') return s;
+		const before = out[i - 1];
+		const after = out[i + 1];
+		return {
+			...s,
+			start: before?.kind === 'stopp' ? { lat: before.lat, lon: before.lon } : s.start,
+			end: after?.kind === 'stopp' ? { lat: after.lat, lon: after.lon } : s.end
+		};
+	});
+}
+
+/** Was in den Zeitraum fällt – auch nur zum Teil (über Mitternacht) */
+export function overlapping<T extends { from: number; to: number }>(items: readonly T[], from: number, to: number): T[] {
+	return items.filter((s) => s.to >= from && s.from < to);
+}
+
+/** Ein fester Ort: Lager, Firma, Baustelle */
+export interface FleetPlace extends LatLon {
+	id: number;
+	name: string;
+	radius: number;
+}
+
+/** Der nächste feste Ort, in dessen Umkreis der Standort liegt */
+export function placeAt<P extends FleetPlace>(p: LatLon, places: readonly P[]): P | null {
+	let best: P | null = null;
+	let bestDistance = Infinity;
+	for (const place of places) {
+		const d = distance(p, place);
+		if (d <= place.radius && d < bestDistance) {
+			best = place;
+			bestDistance = d;
+		}
+	}
+	return best;
+}
+
 export type VehicleState = 'faehrt' | 'steht' | 'offline' | 'nie';
 
 /** Ein Auto auf der Karte */
 export interface MapVehicle {
 	id: number;
 	name: string;
+	kind: 'pkw' | 'transporter' | 'lkw';
 	lat: number;
 	lon: number;
 	state: VehicleState;

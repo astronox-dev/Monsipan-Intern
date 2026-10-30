@@ -8,12 +8,14 @@
  * eine Weile kein Netz hatte. Entkoppeln macht den Schlüssel ungültig.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { and, asc, eq, gte, isNotNull, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
+import { fullName } from '$lib/format';
 import { db } from '$lib/server/db';
 import { broadcast } from '$lib/server/events';
-import { parties, vehiclePositions, vehicles } from '$lib/server/db/schema';
+import { parties, users, VEHICLE_KINDS, vehicleDrivers, vehiclePositions, vehicles, type VehicleKind } from '$lib/server/db/schema';
 import { addDays } from '$lib/modules/stunden/week';
-import { GOOD_ACCURACY, viennaDayStart, type TrackPoint } from '../track';
+import { GOOD_ACCURACY, viennaDayStart, WALK_SPEED, type TrackPoint } from '../track';
+import { purgeOldAddresses } from './addresses';
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 /** Ohne Zeichen, die man verwechselt (0/O, 1/I/L) */
@@ -31,6 +33,10 @@ export async function listVehicles() {
 			id: vehicles.id,
 			name: vehicles.name,
 			plate: vehicles.plate,
+			kind: vehicles.kind,
+			driverId: vehicles.driverId,
+			driverFirst: users.firstName,
+			driverLast: users.lastName,
 			partyId: vehicles.partyId,
 			partyName: parties.name,
 			note: vehicles.note,
@@ -50,6 +56,7 @@ export async function listVehicles() {
 		})
 		.from(vehicles)
 		.leftJoin(parties, eq(parties.id, vehicles.partyId))
+		.leftJoin(users, eq(users.id, vehicles.driverId))
 		.orderBy(asc(vehicles.name))
 		.all();
 }
@@ -60,9 +67,21 @@ export async function getVehicle(id: number) {
 	return (await listVehicles()).find((v) => v.id === id) ?? null;
 }
 
+/** Zur Auswahl als Fahrer: alle aktiven Personen */
+export async function driverOptions() {
+	const rows = await db
+		.select({ id: users.id, firstName: users.firstName, lastName: users.lastName, username: users.username })
+		.from(users)
+		.where(and(eq(users.active, true), isNull(users.deletedAt)))
+		.all();
+	return rows.map((u) => ({ id: u.id, name: fullName(u) })).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+}
+
 export interface VehicleInput {
 	name: string;
 	plate: string;
+	kind: VehicleKind;
+	driverId: number | null;
 	partyId: number | null;
 	note: string;
 	active: boolean;
@@ -73,13 +92,23 @@ export function readVehicle(form: FormData): VehicleInput | { message: string } 
 	const name = s('name').slice(0, 80);
 	if (!name) return { message: 'Bitte einen Namen für das Fahrzeug eintragen.' };
 	const party = Number(form.get('partie'));
+	const driver = Number(form.get('fahrer'));
+	const kind = s('art') as VehicleKind;
 	return {
 		name,
 		plate: s('kennzeichen').toUpperCase().slice(0, 20),
+		kind: VEHICLE_KINDS.includes(kind) ? kind : 'transporter',
+		driverId: Number.isInteger(driver) && driver > 0 ? driver : null,
 		partyId: Number.isInteger(party) && party > 0 ? party : null,
 		note: s('notiz').slice(0, 500),
 		active: form.get('ausblenden') !== 'on'
 	};
+}
+
+/** Fahrerwechsel festhalten – mit Namen, damit das Fahrtenbuch stimmt, auch wenn das Konto später weg ist */
+async function logDriver(vehicleId: number, driverId: number | null, since = new Date()) {
+	const person = driverId ? await db.select().from(users).where(eq(users.id, driverId)).get() : null;
+	await db.insert(vehicleDrivers).values({ vehicleId, driverId, driverName: person ? fullName(person) : '', since });
 }
 
 export async function createVehicle(input: VehicleInput): Promise<number> {
@@ -88,14 +117,34 @@ export async function createVehicle(input: VehicleInput): Promise<number> {
 		.values({ ...input, updatedAt: new Date() })
 		.returning({ id: vehicles.id })
 		.get();
+	if (input.driverId) await logDriver(row.id, input.driverId);
 	return row.id;
 }
 
 export async function updateVehicle(id: number, input: VehicleInput) {
+	const before = await db.select({ driverId: vehicles.driverId }).from(vehicles).where(eq(vehicles.id, id)).get();
 	await db
 		.update(vehicles)
 		.set({ ...input, updatedAt: new Date() })
 		.where(eq(vehicles.id, id));
+	if (before && before.driverId !== input.driverId) await logDriver(id, input.driverId);
+}
+
+/** Wer wann gefahren ist – je Fahrzeug, die Wechsel in zeitlicher Folge */
+export async function driverHistory(): Promise<Map<number, { since: number; name: string }[]>> {
+	const rows = await db.select().from(vehicleDrivers).orderBy(asc(vehicleDrivers.since), asc(vehicleDrivers.id)).all();
+	const out = new Map<number, { since: number; name: string }[]>();
+	for (const r of rows) {
+		const list = out.get(r.vehicleId) ?? [];
+		list.push({ since: r.since.getTime(), name: r.driverName });
+		out.set(r.vehicleId, list);
+	}
+	return out;
+}
+
+/** Der Fahrer zu einem Zeitpunkt – vor dem ersten Eintrag niemand */
+export function driverAt(history: { since: number; name: string }[] | undefined, at: number): string {
+	return history?.findLast((h) => h.since <= at)?.name ?? '';
 }
 
 /** Löschen nimmt alle Standorte des Fahrzeugs mit */
@@ -230,6 +279,51 @@ export async function recordPositions(vehicle: { id: number; lastAt: Date | null
 	if (positions.length) broadcast('fahrzeuge', { id: vehicle.id });
 }
 
+/**
+ * Standorte eines Zeitraums, dazu der letzte davor und der erste danach: Wer
+ * das Wochenende am Lager steht, schickt keine Punkte – so hat die Standzeit
+ * trotzdem Anfang und Ende.
+ */
+export async function rangePoints(vehicleId: number, from: number, to: number): Promise<TrackPoint[]> {
+	const columns = { at: vehiclePositions.at, lat: vehiclePositions.lat, lon: vehiclePositions.lon, speed: vehiclePositions.speed, accuracy: vehiclePositions.accuracy };
+	const good = sql`(${vehiclePositions.accuracy} is null or ${vehiclePositions.accuracy} <= ${GOOD_ACCURACY})`;
+	const [before, rows, after] = await Promise.all([
+		db
+			.select(columns)
+			.from(vehiclePositions)
+			.where(and(eq(vehiclePositions.vehicleId, vehicleId), lt(vehiclePositions.at, new Date(from)), good))
+			.orderBy(desc(vehiclePositions.at))
+			.limit(1)
+			.get(),
+		db
+			.select(columns)
+			.from(vehiclePositions)
+			.where(and(eq(vehiclePositions.vehicleId, vehicleId), gte(vehiclePositions.at, new Date(from)), lt(vehiclePositions.at, new Date(to))))
+			.orderBy(asc(vehiclePositions.at))
+			.all(),
+		db
+			.select(columns)
+			.from(vehiclePositions)
+			.where(and(eq(vehiclePositions.vehicleId, vehicleId), gte(vehiclePositions.at, new Date(to)), good))
+			.orderBy(asc(vehiclePositions.at))
+			.limit(1)
+			.get()
+	]);
+	return [...(before ? [before] : []), ...rows, ...(after ? [after] : [])].map((r) => ({ ...r, at: r.at.getTime() }));
+}
+
+/** Seit wann ein Auto steht: die letzte Bewegung – im Stehen ist das nur eine Handvoll Punkte zurück */
+export async function parkedSince(vehicleId: number): Promise<number | null> {
+	const row = await db
+		.select({ at: vehiclePositions.at })
+		.from(vehiclePositions)
+		.where(and(eq(vehiclePositions.vehicleId, vehicleId), gt(vehiclePositions.speed, WALK_SPEED)))
+		.orderBy(desc(vehiclePositions.at))
+		.limit(1)
+		.get();
+	return row?.at.getTime() ?? null;
+}
+
 /** Die Standorte eines Tages (Wiener Zeit), in zeitlicher Folge */
 export async function dayPoints(vehicleId: number, date: string): Promise<TrackPoint[]> {
 	const from = viennaDayStart(date);
@@ -250,5 +344,6 @@ export async function purgeOldPositions(now = new Date()): Promise<number> {
 		.update(vehicles)
 		.set({ pairCodeHash: null, pairCodeExpires: null })
 		.where(and(isNotNull(vehicles.pairCodeExpires), lte(vehicles.pairCodeExpires, now)));
+	await purgeOldAddresses(now);
 	return res.rowsAffected;
 }

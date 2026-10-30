@@ -26,8 +26,6 @@
 	let resultOpen = $state(false);
 	let result = $state<LookupResult | null>(null);
 
-	const showAlerts = $derived(can(data.user.role, 'lager.warnungen.sehen'));
-
 	/**
 	 * Neue Benachrichtigung, während die App offen ist: kurz einblenden. Die
 	 * zuletzt gezeigte merken wir uns, damit ein Neuladen nichts doppelt meldet.
@@ -68,6 +66,8 @@
 				clearTimeout(timer);
 				timer = setTimeout(() => invalidate('app:stock'), 250);
 			});
+			// Zahlen im Menü: Anfragen oder Tagesberichte haben sich geändert
+			es.addEventListener('badges', () => invalidate('app:badges'));
 			// Fahrzeuge: neuer Standort – offene Karten neu laden, höchstens alle 3 Sekunden
 			let fleetAt = 0;
 			es.addEventListener('fahrzeuge', () => {
@@ -103,7 +103,7 @@
 
 <NavProgress />
 
-<div class="print:hidden"><Sidebar user={data.user} lowStockCount={data.lowStockCount} theme={data.theme} /></div>
+<div class="print:hidden"><Sidebar user={data.user} badges={data.badges} theme={data.theme} /></div>
 
 <div class="min-h-dvh lg:pl-64 print:pl-0">
 	<div class="contents print:hidden"><TopBar unread={data.notifications.unread} role={data.user.role} onscan={() => scanner.openCamera()} /></div>
@@ -125,9 +125,9 @@
 </div>
 
 <div class="print:hidden">
-	<BottomNav role={data.user.role} onscan={() => scanner.openCamera()} onmore={() => (moreOpen = true)} moreBadge={showAlerts ? data.lowStockCount : 0} />
+	<BottomNav role={data.user.role} onscan={() => scanner.openCamera()} onmore={() => (moreOpen = true)} badges={data.badges} />
 </div>
-<MoreSheet bind:open={moreOpen} user={data.user} lowStockCount={data.lowStockCount} theme={data.theme} />
+<MoreSheet bind:open={moreOpen} user={data.user} badges={data.badges} theme={data.theme} />
 
 <ScanResultDialog
 	bind:open={resultOpen}

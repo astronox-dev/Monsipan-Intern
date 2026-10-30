@@ -3,26 +3,33 @@
 	import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import ScanBarcode from '@lucide/svelte/icons/scan-barcode';
-	import { bottomTabs, isActive, type NavItem } from '$lib/nav';
+	import { allNavItems, badgeCount, bottomTabs, isActive, NAV_BADGES, type NavBadges, type NavItem } from '$lib/nav';
 	import { can, type Role } from '$lib/permissions';
 
 	interface Props {
 		role: Role;
 		onscan: () => void;
 		onmore: () => void;
-		moreBadge?: number;
+		badges: NavBadges;
 	}
-	let { role, onscan, onmore, moreBadge = 0 }: Props = $props();
+	let { role, onscan, onmore, badges }: Props = $props();
 
 	const home: NavItem = { href: '/', label: 'Übersicht', icon: LayoutDashboard };
 	/** Zwei Reiter je nach Rolle – Büro: Aufträge und Planung, Partie: Berichte und Stunden */
 	const tabs = $derived(bottomTabs(role));
 	/** Scannen sucht Artikel im Lager – nur, wer den Bestand sehen darf */
 	const canScan = $derived(can(role, 'lager.bestand.sehen'));
+	/** Punkt an „Mehr": eine Zahl steht an einem Eintrag, der nicht schon als Reiter da ist */
+	const moreBadge = $derived(
+		allNavItems(role)
+			.filter((i) => !tabs.some((t) => t.href === i.href))
+			.some((i) => badgeCount(i, badges) > 0)
+	);
 </script>
 
 {#snippet tab(t: NavItem)}
 	{@const active = isActive(t.href, page.url.pathname)}
+	{@const count = badgeCount(t, badges)}
 	<a
 		href={t.href}
 		aria-current={active ? 'page' : undefined}
@@ -31,8 +38,14 @@
 			: 'text-ink-3'}"
 	>
 		{#if active}<span class="absolute top-0 h-[3px] w-7 rounded-b-[2px] bg-mark" aria-hidden="true"></span>{/if}
-		<span class="grid h-7 w-12 place-items-center">
+		<span class="relative grid h-7 w-12 place-items-center">
 			<t.icon size={21} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
+			{#if t.badge && count > 0}
+				<span
+					class="badge {NAV_BADGES[t.badge].tone} num absolute -top-1 right-0 h-4 min-w-4 justify-center px-1 text-[0.625rem]"
+					aria-label={NAV_BADGES[t.badge].label(count)}>{count}</span
+				>
+			{/if}
 		</span>
 		{t.label}
 	</a>
@@ -60,7 +73,7 @@
 		<button class="relative flex flex-1 flex-col items-center justify-center gap-0.5 pt-1.5 text-[0.6875rem] font-medium text-ink-3" onclick={onmore}>
 			<span class="grid h-7 w-12 place-items-center rounded-full"><Ellipsis size={21} aria-hidden="true" /></span>
 			Mehr
-			{#if moreBadge > 0}
+			{#if moreBadge}
 				<span class="absolute top-1.5 right-[calc(50%-1.25rem)] size-2.5 rounded-full bg-warn ring-2 ring-surface" aria-label="Hinweise vorhanden"></span>
 			{/if}
 		</button>

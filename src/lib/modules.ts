@@ -44,12 +44,23 @@ import Database from '@lucide/svelte/icons/database';
 import type { Component } from 'svelte';
 import { can, type Permission, type Role } from './permissions';
 
+/** Zahlen neben Menüeinträgen – was noch zu tun ist */
+export type NavBadge = 'lowStock' | 'anfragen' | 'tagesberichte';
+export type NavBadges = Partial<Record<NavBadge, number>>;
+
+/** Wie die Zahl aussieht und was sie vorliest */
+export const NAV_BADGES: Record<NavBadge, { tone: string; label: (n: number) => string }> = {
+	lowStock: { tone: 'badge-warn', label: (n) => `${n} Artikel nachbestellen` },
+	anfragen: { tone: 'badge-info', label: (n) => (n === 1 ? '1 offene Anfrage' : `${n} offene Anfragen`) },
+	tagesberichte: { tone: 'badge-warn', label: (n) => (n === 1 ? '1 Tagesbericht zu prüfen' : `${n} Tagesberichte zu prüfen`) }
+};
+
 export interface NavItem {
 	href: string;
 	label: string;
 	icon: Component;
 	permission?: Permission;
-	badge?: 'lowStock';
+	badge?: NavBadge;
 	/** Eine Zeile für die Karte auf der Übersicht – wenn der Eintrag dort eine eigene Karte hat */
 	hint?: string;
 }
@@ -83,12 +94,13 @@ export const MODULES: AppModule[] = [
 		href: '/auftraege',
 		group: 'betrieb',
 		status: 'aktiv',
-		hint: 'Anfragen, Angebote, Aufträge, Rechnungen und Kunden',
+		hint: 'Anfragen, Angebote, Aufträge, Tagesberichte, Rechnungen und Kunden',
 		cardsPerItem: true,
 		items: [
-			{ href: '/anfragen', label: 'Anfragen', icon: Inbox, permission: 'anfragen.sehen', hint: 'E-Mails, aus denen Angebote werden' },
+			{ href: '/anfragen', label: 'Anfragen', icon: Inbox, permission: 'anfragen.sehen', badge: 'anfragen', hint: 'E-Mails, aus denen Angebote werden' },
 			{ href: '/angebote', label: 'Angebote', icon: FilePen, permission: 'angebote.sehen', hint: 'Mit Preisen, Link zum Annehmen' },
 			{ href: '/auftraege', label: 'Aufträge', icon: HardHat, permission: 'auftraege.sehen', hint: 'Arbeiten je Partie' },
+			{ href: '/tagesberichte', label: 'Tagesberichte', icon: NotebookPen, permission: 'tagesberichte.sehen', badge: 'tagesberichte', hint: 'Leistung je Tag und Baustelle' },
 			{ href: '/rechnungen', label: 'Rechnungen', icon: ReceiptText, permission: 'rechnungen.sehen', hint: 'Offen und bezahlt' },
 			{ href: '/kunden', label: 'Kunden', icon: Building, permission: 'kunden.sehen', hint: 'Anschriften für Angebote' }
 		]
@@ -107,7 +119,7 @@ export const MODULES: AppModule[] = [
 			{ href: '/urlaub', label: 'Urlaub', icon: TreePalm, permission: 'urlaub.eigene.sehen', hint: 'Beantragen und genehmigen' },
 			{ href: '/krankenstand', label: 'Krankenstand', icon: Thermometer, permission: 'krankenstand.eigene.sehen', hint: 'Melden, mit Krankmeldung' },
 			{ href: '/urlaubskonten', label: 'Urlaubskonten', icon: PiggyBank, permission: 'urlaub.konten.bearbeiten', hint: 'An- und Abmeldung, Resturlaub' },
-			{ href: '/fahrzeuge', label: 'Fahrzeuge', icon: Truck, permission: 'fahrzeuge.sehen', hint: 'Wo die Autos sind, Fahrten je Tag' }
+			{ href: '/fahrzeuge', label: 'Fahrzeuge', icon: Truck, permission: 'fahrzeuge.sehen', hint: 'Live-Karte, Fahrtenbuch und Statistik' }
 		]
 	},
 	{ key: 'partien', label: 'Partien', icon: Users, href: '/partien', group: 'betrieb', status: 'geplant', items: [] },
@@ -118,11 +130,10 @@ export const MODULES: AppModule[] = [
 		href: '/stundenzettel',
 		group: 'betrieb',
 		status: 'aktiv',
-		hint: 'Stundenzettel, Tagesberichte und Kostenstellen',
+		hint: 'Stundenzettel und Kostenstellen',
 		cardsPerItem: true,
 		items: [
 			{ href: '/stundenzettel', label: 'Stundenzettel', icon: Clock, permission: 'stunden.eigene.sehen', hint: 'Lohnwoche je Mitarbeiter' },
-			{ href: '/tagesberichte', label: 'Tagesberichte', icon: NotebookPen, permission: 'tagesberichte.sehen', hint: 'Leistung je Tag und Baustelle' },
 			{ href: '/kostenstellen', label: 'Kostenstellen', icon: Tags, permission: 'stunden.alle.sehen', hint: 'Stunden je Kostenstelle, alle Partien' }
 		]
 	},

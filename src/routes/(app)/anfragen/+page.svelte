@@ -14,7 +14,7 @@
 	import Dialog from '$lib/components/Dialog.svelte';
 	import { date as dateLabel } from '$lib/format';
 	import { guessFromEmail, MAX_INQUIRY_TEXT } from '$lib/modules/auftraege/inquiry';
-	import { OFFER_STATUS_LABELS, spacedNumber } from '$lib/modules/auftraege/offer';
+	import { spacedNumber } from '$lib/modules/auftraege/offer';
 
 	let { data, form } = $props();
 
@@ -37,17 +37,10 @@
 	}
 
 	function stateOf(i: (typeof data.inquiries)[number]): { label: string; tone: string } {
-		if (i.offerStatus === 'angenommen') return { label: 'Angenommen', tone: 'badge-ok' };
-		if (i.closedAt) return { label: 'Abgelegt', tone: '' };
-		if (i.offerId) return OFFER_STATUS_LABELS[i.offerStatus ?? 'entwurf'] ?? OFFER_STATUS_LABELS.entwurf;
-		// Noch ohne Angebot, aber jemand ist dran – heißt wie ein Angebot im Entwurf
-		if (i.inProgressAt) return OFFER_STATUS_LABELS.entwurf;
-		return { label: 'Neu', tone: 'badge-info' };
+		return i.closedAt ? { label: 'Erledigt', tone: 'badge-ok' } : { label: 'Offen', tone: 'badge-info' };
 	}
 	const TABS = $derived([
 		{ key: 'offen', label: 'Offen', count: data.counts.open },
-		{ key: 'neu', label: 'Neu', count: data.counts.neu },
-		{ key: 'inarbeit', label: 'In Arbeit', count: data.counts.working },
 		{ key: 'erledigt', label: 'Erledigt', count: data.counts.done }
 	]);
 </script>
@@ -57,7 +50,7 @@
 <div class="flex flex-wrap items-end justify-between gap-3 pt-2 pb-5">
 	<div>
 		<h1 class="flex items-center gap-2 text-[2rem] leading-tight"><Inbox size={26} aria-hidden="true" />Anfragen</h1>
-		<p class="text-ink-2">E-Mail hineinkopieren oder über das Kontaktformular der Webseite – daraus das Angebot schreiben; ist es angenommen, ist die Anfrage erledigt.</p>
+		<p class="text-ink-2">E-Mail hineinkopieren oder über das Kontaktformular der Webseite – daraus das Angebot schreiben; damit ist die Anfrage erledigt.</p>
 	</div>
 	{#if data.canCreate}
 		<button class="btn btn-primary" onclick={openNew}><Plus size={18} aria-hidden="true" />Neue Anfrage</button>
@@ -109,8 +102,9 @@
 				<p class="font-medium">
 					{data.filter.q
 						? 'Keine Anfrage gefunden'
-						: ({ erledigt: 'Noch nichts erledigt', neu: 'Keine neuen Anfragen', inarbeit: 'Gerade ist keine Anfrage in Arbeit' } as Record<string, string>)[data.filter.state] ??
-							'Keine offenen Anfragen'}
+						: data.filter.state === 'erledigt'
+							? 'Noch nichts erledigt'
+							: 'Keine offenen Anfragen'}
 				</p>
 				{#if data.canCreate && data.filter.state === 'offen' && !data.filter.q}
 					<p class="mt-1 text-sm text-ink-3">Mit „Neue Anfrage" eine E-Mail einfügen.</p>

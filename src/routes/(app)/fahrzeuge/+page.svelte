@@ -2,7 +2,8 @@
 	/**
 	 * Fahrzeuge: Wo die Autos gerade sind – Karte und Liste, live: Jeder neue
 	 * Standort kommt über die Ereignis-Leitung (siehe Layout), dazu alle 30
-	 * Sekunden neu für „seit …". Wer verwalten darf, legt Fahrzeuge an und
+	 * Sekunden neu für „seit …". Feste Orte stehen auf der Karte; ist ein Auto
+	 * dort, steht es in der Liste. Wer verwalten darf, legt Fahrzeuge an und
 	 * koppelt die Tablets.
 	 */
 	import { pageTitle } from '$lib/app';
@@ -18,8 +19,12 @@
 	import BatteryCharging from '@lucide/svelte/icons/battery-charging';
 	import Battery from '@lucide/svelte/icons/battery';
 	import Download from '@lucide/svelte/icons/download';
+	import Warehouse from '@lucide/svelte/icons/warehouse';
+	import UserRound from '@lucide/svelte/icons/user-round';
 	import Dialog from '$lib/components/Dialog.svelte';
+	import FleetTabs from '$lib/modules/fuhrpark/components/FleetTabs.svelte';
 	import VehicleMap from '$lib/modules/fuhrpark/components/VehicleMap.svelte';
+	import { KIND_OPTIONS, kindOf } from '$lib/modules/fuhrpark/kinds';
 	import type { MapVehicle, VehicleState } from '$lib/modules/fuhrpark/track';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -49,9 +54,13 @@
 		offline: { label: 'Keine Meldung', tone: 'badge-warn' },
 		nie: { label: 'Noch keine Daten', tone: '' }
 	};
+	const span = (min: number) => (min < 60 ? `${min} Min.` : min < 48 * 60 ? `${Math.floor(min / 60)} Std. ${String(min % 60).padStart(2, '0')} Min.` : `${Math.floor(min / 1440)} Tagen`);
+	/** „seit 09:53 (für 2 Std. 48 Min.)" – bei mehr als einem Tag mit Datum */
+	const parkedText = (since: number) => `Steht seit ${data.now - since < 86_400_000 ? clock.format(since) : dayClock.format(since)} (${span(Math.max(0, Math.round((data.now - since) / 60_000)))})`;
 	function detail(v: Vehicle): string {
 		if (!v.paired && v.state === 'nie') return 'Kein Tablet gekoppelt';
 		if (v.state === 'faehrt') return `${Math.round((v.lastSpeed ?? 0) * 3.6)} km/h · ${ago(v.lastAt!)}`;
+		if (v.state === 'steht' && v.parkedSince) return parkedText(v.parkedSince);
 		if (v.state === 'steht') return v.lastAt ? `hier ${ago(v.lastAt)}` : 'meldet sich, noch ohne Standort';
 		if (v.state === 'offline') return `zuletzt ${ago(Math.max(v.lastSeenAt ?? 0, v.lastAt ?? 0))}`;
 		return 'Gekoppelt, wartet auf den ersten Standort';
@@ -60,7 +69,18 @@
 	const onMap = $derived(
 		data.vehicles
 			.filter((v) => v.active && v.lastLat != null && v.lastLon != null)
-			.map((v): MapVehicle => ({ id: v.id, name: v.name, lat: v.lastLat!, lon: v.lastLon!, state: v.state, heading: v.lastHeading, href: `/fahrzeuge/${v.id}` }))
+			.map(
+				(v): MapVehicle => ({
+					id: v.id,
+					name: v.driverName ? `${v.name} – ${v.driverName}` : v.name,
+					kind: v.kind,
+					lat: v.lastLat!,
+					lon: v.lastLon!,
+					state: v.state,
+					heading: v.lastHeading,
+					href: `/fahrzeuge/${v.id}`
+				})
+			)
 	);
 	let focus = $state<number | null>(null);
 
@@ -105,6 +125,8 @@
 	{/if}
 </div>
 
+<FleetTabs />
+
 {#if !data.vehicles.length}
 	<div class="card p-8 text-center">
 		<p class="font-medium">Noch kein Fahrzeug</p>
@@ -114,13 +136,15 @@
 	</div>
 {:else}
 	<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-		<VehicleMap vehicles={onMap} {focus} onrelease={() => (focus = null)} class="h-[55vh] lg:h-[calc(100dvh-12rem)]" />
+		<VehicleMap vehicles={onMap} places={data.places} {focus} onrelease={() => (focus = null)} class="h-[55vh] lg:h-[calc(100dvh-15rem)]" />
 
 		<ul class="card divide-y divide-line self-start overflow-hidden" aria-label="Fahrzeuge">
 			{#each data.vehicles as v (v.id)}
 				{@const st = STATE[v.state]}
+				{@const kind = kindOf(v.kind)}
 				<li class="p-3 {v.active ? '' : 'opacity-60'}">
 					<div class="flex items-start gap-2">
+						<span class="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-surface-3 text-ink-2" title={kind.label}><kind.icon size={19} aria-hidden="true" /></span>
 						<button
 							type="button"
 							class="min-w-0 flex-1 text-left"
@@ -133,6 +157,14 @@
 						</button>
 						<span class="badge {st.tone}">{v.active ? st.label : 'Ausgeblendet'}</span>
 					</div>
+					{#if v.driverName}
+						<p class="mt-1 flex items-center gap-1.5 text-[0.8125rem] text-ink-2"><UserRound size={14} class="shrink-0 text-ink-3" aria-hidden="true" /><span class="truncate">{v.driverName}</span></p>
+					{/if}
+					{#if v.place}
+						<p class="mt-1 flex items-center gap-1.5 text-[0.8125rem] font-semibold text-info"><Warehouse size={14} class="shrink-0" aria-hidden="true" /><span class="truncate">{v.place}</span></p>
+					{:else if v.address}
+						<p class="mt-1 truncate text-[0.8125rem] text-ink-2">{v.address}</p>
+					{/if}
 					<p class="mt-1 flex items-center gap-2 text-[0.8125rem] text-ink-2">
 						<span class="min-w-0 flex-1 truncate">{detail(v)}</span>
 						{#if v.battery != null}
@@ -169,7 +201,7 @@
 
 <p class="field-hint mt-4">
 	Die Tablets senden rund um die Uhr; jeder Standort bleibt 90 Tage gespeichert, dann wird er gelöscht. Die Fahrer sehen am Tablet dauerhaft, dass der Standort
-	geteilt wird.
+	geteilt wird. Anschriften kommen von OpenStreetMap.
 </p>
 
 {#if data.canManage}
@@ -186,6 +218,19 @@
 					<label class="block">
 						<span class="field-label">Kennzeichen</span>
 						<input class="input" name="kennzeichen" maxlength="20" value={editing?.plate ?? ''} />
+					</label>
+					<label class="block">
+						<span class="field-label">Art</span>
+						<select class="select" name="art" value={editing?.kind ?? 'transporter'}>
+							{#each KIND_OPTIONS as k (k.value)}<option value={k.value}>{k.label}</option>{/each}
+						</select>
+					</label>
+					<label class="block">
+						<span class="field-label">Fahrer</span>
+						<select class="select" name="fahrer" value={editing?.driverId ? String(editing.driverId) : ''}>
+							<option value="">–</option>
+							{#each data.drivers as d (d.id)}<option value={String(d.id)}>{d.name}</option>{/each}
+						</select>
 					</label>
 					<label class="block">
 						<span class="field-label">Partie</span>

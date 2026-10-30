@@ -21,6 +21,7 @@ import {
 	setCrew,
 	setPartyOrder,
 	setNoteDone,
+	unplanOrder,
 	updateEntry,
 	updateNote
 } from '$lib/modules/planung/server/plan';
@@ -101,6 +102,15 @@ export const actions: Actions = {
 		const result = await moveEntry(id(form), { date, partyId, beforeId: Number.isInteger(before) && before > 0 ? before : null });
 		if ('message' in result) return fail(400, result);
 		return { moved: true, assigned: await assign(user, { orderId: result.orderId, partyId }) };
+	},
+
+	/** Eintrag auf „Nicht zugeteilte Aufträge" gezogen: der Auftrag verliert seine Partie */
+	unplan: async ({ request, locals }) => {
+		const user = requirePermission(locals, 'planung.bearbeiten');
+		const result = await unplanOrder(id(await request.formData()), today());
+		if ('message' in result) return fail(400, result);
+		await syncWorkOrderPlan(result.orderId, user.id);
+		return { unplanned: result.number };
 	},
 
 	/** Reihenfolge der Spalten – `partie` mehrfach, in der neuen Reihenfolge */

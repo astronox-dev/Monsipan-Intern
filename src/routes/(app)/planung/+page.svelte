@@ -63,7 +63,7 @@
 	const dayName = (day: string) => `${DAY[data.days.indexOf(day)] ?? ''} ${short(day)}`;
 
 	/* ------------------------------------------------ Ziehen und Ablegen */
-	type EntryDrag = { id: number; partyId: number; date: string };
+	type EntryDrag = { id: number; partyId: number; date: string; orderId: number | null; number: string | null };
 	type PersonDrag = { userId: number; name: string; weekParty: number; day?: string };
 	type OrderDrag = { id: number; number: string };
 
@@ -104,6 +104,16 @@
 			if (m.day === day && m.weekParty === partyId) return;
 			post('crew', { person: m.userId, partie: partyId, tag: day }, `${m.name}: ${dayName(day)} bei ${nameOfParty(partyId)}`);
 		}
+	};
+
+	/** Auf „Nicht zugeteilte Aufträge": der Auftrag verliert seine Partie und geht aus der Planung */
+	const dropOnUnassigned = (item: DragItem) => {
+		const e = item.data as EntryDrag;
+		if (!e.orderId) {
+			toast.error('Nur Einträge mit Auftrag lassen sich zurücklegen', 'Einen Eintrag ohne Auftrag im Dialog löschen.');
+			return;
+		}
+		post('unplan', { id: e.id }, `Auftrag ${spacedNumber(e.number ?? '')} ist wieder ohne Partie`);
 	};
 
 	/** In den Spaltenkopf: eine Person für die ganze Woche – oder eine Spalte an diese Stelle */
@@ -269,7 +279,7 @@
 			data-entry={e.id}
 			onclick={() => openEdit(e)}
 			title="Ändern – oder auf ein anderes Feld ziehen"
-			use:draggable={{ kind: 'entry', data: { id: e.id, partyId: e.partyId, date: e.date } satisfies EntryDrag }}
+			use:draggable={{ kind: 'entry', data: { id: e.id, partyId: e.partyId, date: e.date, orderId: e.orderId, number: e.orderNumber } satisfies EntryDrag }}
 		>
 			<span class="block font-medium">{main}</span>
 			{#if e.orderId}<span class="num block text-[0.6875rem] text-ink-3">{spacedNumber(e.orderNumber ?? '')}{e.text ? ` · ${e.text}` : ''}</span>{/if}
@@ -481,11 +491,15 @@
 {/if}
 
 {#if data.all}
-	<section class="card mt-5 p-4 lg:p-5" aria-labelledby="h-unassigned">
+	<section
+		class="card mt-5 p-4 lg:p-5"
+		aria-labelledby="h-unassigned"
+		use:dropzone={{ accepts: ['entry'], onDrop: dropOnUnassigned, disabled: !data.canEdit }}
+	>
 		<h2 id="h-unassigned" class="flex items-center gap-2 text-lg"><HardHat size={20} aria-hidden="true" />Nicht zugeteilte Aufträge</h2>
 		<p class="mt-1 text-sm text-ink-2">
 			Offene Aufträge ohne Partie.{data.canEdit
-				? ' Zum Einplanen am Griff in ein Feld der Wochenplanung ziehen (Partie und Tag) oder „Einplanen“ – die Partie bekommt den Auftrag dann zugeteilt.'
+				? ' Zum Einplanen am Griff in ein Feld der Wochenplanung ziehen (Partie und Tag) oder „Einplanen“ – die Partie bekommt den Auftrag dann zugeteilt. Ein eingeplanter Auftrag lässt sich hierher zurückziehen: Er verliert die Partie, seine Tage ab heute gehen aus der Planung.'
 				: ''} Die Partien sehen diese Liste nicht.
 		</p>
 		{#if data.unassigned.length}

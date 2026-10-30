@@ -14,7 +14,7 @@ const config = {
 				'script-src': ['self', 'wasm-unsafe-eval'],
 				'style-src': ['self', 'unsafe-inline'],
 				// Kartenkacheln für die Fahrzeuge: basemap.at (amtliche Grundkarte Österreichs)
-				'img-src': ['self', 'data:', 'blob:', 'https://mapsneu.wien.gv.at'],
+				'img-src': ['self', 'data:', 'blob:', 'https://mapsneu.wien.gv.at', 'https://tile.openstreetmap.org'],
 				'font-src': ['self'],
 				'connect-src': ['self'],
 				'media-src': ['self', 'blob:'],

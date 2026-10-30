@@ -178,7 +178,7 @@ export const load: PageServerLoad = async ({ depends, locals }) => {
 		href: '/angebote?status=angenommen',
 		tone: 'warn'
 	});
-	add(has('anfragen.bearbeiten') || has('angebote.erstellen'), auftrag?.inquiries?.fresh, { key: 'anfragen', label: 'Anfragen ohne Angebot', href: '/anfragen', tone: 'info' });
+	add(has('anfragen.bearbeiten') || has('angebote.erstellen'), auftrag?.inquiries?.open, { key: 'anfragen', label: 'Anfragen ohne Angebot', href: '/anfragen', tone: 'info' });
 	add(has('tagesberichte.pruefen'), doku?.reports?.freigegeben, { key: 'tb-pruefen', label: 'Tagesberichte zu prüfen', href: '/tagesberichte?stand=freigegeben', tone: 'warn' });
 	add(has('tagesberichte.freigeben') && !has('tagesberichte.pruefen'), doku?.reports?.entwurf, {
 		key: 'tb-offen',

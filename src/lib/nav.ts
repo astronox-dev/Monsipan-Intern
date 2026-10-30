@@ -3,10 +3,16 @@
  * Welche Bereiche es gibt, steht in modules.ts – hier steht nur, wie sie je
  * nach Rolle gefiltert werden.
  */
-import { MODULES, type AppModule, type NavItem } from './modules';
+import { MODULES, type AppModule, type NavBadges, type NavItem } from './modules';
 import { can, type Role } from './permissions';
 
-export type { NavItem, AppModule };
+export type { NavItem, AppModule, NavBadges };
+export { NAV_BADGES } from './modules';
+
+/** Die Zahl zu einem Eintrag – 0, wenn er keine hat */
+export function badgeCount(item: NavItem, badges: NavBadges): number {
+	return item.badge ? (badges[item.badge] ?? 0) : 0;
+}
 
 export function visible(items: NavItem[], role: Role): NavItem[] {
 	return items.filter((i) => !i.permission || can(role, i.permission));

@@ -6,12 +6,12 @@ Oberfläche, auf dem Handy wie am PC. Die übrigen Bereiche kommen nach und nach
 | Bereich | Stand |
 |---|---|
 | Übersicht | fertig – „Zu erledigen“ und Kennzahlen aus allen Bereichen, je nach Berechtigung |
-| Auftragsmanagement | fertig – Anfragen, Angebote mit Kundenlink, Aufträge (Partie freiwillig), Summenblatt, Rechnungen (archiviert, PAdES-signiert, mit Prüfcode), Kunden |
+| Auftragsmanagement | fertig – Anfragen, Angebote mit Kundenlink, Aufträge (Partie freiwillig), Tagesberichte, Summenblatt, Rechnungen (archiviert, PAdES-signiert, mit Prüfcode), Kunden |
 | Dokumentation: Stundenzettel | fertig – Lohnwoche je Mitarbeiter, Freigabe und Prüfung |
-| Dokumentation: Tagesberichte | fertig – Leistung je Tag und Baustelle, Freigabe, Prüfung, Unterschrift des Kunden |
+| Auftragsmanagement: Tagesberichte | fertig – Leistung je Tag und Baustelle, Freigabe, Prüfung, Unterschrift des Kunden |
 | Tools und Hilfestellung: Rechner | fertig – Parkordnung und Schutzwege einteilen, mit Zeichnung |
 | Tools und Hilfestellung: Richtlinien & Vorschriften | fertig – PDFs in Ordnern wie in einem Dateibrowser, für alle zum Nachlesen |
-| Planung | fertig – Wochenplanung je Partie und Tag mit Notizliste, Urlaubsanträge, Krankenstand mit Krankmeldung |
+| Planung | fertig – Wochenplanung je Partie und Tag mit Notizliste, Urlaubsanträge, Krankenstand mit Krankmeldung, Fahrzeuge mit Live-Karte, festen Orten, Fahrtenbuch und Statistik |
 | Lagermanagement | fertig – Bestand, Buchen, Inventur, Bewegungen, Bestellliste, Berichte, Artikel |
 | Benutzer | fertig – Zugänge, Gruppen, Berechtigungen |
 | Administration | fertig – Stammdaten, Benachrichtigungen (Glocke, Push, Info-Mail), Import und Export, Einstellungen, Sicherungen |
@@ -328,7 +328,10 @@ liegen als Linienzug vor und bleiben in jeder Größe scharf.
 ## Tagesberichte
 
 Die **Liste** ist nach Tagen gegliedert, neueste zuerst: je Tag ein Block mit Überschrift
-(„Dienstag, 20.10.2026“, dazu „Heute“ bzw. „Gestern“ und die Anzahl), darin die Berichte.
+(„Dienstag, 20.10.2026“, dazu „Heute“ bzw. „Gestern“ und die Anzahl), darin die Berichte. Sie
+zeigt, was noch zu tun ist: Geprüfte Berichte stehen nicht mehr darin, man findet sie über den
+Auftrag oder den Filter **Stand**. Wer prüfen darf, sieht im Menü neben **Tagesberichte**, wie
+viele freigegeben sind.
 
 Ein Bericht je Tag und Baustelle, wie der Block im Auto: Nummer, Datum, Bundesstraße,
 Baustelle und Kostenstelle im Kopf, darunter beliebig viele LB-Positionen mit Einheit
@@ -440,6 +443,8 @@ kurz halten, dann ziehen):
 - **Spalten umordnen:** am Griff ⋮⋮ neben dem Namen der Partie ziehen (oder mit den Pfeiltasten).
   Die Reihenfolge gilt für alle und auch im PDF und Ausdruck; neue Partien stehen alphabetisch
   dahinter.
+- **Auftrag zurückziehen:** einen eingeplanten Auftrag auf **Nicht zugeteilte Aufträge** ziehen –
+  er verliert die Partie, seine Tage ab heute gehen aus der Planung; was schon war, bleibt stehen.
 - **Einträge verschieben:** einen Eintrag auf ein anderes Feld ziehen – anderer Tag, andere
   Partie oder auf einen anderen Eintrag, dann landet er davor. Ein nicht zugeteilter Auftrag
   geht dabei wie beim Eintragen an die Partie.
@@ -571,12 +576,29 @@ Lebenszeichen mit Akkustand und ob das Tablet lädt (= Zündung an). Ohne Netz s
 und schickt später nach.
 
 - **Fahrzeuge** (`/fahrzeuge`, unter Planung – Recht „Fahrzeuge sehen", von Haus aus Admin,
-  Geschäftsführung, Bauleitung): Karte (Grundkarte [basemap.at](https://basemap.at)) und Liste mit
-  **Fährt** (Geschwindigkeit), **Steht** (seit wann) oder **Keine Meldung**; alle 30 Sekunden neu.
-- **Fahrten** je Fahrzeug und Tag: Strecke auf der Karte, gefahrene Kilometer, erster und letzter
-  Standort, **Standzeiten** ab 5 Minuten (Umkreis 100 m).
+  Geschäftsführung, Bauleitung): Karte (Österreich von [basemap.at](https://basemap.at), die
+  Nachbarländer von [OpenStreetMap](https://www.openstreetmap.org)) und Liste mit
+  Symbol (PKW, Transporter, LKW), Fahrer und **Fährt** (Geschwindigkeit), **Steht** (seit wann,
+  mit Ort oder Anschrift) oder **Keine Meldung**; alle 30 Sekunden neu.
+- **Feste Orte** (`/fahrzeuge/orte`): Lager, Firma, Baustellen mit Namen und Umkreis – Adresse
+  suchen oder in die Karte klicken. Sie stehen auf der Karte; ist ein Auto in ihrem Umkreis, steht
+  der Name beim Auto, im Verlauf und im Fahrtenbuch.
+- **Verlauf** je Fahrzeug und Tag: Strecke auf der Karte, Kilometer, Fahrzeit und der Ablauf aus
+  Fahrten und **Standzeiten** – die sind nummeriert wie auf der Karte. Eine Standzeit beginnt bei
+  10 Minuten (Umkreis 100 m), kürzere Halte zählen zur Fahrt. Was über Mitternacht geht, steht
+  ganz da – an beiden Tagen.
+- **Fahrtenbuch** (`/fahrzeuge/fahrtenbuch`): jede Fahrt mit Beginn, Ende, Abfahrt, Ankunft,
+  Strecke, Dauer, Fahrer und Fahrzeug, bis 31 Tage auf einmal, auch als CSV. Es gibt keinen Schnitt
+  am Tagesende: Eine Nachtfahrt steht einmal da, am Tag ihres Beginns. Wechselt der Fahrer, bleibt
+  bei früheren Fahrten der von damals.
+- **Statistik** (`/fahrzeuge/statistik`): Strecke, Fahrzeit und Fahrten für heute, gestern, 7 oder
+  30 Tage – je Tag, je Fahrzeug (mit Höchstgeschwindigkeit) und die Zeit an festen Orten.
+- **Anschriften** kommen von [OpenStreetMap](https://nominatim.openstreetmap.org): Für Standzeiten
+  und das Ende von Fahrten geht die Lage (rund 10 m genau) an Nominatim, je Ort einmal, höchstens
+  eine Anfrage pro Sekunde, die Antwort bleibt gespeichert. Die Umgebungsvariable `GEOCODE=aus`
+  schaltet das ab – dann stehen nur die festen Orte da.
 - **Verwalten** (Recht „Fahrzeuge verwalten", Admin und Geschäftsführung): Fahrzeug anlegen
-  (Name, Kennzeichen, Partie), **Koppeln** zeigt einen Code (8 Zeichen, 30 Minuten gültig), den man
+  (Name, Kennzeichen, Art, Fahrer, Partie), **Koppeln** zeigt einen Code (8 Zeichen, 30 Minuten gültig), den man
   am Tablet einträgt; danach Standort „Immer zulassen" und die Akku-Ausnahme bestätigen.
   **Entkoppeln** bzw. Ausblenden – das Tablet hört dann auf zu senden; Löschen nimmt alle
   Standorte mit.
@@ -599,9 +621,8 @@ werden erkannt und vorgeschlagen (die eigene Adresse bei weitergeleiteten Mails 
 der passende Kunde wird über die E-Mail-Adresse gesucht. In der Anfrage lässt sich der Kunde
 zuordnen oder direkt aus der Anfrage neu anlegen, dazu der Ausführungsort und eine Notiz.
 **Angebot erstellen** übernimmt Kunde, Betreff (als BV) und Ausführungsort; im Angebot steht
-die E-Mail daneben. Ist das Angebot angenommen, ist die Anfrage **erledigt** und verschwindet
-aus der Liste der offenen. Kommt kein Angebot zustande, legt man sie mit **Als erledigt
-ablegen** ab. Erkannt wird nur im Browser – die E-Mail geht an keinen fremden Dienst.
+die E-Mail daneben. Mit dem Angebot ist die Anfrage **erledigt** und verschwindet aus der Liste
+der offenen. Kommt kein Angebot zustande, legt man sie mit **Als erledigt ablegen** ab. Erkannt wird nur im Browser – die E-Mail geht an keinen fremden Dienst.
 
 **Pläne und Fotos – einmal für den ganzen Vorgang:** Anfrage, Angebot und Auftrag haben
 dieselben **Pläne und Unterlagen** (PDFs, auch große, in Teilen hochgeladen) und dieselben
@@ -615,12 +636,8 @@ am Angebot nicht (etwa ein LV mit Preisen); PDFs am Auftrag sind immer für die 
 sieht die Partie beim Arbeitsauftrag, der Kunde nie. Höchstens 60 Fotos je Anfrage, Angebot bzw.
 Auftrag.
 
-**Stand einer Anfrage:** **Neu** → **In Arbeit** → der Stand ihres Angebots (Ausstehend,
-Änderung gewünscht) → erledigt (Angenommen oder Abgelegt). „In Arbeit“ heißt: Jemand hat sie
-mit **In Arbeit nehmen** übernommen, solange es noch kein Angebot gibt (etwa für Rückfragen
-oder eine Besichtigung; in der Anfrage steht, bei wem und seit wann, **Zurück auf Neu** macht
-es rückgängig) – oder ihr Angebot ist noch ein Entwurf. Die Liste filtert nach **Offen**,
-**Neu**, **In Arbeit** und **Erledigt**.
+**Stand einer Anfrage:** **Offen** oder **Erledigt**. Die Liste filtert danach, im Menü steht
+neben **Anfragen** die Zahl der offenen. **Wieder öffnen** holt eine erledigte zurück.
 
 **Anfragen von der Webseite:** Das Kontaktformular auf monsipan.at (Repo
 [Monsipan-Webseite](https://github.com/mstreicher98/Monsipan-Webseite)) legt jede Anfrage
@@ -1253,7 +1270,9 @@ bisherigen Programm:
 Bei wichtigen Schritten bekommen die richtigen Leute Bescheid – unter der **Glocke** oben
 rechts (mit Zahl der ungelesenen, live) und als **Push** aufs Handy bzw. den PC, auch wenn
 die App zu ist, und auf Wunsch als **Info-Mail**. Ein Tipp führt direkt zur Stelle und
-markiert die Benachrichtigung als gelesen. Ältere als 90 Tage räumt die nächtliche Wartung weg.
+markiert die Benachrichtigung als gelesen – auch bei allen anderen, die dieselbe Meldung bekommen
+haben: Einer hat sie gesehen, das reicht. **Alle gelesen** gilt nur für die eigenen. Gelesene
+räumt die nächtliche Wartung nach 30 Tagen weg, ungelesene nach 90.
 
 **Ereignisse:** neue Anfrage · Angebot freigegeben · Angebot vom Kunden angenommen ·
 Änderungswunsch des Kunden · Auftrag einer Partie zugeordnet (neu oder Partie gewechselt) ·

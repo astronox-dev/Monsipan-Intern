@@ -8,7 +8,7 @@
  * mit eigener Auswahl als Info-Mail. Das läuft im Hintergrund – die Antwort
  * an den Auslöser wartet nicht darauf.
  */
-import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 import { can, ROLES, type Role } from '$lib/permissions';
 import {
@@ -255,9 +255,10 @@ async function deliverPush(input: NotifyInput) {
 	if (!ids.length) return;
 	const title = cleanTitle(input.title);
 	const body = cleanBody(input.body);
+	const batch = crypto.randomUUID();
 	const rows = await db
 		.insert(notifications)
-		.values(ids.map((userId) => ({ userId, event: input.event, title, body, url: input.url })))
+		.values(ids.map((userId) => ({ userId, event: input.event, title, body, url: input.url, batch })))
 		.returning({ id: notifications.id, userId: notifications.userId });
 	// Offene Browser laden ihre Glocke neu – nur die Nummern, nicht der Inhalt
 	broadcast('notifications', { userIds: ids });
@@ -318,21 +319,50 @@ export function getNotification(userId: number, id: number) {
 		.get();
 }
 
-/** Eine bzw. alle als gelesen markieren */
+/**
+ * Eine bzw. alle eigenen als gelesen markieren. Wer eine einzelne öffnet, liest
+ * sie für alle, die dieselbe Meldung bekommen haben – deren Glocke zählt sie
+ * dann ebenfalls nicht mehr.
+ */
 export async function markRead(userId: number, id?: number) {
-	const where = [eq(notifications.userId, userId), isNull(notifications.readAt)];
-	if (id != null) where.push(eq(notifications.id, id));
-	await db
+	const now = new Date();
+	if (id == null) {
+		await db
+			.update(notifications)
+			.set({ readAt: now })
+			.where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+		return;
+	}
+	const own = await db
+		.select({ batch: notifications.batch })
+		.from(notifications)
+		.where(and(eq(notifications.userId, userId), eq(notifications.id, id)))
+		.get();
+	if (!own) return;
+	const where = own.batch ? eq(notifications.batch, own.batch) : eq(notifications.id, id);
+	const rows = await db
 		.update(notifications)
-		.set({ readAt: new Date() })
-		.where(and(...where));
+		.set({ readAt: now })
+		.where(and(where, isNull(notifications.readAt)))
+		.returning({ userId: notifications.userId });
+	const others = [...new Set(rows.map((r) => r.userId))].filter((u) => u !== userId);
+	if (others.length) broadcast('notifications', { userIds: others });
 }
 
-/** Alte Benachrichtigungen räumt die nächtliche Wartung weg */
+/** Alte Benachrichtigungen räumt die nächtliche Wartung weg: gelesene nach 30 Tagen, ungelesene nach 90 */
+export const KEEP_READ_NOTIFICATIONS_DAYS = 30;
 export const KEEP_NOTIFICATIONS_DAYS = 90;
 
 export async function purgeOldNotifications(now = new Date()) {
-	await db.delete(notifications).where(lt(notifications.createdAt, new Date(now.getTime() - KEEP_NOTIFICATIONS_DAYS * 86_400_000)));
+	const before = (days: number) => new Date(now.getTime() - days * 86_400_000);
+	await db
+		.delete(notifications)
+		.where(
+			or(
+				lt(notifications.createdAt, before(KEEP_NOTIFICATIONS_DAYS)),
+				and(isNotNull(notifications.readAt), lt(notifications.createdAt, before(KEEP_READ_NOTIFICATIONS_DAYS)))
+			)
+		);
 }
 
 /* ---------------------------------------------------- Eigene Auswahl */

@@ -12,7 +12,7 @@
 	import Monitor from '@lucide/svelte/icons/monitor';
 	import Smartphone from '@lucide/svelte/icons/smartphone';
 	import Dialog from './Dialog.svelte';
-	import { isActive, visibleModules, type NavItem } from '$lib/nav';
+	import { badgeCount, isActive, NAV_BADGES, visibleModules, type NavBadges, type NavItem } from '$lib/nav';
 	import { fullName, initials } from '$lib/format';
 	import { ROLE_LABELS, type Role } from '$lib/permissions';
 	import { install } from '$lib/install.svelte';
@@ -21,10 +21,10 @@
 	interface Props {
 		open: boolean;
 		user: { firstName: string; lastName: string; username: string; role: Role };
-		lowStockCount: number;
+		badges: NavBadges;
 		theme: Theme;
 	}
-	let { open = $bindable(), user, lowStockCount, theme }: Props = $props();
+	let { open = $bindable(), user, badges, theme }: Props = $props();
 
 	/** Bereiche mit ihren Seiten; die Übersicht steht ohnehin in der Leiste */
 	const groups = $derived(
@@ -42,6 +42,7 @@
 
 {#snippet link(n: NavItem)}
 	{@const active = isActive(n.href, page.url.pathname)}
+	{@const count = badgeCount(n, badges)}
 	<li>
 		<a
 			href={n.href}
@@ -53,8 +54,8 @@
 		>
 			<n.icon size={19} class="shrink-0 {active ? 'text-ink' : 'text-ink-2'}" aria-hidden="true" />
 			<span class="min-w-0 flex-1 text-[0.875rem] leading-tight hyphens-auto">{n.label}</span>
-			{#if n.badge === 'lowStock' && lowStockCount > 0}
-				<span class="badge badge-warn num shrink-0">{lowStockCount}</span>
+			{#if n.badge && count > 0}
+				<span class="badge {NAV_BADGES[n.badge].tone} num shrink-0" aria-label={NAV_BADGES[n.badge].label(count)}>{count}</span>
 			{/if}
 		</a>
 	</li>

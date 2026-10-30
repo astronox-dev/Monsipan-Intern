@@ -11,6 +11,7 @@ import { and, asc, desc, eq, inArray, like, or, sql, type SQL } from 'drizzle-or
 import { alias } from 'drizzle-orm/sqlite-core';
 import { can, type Role } from '$lib/permissions';
 import { db } from '$lib/server/db';
+import { broadcast } from '$lib/server/events';
 import {
 	categories,
 	colors,
@@ -53,6 +54,8 @@ export interface ReportFilter {
 	orderId?: number;
 	/** Nur Berichte in diesem Stand */
 	status?: string;
+	/** Geprüfte und abgeschlossene weglassen – die Liste zeigt nur, was noch zu tun ist */
+	pendingOnly?: boolean;
 }
 
 export async function listReports(user: SessionUser, filter: ReportFilter = {}, limit = 100) {
@@ -62,6 +65,7 @@ export async function listReports(user: SessionUser, filter: ReportFilter = {}, 
 	if (filter.to) where.push(sql`${dailyReports.date} <= ${filter.to}`);
 	if (filter.orderId) where.push(eq(dailyReports.orderId, filter.orderId));
 	if (filter.status && (REPORT_STATUS as readonly string[]).includes(filter.status)) where.push(eq(dailyReports.status, filter.status as ReportStatus));
+	else if (filter.pendingOnly) where.push(inArray(dailyReports.status, ['entwurf', 'freigegeben']));
 	if (filter.q?.trim()) {
 		const q = `%${filter.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 		where.push(
@@ -114,6 +118,16 @@ export async function reportCounts(user: SessionUser, weekStart: string) {
 		.where(scope(user))
 		.get();
 	return { entwurf: row?.entwurf ?? 0, freigegeben: row?.freigegeben ?? 0, geprueft: row?.geprueft ?? 0, week: row?.week ?? 0 };
+}
+
+/** Freigegeben und noch nicht geprüft – die Zahl im Menü für alle, die prüfen dürfen */
+export async function reportsToCheck(user: SessionUser): Promise<number> {
+	const row = await db
+		.select({ n: sql<number>`count(*)`.mapWith(Number) })
+		.from(dailyReports)
+		.where(and(eq(dailyReports.status, 'freigegeben'), scope(user)))
+		.get();
+	return row?.n ?? 0;
 }
 
 /** Nächste freie Nummer vorschlagen: höchste rein numerische Nummer plus eins */
@@ -401,6 +415,8 @@ const NO_CHECK = { checkedBy: null, checkedAt: null };
 const NO_CUSTOMER = { customerName: null, customerSignature: null, customerSignedAt: null, customerSignedOnSite: false };
 /** Vor der Prüfung: in Arbeit oder freigegeben */
 const BEFORE_CHECK = inArray(dailyReports.status, ['entwurf', 'freigegeben']);
+/** Offene Browser zählen die Berichte zum Prüfen im Menü neu */
+const badgesChanged = () => broadcast('badges', {});
 
 /**
  * Freigeben mit Unterschrift – sie steht im Ausdruck bei „Für den Auftragnehmer".
@@ -411,6 +427,7 @@ export async function releaseReport(id: number, userId: number, signature: strin
 		.update(dailyReports)
 		.set({ status: 'freigegeben', releasedBy: userId, releasedAt: new Date(), releaseSignature: signature, ...NO_CHECK, updatedAt: new Date() })
 		.where(and(eq(dailyReports.id, id), eq(dailyReports.status, 'entwurf')));
+	badgesChanged();
 }
 
 /**
@@ -425,6 +442,7 @@ export async function checkReport(id: number, userId: number): Promise<'geprueft
 		.set({ status, checkedBy: userId, checkedAt: new Date(), updatedAt: new Date() })
 		.where(and(eq(dailyReports.id, id), eq(dailyReports.status, 'freigegeben')));
 	await ensureCustomerToken(id);
+	badgesChanged();
 	return status;
 }
 
@@ -452,6 +470,7 @@ export async function undoCheck(id: number) {
 		.update(dailyReports)
 		.set({ status: 'freigegeben', ...NO_CHECK, updatedAt: new Date() })
 		.where(and(eq(dailyReports.id, id), eq(dailyReports.status, 'geprueft')));
+	badgesChanged();
 }
 
 /**
@@ -463,6 +482,7 @@ export async function reopenReport(id: number) {
 		.update(dailyReports)
 		.set({ status: 'entwurf', releasedBy: null, releasedAt: null, releaseSignature: null, ...NO_CHECK, ...NO_CUSTOMER, updatedAt: new Date() })
 		.where(eq(dailyReports.id, id));
+	badgesChanged();
 }
 
 /** Link für den Kunden: 128 Bit Zufall, bleibt dauerhaft gleich */
@@ -509,6 +529,7 @@ export async function saveReportInk(id: number, ink: InkPages) {
 
 export async function deleteReport(id: number) {
 	await db.delete(dailyReports).where(eq(dailyReports.id, id));
+	badgesChanged();
 }
 
 export function mayView(user: SessionUser, report: { createdBy: number | null; partyId: number | null }): boolean {

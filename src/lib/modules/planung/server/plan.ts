@@ -291,6 +291,26 @@ export async function claimOrder(orderId: number, partyId: number): Promise<bool
 	return done.length > 0;
 }
 
+/**
+ * Zurück zu den nicht zugeteilten: Der Auftrag verliert seine Partie, seine
+ * Einträge ab heute gehen aus der Planung – der gezogene Eintrag in jedem Fall.
+ * Was schon war, bleibt als Nachweis stehen.
+ */
+export async function unplanOrder(entryId: number, today: string): Promise<{ orderId: number; number: string } | { message: string }> {
+	const entry = await db.select({ orderId: planEntries.orderId }).from(planEntries).where(eq(planEntries.id, entryId)).get();
+	if (!entry) return { message: 'Den Eintrag gibt es nicht mehr.' };
+	const orderId = entry.orderId;
+	if (!orderId) return { message: 'Nur Einträge mit Auftrag lassen sich zurücklegen.' };
+	const order = await db.select({ number: orders.number, status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+	if (!order) return { message: 'Den Auftrag gibt es nicht mehr.' };
+	if (order.status === 'abgeschlossen') return { message: 'Der Auftrag ist schon abgeschlossen.' };
+	await db.transaction(async (tx) => {
+		await tx.delete(planEntries).where(or(eq(planEntries.id, entryId), and(eq(planEntries.orderId, orderId), gte(planEntries.date, today))));
+		await tx.update(orders).set({ partyId: null, updatedAt: new Date() }).where(eq(orders.id, orderId));
+	});
+	return { orderId, number: order.number };
+}
+
 export type PlanWeek = Awaited<ReturnType<typeof planWeek>>;
 
 /** Aufträge zur Auswahl: alle offenen, dazu die schon in der Woche eingeplanten */

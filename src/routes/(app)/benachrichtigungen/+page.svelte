@@ -19,7 +19,7 @@
 <div class="flex flex-wrap items-end justify-between gap-3 pt-2 pb-5">
 	<div>
 		<h1 class="flex items-center gap-2 text-[2rem] leading-tight"><Bell size={26} aria-hidden="true" />Benachrichtigungen</h1>
-		<p class="text-ink-2">{unread ? `${unread} ungelesen` : 'Alles gelesen'} · ältere als 90 Tage verschwinden von selbst</p>
+		<p class="text-ink-2">{unread ? `${unread} ungelesen` : 'Alles gelesen'} · gelesene verschwinden nach 30 Tagen von selbst</p>
 	</div>
 	<div class="flex flex-wrap gap-2">
 		{#if unread}

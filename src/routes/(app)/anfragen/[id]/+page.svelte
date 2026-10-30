@@ -13,15 +13,13 @@
 	import Mail from '@lucide/svelte/icons/mail';
 	import Phone from '@lucide/svelte/icons/phone';
 	import UserPlus from '@lucide/svelte/icons/user-plus';
-	import Hammer from '@lucide/svelte/icons/hammer';
-	import Undo from '@lucide/svelte/icons/undo-2';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import CustomerFields from '$lib/modules/auftraege/components/CustomerFields.svelte';
 	import CaseDocuments from '$lib/modules/auftraege/components/CaseDocuments.svelte';
 	import PhotoGallery from '$lib/components/PhotoGallery.svelte';
 	import { date as dateLabel, dateTime } from '$lib/format';
 	import { MAX_INQUIRY_TEXT } from '$lib/modules/auftraege/inquiry';
-	import { OFFER_STATUS_LABELS, OFFER_TITLE_DEFAULT, spacedNumber, titleToEnd } from '$lib/modules/auftraege/offer';
+	import { OFFER_TITLE_DEFAULT, spacedNumber, titleToEnd } from '$lib/modules/auftraege/offer';
 	import { toast } from '$lib/stores/toast.svelte';
 
 	let { data, form } = $props();
@@ -32,20 +30,8 @@
 	let deleteOpen = $state(false);
 	let busy = $state(false);
 
-	const stand = $derived.by(() => {
-		if (inquiry.offerStatus === 'angenommen') return { label: 'Erledigt – Angebot angenommen', tone: 'badge-ok' };
-		if (inquiry.closedAt) return { label: 'Abgelegt', tone: '' };
-		if (inquiry.offerId) {
-			const st = OFFER_STATUS_LABELS[inquiry.offerStatus ?? 'entwurf'] ?? OFFER_STATUS_LABELS.entwurf;
-			return { label: `Angebot: ${st.label}`, tone: st.tone };
-		}
-		if (inquiry.inProgressAt) return { label: 'In Arbeit', tone: OFFER_STATUS_LABELS.entwurf.tone };
-		return { label: 'Neu', tone: 'badge-info' };
-	});
+	const stand = $derived(inquiry.closedAt ? { label: 'Erledigt', tone: 'badge-ok' } : { label: 'Offen', tone: 'badge-info' });
 	const author = $derived([inquiry.creatorFirst, inquiry.creatorLast].filter(Boolean).join(' '));
-	const worker = $derived([inquiry.workerFirst, inquiry.workerLast].filter(Boolean).join(' '));
-	/** „In Arbeit" von Hand gibt es nur ohne Angebot und solange die Anfrage nicht abgelegt ist */
-	const canProgress = $derived(data.canEdit && !inquiry.offerId && !inquiry.closedAt);
 	const fromWebsite = $derived(inquiry.source === 'webseite');
 </script>
 
@@ -63,28 +49,9 @@
 				? ` (${inquiry.senderCompany})`
 				: ''}{fromWebsite ? ' · über die Webseite' : ''}
 		</p>
-		{#if inquiry.inProgressAt && !inquiry.offerId && !inquiry.closedAt}
-			<p class="mt-0.5 text-sm text-ink-3">In Arbeit{worker ? ` bei ${worker}` : ''} seit {dateTime(inquiry.inProgressAt)}</p>
-		{/if}
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
 		<span class="badge {stand.tone}">{stand.label}</span>
-		{#if canProgress}
-			<form
-				method="POST"
-				action="?/progress"
-				use:enhance={() => async ({ result, update }) => {
-					if (result.type === 'success') toast.success(result.data?.inProgress ? 'Anfrage ist in Arbeit' : 'Wieder auf „Neu"');
-					await update();
-				}}
-			>
-				{#if inquiry.inProgressAt}
-					<button class="btn btn-ghost" name="an" value="0" title="Doch noch niemand dran"><Undo size={18} aria-hidden="true" />Zurück auf Neu</button>
-				{:else}
-					<button class="btn btn-secondary" name="an" value="1"><Hammer size={18} aria-hidden="true" />In Arbeit nehmen</button>
-				{/if}
-			</form>
-		{/if}
 		{#if inquiry.offerId && data.canSeeOffer}
 			<a href="/angebote/{inquiry.offerId}" class="btn btn-secondary"><FilePen size={18} aria-hidden="true" />Angebot {spacedNumber(inquiry.offerNumber ?? '')}</a>
 		{:else if data.canCreateOffer}

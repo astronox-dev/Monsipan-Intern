@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { distance, kilometers, smoothTrack, stops, vehicleState, viennaDayStart, type TrackPoint } from './track';
+import { distance, kilometers, overlapping, placeAt, segments, smoothTrack, stops, vehicleState, viennaDayStart, type TrackPoint } from './track';
 
 const MIN = 60_000;
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -22,7 +22,7 @@ describe('Fuhrpark – Strecke', () => {
 		expect(kilometers([at(0, 48, 16), at(1, 48.9, 16)])).toBe(0);
 	});
 
-	it('findet Standzeiten ab 5 Minuten im Umkreis von 100 m – auch über eine Lücke', () => {
+	it('findet Standzeiten ab 10 Minuten im Umkreis von 100 m – auch über eine Lücke', () => {
 		const points = [
 			at(0, 48.3608, 16.4925),
 			at(3, 48.3609, 16.4926),
@@ -97,5 +97,56 @@ describe('Fuhrpark – Zustand', () => {
 		expect(new Date(viennaDayStart('2026-12-01')).toISOString()).toBe('2026-11-30T23:00:00.000Z');
 		// Umstellung am 25.10.: der Tag beginnt noch in Sommerzeit
 		expect(new Date(viennaDayStart('2026-10-25')).toISOString()).toBe('2026-10-24T22:00:00.000Z');
+	});
+});
+
+describe('Fuhrpark – Fahrten und Standzeiten', () => {
+	/** Gerade Fahrt von a nach b, jede halbe Minute ein Punkt */
+	const drive = (startMin: number, minutes: number, a: { lat: number; lon: number }, b: { lat: number; lon: number }) =>
+		Array.from({ length: minutes * 2 + 1 }, (_, i) => {
+			const f = i / (minutes * 2);
+			return { ...at(startMin + i / 2, a.lat + (b.lat - a.lat) * f, a.lon + (b.lon - a.lon) * f, 6), speed: 14 };
+		});
+	const lager = { lat: 48.3608, lon: 16.4925 };
+	const baustelle = { lat: 48.3812, lon: 16.5163 };
+	const tankstelle = { lat: 48.37, lon: 16.5044 };
+
+	it('kurze Halte unter 10 Minuten gehören zur Fahrt', () => {
+		const points = [
+			...drive(0, 4, lager, tankstelle),
+			// 8 Minuten tanken
+			{ ...at(12, tankstelle.lat, tankstelle.lon, 6), speed: 0 },
+			...drive(12.5, 4, tankstelle, baustelle),
+			// Eine Stunde auf der Baustelle
+			{ ...at(80, baustelle.lat, baustelle.lon, 6), speed: 0 }
+		];
+		const seg = segments(smoothTrack(points));
+		expect(seg.map((s) => s.kind)).toEqual(['fahrt', 'stopp']);
+		const [trip, stop] = seg;
+		expect(trip.kind === 'fahrt' && trip.km).toBeGreaterThan(2.5);
+		// Ab der Ankunft (im Umkreis von 100 m) bis zum letzten Standort
+		expect(stop.kind === 'stopp' && stop.minutes).toBe(64);
+	});
+
+	it('über Mitternacht: eine Fahrt, die in beide Tage fällt', () => {
+		const midnight = Date.UTC(2026, 9, 27, 23) - Date.UTC(2026, 9, 27, 6);
+		const start = midnight / MIN - 10;
+		const points = [{ ...at(start - 30, lager.lat, lager.lon, 6), speed: 0 }, ...drive(start, 20, lager, baustelle), { ...at(start + 60, baustelle.lat, baustelle.lon, 6), speed: 0 }];
+		const seg = segments(smoothTrack(points));
+		const trips = seg.filter((s) => s.kind === 'fahrt');
+		expect(trips).toHaveLength(1);
+		const cut = Date.UTC(2026, 9, 27, 23);
+		expect(overlapping(trips, cut - 86_400_000, cut)).toHaveLength(1);
+		expect(overlapping(trips, cut, cut + 86_400_000)).toHaveLength(1);
+	});
+
+	it('kennt feste Orte im Umkreis – der nächste gewinnt', () => {
+		const places = [
+			{ id: 1, name: 'Lager Eibesbrunn', ...lager, radius: 150 },
+			{ id: 2, name: 'Nachbar', lat: lager.lat + 0.0018, lon: lager.lon, radius: 300 }
+		];
+		expect(placeAt({ lat: lager.lat + 0.0003, lon: lager.lon }, places)?.name).toBe('Lager Eibesbrunn');
+		expect(placeAt({ lat: lager.lat + 0.0016, lon: lager.lon }, places)?.name).toBe('Nachbar');
+		expect(placeAt(baustelle, places)).toBeNull();
 	});
 });

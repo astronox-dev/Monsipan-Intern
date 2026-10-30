@@ -2,22 +2,23 @@
 	import { page } from '$app/state';
 	import Logo from './Logo.svelte';
 	import UserMenu from './UserMenu.svelte';
-	import { isActive, visibleModules, type NavItem } from '$lib/nav';
+	import { badgeCount, isActive, NAV_BADGES, visibleModules, type NavBadges, type NavItem } from '$lib/nav';
 	import type { Role } from '$lib/permissions';
 	import type { Theme } from '$lib/theme';
 
 	interface Props {
 		user: { firstName: string; lastName: string; username: string; role: Role };
-		lowStockCount: number;
+		badges: NavBadges;
 		theme: Theme;
 	}
-	let { user, lowStockCount, theme }: Props = $props();
+	let { user, badges, theme }: Props = $props();
 
 	const modules = $derived(visibleModules(user.role));
 </script>
 
 {#snippet item(n: NavItem)}
 	{@const active = isActive(n.href, page.url.pathname)}
+	{@const count = badgeCount(n, badges)}
 	<li>
 		<a
 			href={n.href}
@@ -32,9 +33,9 @@
 			<n.icon size={19} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
 			<!-- Lange Namen („Richtlinien & Vorschriften") brechen eng um, damit sie in die Zeile passen -->
 			<span class="flex-1 leading-tight">{n.label}</span>
-			{#if n.badge === 'lowStock' && lowStockCount > 0}
-				<span class="badge badge-warn num h-5 min-w-5 justify-center px-1.5 text-xs" aria-label="{lowStockCount} Artikel nachbestellen">
-					{lowStockCount}
+			{#if n.badge && count > 0}
+				<span class="badge {NAV_BADGES[n.badge].tone} num h-5 min-w-5 justify-center px-1.5 text-xs" aria-label={NAV_BADGES[n.badge].label(count)}>
+					{count}
 				</span>
 			{/if}
 		</a>

@@ -11,22 +11,10 @@ vi.mock('$app/environment', () => ({ dev: true, browser: false, building: false,
 const { db, client, ensureDatabase } = await import('$lib/server/db');
 const { inquiries, offers, users } = await import('$lib/server/db/schema');
 const { eq } = await import('drizzle-orm');
-const { closeInquiry, countInquiries, inquiryDetail, listInquiries, setInquiryInProgress } = await import('./inquiries');
+const { closeInquiry, countInquiries, inquiryDetail, listInquiries, offerFromInquiry, openInquiryCount } = await import('./inquiries');
 
-let n = 0;
-async function inquiry(subject: string, offerStatus?: 'entwurf' | 'freigegeben' | 'angenommen') {
-	const offer = offerStatus
-		? await db
-				.insert(offers)
-				.values({ number: `26${String(++n).padStart(3, '0')}`, date: '2026-10-13', status: offerStatus })
-				.returning({ id: offers.id })
-				.get()
-		: null;
-	const row = await db
-		.insert(inquiries)
-		.values({ receivedOn: '2026-10-13', subject, offerId: offer?.id ?? null })
-		.returning({ id: inquiries.id })
-		.get();
+async function inquiry(subject: string) {
+	const row = await db.insert(inquiries).values({ receivedOn: '2026-10-13', subject }).returning({ id: inquiries.id }).get();
 	return row.id;
 }
 
@@ -46,43 +34,39 @@ afterAll(() => {
 });
 
 describe('Stand der Anfragen', () => {
-	it('Neu, In Arbeit (von Hand oder Angebot im Entwurf), Ausstehend, Erledigt', async () => {
-		const me = (await db.select({ id: users.id }).from(users).get())!.id;
+	it('offen oder erledigt – erledigt mit Angebot oder von Hand abgelegt', async () => {
 		await inquiry('Neu');
-		const working = await inquiry('Von Hand in Arbeit');
-		await setInquiryInProgress(working, me);
-		await inquiry('Angebot im Entwurf', 'entwurf');
-		await inquiry('Angebot beim Kunden', 'freigegeben');
-		await inquiry('Angenommen', 'angenommen');
 		const closed = await inquiry('Abgelegt');
 		await closeInquiry(closed, true);
 
-		expect(await subjects('neu')).toEqual(['Neu']);
-		expect(await subjects('inarbeit')).toEqual(['Angebot im Entwurf', 'Von Hand in Arbeit']);
-		expect(await subjects('offen')).toEqual(['Angebot beim Kunden', 'Angebot im Entwurf', 'Neu', 'Von Hand in Arbeit']);
-		expect(await subjects('erledigt')).toEqual(['Abgelegt', 'Angenommen']);
+		expect(await subjects('offen')).toEqual(['Neu']);
+		expect(await subjects('erledigt')).toEqual(['Abgelegt']);
 		// Unbekannter Stand: die offenen
 		expect(await subjects('irgendwas')).toEqual(await subjects('offen'));
-		expect(await countInquiries()).toMatchObject({ open: 4, neu: 1, working: 2, done: 2, fresh: 2 });
+		expect(await countInquiries()).toEqual({ open: 1, done: 1 });
+		expect(await openInquiryCount()).toBe(1);
 
-		const detail = await inquiryDetail(working);
-		expect(detail?.inProgressAt).toBeInstanceOf(Date);
-		expect(detail?.workerFirst).toBeTruthy();
+		await closeInquiry(closed, false);
+		expect(await subjects('offen')).toEqual(['Abgelegt', 'Neu']);
 	});
 
-	it('zurück auf Neu – und wer in Arbeit hatte, darf gelöscht werden', async () => {
-		const id = await inquiry('Wieder neu');
-		const helper = await db
-			.insert(users)
-			.values({ username: 'aushilfe', firstName: 'Aus', lastName: 'Hilfe', passwordHash: 'x', role: 'buchhaltung' })
-			.returning({ id: users.id })
-			.get();
-		await setInquiryInProgress(id, helper.id);
-		expect(await subjects('inarbeit')).toContain('Wieder neu');
-		await db.delete(users).where(eq(users.id, helper.id));
-		// Ohne Person bleibt sie in Arbeit
-		expect((await inquiryDetail(id))?.workerFirst).toBeNull();
-		await setInquiryInProgress(id, null);
-		expect(await subjects('neu')).toContain('Wieder neu');
+	it('mit dem Angebot ist die Anfrage erledigt', async () => {
+		const id = await inquiry('Mit Angebot');
+		const me = await db.select().from(users).get();
+		const detail = (await inquiryDetail(id))!;
+		const offerId = await offerFromInquiry({ ...me!, effectiveRole: me!.role } as never, detail, {
+			number: 'A-' + id,
+			projectNumber: '',
+			date: '2026-10-13',
+			title: 'Bodenmarkierungen',
+			customerId: null
+		});
+		const after = (await inquiryDetail(id))!;
+		expect(after.offerId).toBe(offerId);
+		expect(after.closedAt).toBeInstanceOf(Date);
+		expect(await subjects('erledigt')).toContain('Mit Angebot');
+		await db.delete(offers).where(eq(offers.id, offerId));
+		// Angebot wieder gelöscht: bleibt erledigt, bis jemand sie wieder öffnet
+		expect(await subjects('erledigt')).toContain('Mit Angebot');
 	});
 });

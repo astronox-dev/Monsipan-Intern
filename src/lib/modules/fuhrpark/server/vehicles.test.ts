@@ -16,7 +16,7 @@ let id: number;
 
 beforeAll(async () => {
 	await ensureDatabase();
-	id = await createVehicle({ name: 'Pritsche Nord', plate: 'MI-123AB', partyId: null, note: '', active: true });
+	id = await createVehicle({ name: 'Pritsche Nord', plate: 'MI-123AB', kind: 'lkw', driverId: null, partyId: null, note: '', active: true });
 });
 
 afterAll(() => {

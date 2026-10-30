@@ -223,7 +223,7 @@
 	{@render heading('Auftragsmanagement', has('auftraege.sehen') ? '/auftraege' : has('angebote.sehen') ? '/angebote' : has('anfragen.sehen') ? '/anfragen' : '/rechnungen')}
 	<section class="card grid grid-cols-2 gap-px overflow-hidden bg-line lg:flex [&>*:last-child:nth-child(odd)]:col-span-2" aria-label="Kennzahlen Auftragsmanagement">
 		{#if auftrag.inquiries}
-			{@render tile('/anfragen', 'Offene Anfragen', auftrag.inquiries.open, `${auftrag.inquiries.fresh} ohne Angebot`)}
+			{@render tile('/anfragen', 'Offene Anfragen', auftrag.inquiries.open, `${auftrag.inquiries.done} erledigt`)}
 		{/if}
 		{#if auftrag.offers}
 			{@render tile(

@@ -2,8 +2,11 @@ import { fail } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
 import { requirePermission } from '$lib/server/guard';
 import { partyOptions } from '$lib/server/options';
-import { createVehicle, deleteVehicle, listVehicles, readVehicle, startPairing, unpair, updateVehicle } from '$lib/modules/fuhrpark/server/vehicles';
-import { vehicleState } from '$lib/modules/fuhrpark/track';
+import { fullName } from '$lib/format';
+import { addressesFor, addressKey } from '$lib/modules/fuhrpark/server/addresses';
+import { listPlaces } from '$lib/modules/fuhrpark/server/places';
+import { createVehicle, deleteVehicle, driverOptions, listVehicles, parkedSince, readVehicle, startPairing, unpair, updateVehicle } from '$lib/modules/fuhrpark/server/vehicles';
+import { placeAt, vehicleState } from '$lib/modules/fuhrpark/track';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Die App für die Tablets – fester Link auf die neueste Fassung */
@@ -14,20 +17,32 @@ export const load: PageServerLoad = async ({ locals, depends }) => {
 	const user = requirePermission(locals, 'fahrzeuge.sehen');
 	const canManage = can(user.role, 'fahrzeuge.verwalten');
 	const now = Date.now();
-	const rows = await listVehicles();
+	const [rows, places] = await Promise.all([listVehicles(), listPlaces()]);
+	const shown = rows
+		.filter((v) => v.active || canManage)
+		.map((v) => {
+			const position = v.lastLat != null && v.lastLon != null ? { lat: v.lastLat, lon: v.lastLon } : null;
+			return { ...v, position, place: position ? (placeAt(position, places)?.name ?? null) : null, state: vehicleState(v, now) };
+		});
+	// Anschrift nur für Autos, die stehen und nicht an einem festen Ort sind – was fehlt, kommt beim nächsten Neuladen
+	const parked = shown.filter((v) => v.state !== 'faehrt' && v.position);
+	const addresses = await addressesFor(parked.filter((v) => !v.place).map((v) => v.position!));
+	const since = new Map(await Promise.all(parked.map(async (v) => [v.id, await parkedSince(v.id)] as const)));
 	return {
-		vehicles: rows
-			.filter((v) => v.active || canManage)
-			.map((v) => ({
-				...v,
-				lastAt: v.lastAt?.getTime() ?? null,
-				lastSeenAt: v.lastSeenAt?.getTime() ?? null,
-				pairedAt: v.pairedAt?.getTime() ?? null,
-				state: vehicleState(v, now)
-			})),
+		vehicles: shown.map(({ position, ...v }) => ({
+			...v,
+			driverName: v.driverId ? fullName({ firstName: v.driverFirst, lastName: v.driverLast }) : '',
+			address: position && v.state !== 'faehrt' ? (addresses.get(addressKey(position)) ?? '') : '',
+			parkedSince: since.get(v.id) ?? null,
+			lastAt: v.lastAt?.getTime() ?? null,
+			lastSeenAt: v.lastSeenAt?.getTime() ?? null,
+			pairedAt: v.pairedAt?.getTime() ?? null
+		})),
+		places: places.map((p) => ({ id: p.id, name: p.name, lat: p.lat, lon: p.lon, radius: p.radius })),
 		now,
 		canManage,
 		parties: canManage ? await partyOptions() : [],
+		drivers: canManage ? await driverOptions() : [],
 		apk: FAHRZEUG_APK
 	};
 };

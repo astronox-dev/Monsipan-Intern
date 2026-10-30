@@ -21,10 +21,12 @@ export const notifications = sqliteTable(
 		body: text('body').notNull().default(''),
 		/** Wohin ein Tipp führt, z. B. „/auftraege/12" */
 		url: text('url').notNull().default('/'),
+		/** Dieselbe Meldung an mehrere Personen – liest sie eine, ist sie für alle gelesen */
+		batch: text('batch'),
 		createdAt: createdAt(),
 		readAt: integer('read_at', { mode: 'timestamp_ms' })
 	},
-	(t) => [index('notifications_user_idx').on(t.userId, t.createdAt)]
+	(t) => [index('notifications_user_idx').on(t.userId, t.createdAt), index('notifications_batch_idx').on(t.batch)]
 );
 
 /** Ein Gerät für Push: im Browser über Web-Push, in der Android-App über Firebase */

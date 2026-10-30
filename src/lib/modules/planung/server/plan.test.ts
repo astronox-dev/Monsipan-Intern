@@ -11,7 +11,8 @@ vi.mock('$app/environment', () => ({ dev: true, browser: false, building: false,
 const { db, client, ensureDatabase } = await import('$lib/server/db');
 const { eq } = await import('drizzle-orm');
 const { orders, parties, users } = await import('$lib/server/db/schema');
-const { addEntry, claimOrder, moveEntry, partyOnDay, planWeek, resetCrew, setCrew, setPartyOrder, unassignedOrders } = await import('./plan');
+const { planEntries } = await import('$lib/server/db/schema');
+const { addEntry, claimOrder, moveEntry, partyOnDay, planWeek, resetCrew, setCrew, setPartyOrder, unassignedOrders, unplanOrder } = await import('./plan');
 
 beforeAll(async () => {
 	await ensureDatabase();
@@ -47,6 +48,25 @@ describe('Aufträge ohne Partie', () => {
 		// Schon zugeteilt: bleibt, wo er ist – die andere Partie hilft nur aus
 		expect(await claimOrder(taken.id, b.id)).toBe(false);
 		expect((await db.select({ partyId: orders.partyId }).from(orders).where(eq(orders.id, taken.id)).get())?.partyId).toBe(a.id);
+	});
+
+	it('zurückziehen: ohne Partie, Einträge ab heute weg, vergangene bleiben', async () => {
+		const [p] = await db.insert(parties).values([{ name: 'Partie Z' }]).returning({ id: parties.id });
+		const [o] = await db.insert(orders).values([{ number: '9010', title: 'Zurück', partyId: p.id }]).returning({ id: orders.id });
+		const admin = (await db.select().from(users).get())!;
+		const me = { ...admin, effectiveRole: admin.role } as never;
+		const entry = async (date: string) => (await addEntry(me, { date, partyId: p.id, orderId: o.id, text: '' })) as number;
+		const past = await entry('2026-10-20');
+		const now = await entry('2026-10-29');
+		await entry('2026-10-30');
+		const result = await unplanOrder(now, '2026-10-29');
+		expect(result).toEqual({ orderId: o.id, number: '9010' });
+		expect((await unassignedOrders()).map((u) => u.id)).toContain(o.id);
+		const left = await db.select({ id: planEntries.id }).from(planEntries).where(eq(planEntries.orderId, o.id)).all();
+		expect(left.map((l) => l.id)).toEqual([past]);
+		// Ein Eintrag ohne Auftrag lässt sich nicht zurücklegen
+		const plain = (await addEntry(me, { date: '2026-10-29', partyId: p.id, orderId: null, text: 'Lager' })) as number;
+		expect(await unplanOrder(plain, '2026-10-29')).toHaveProperty('message');
 	});
 });
 
