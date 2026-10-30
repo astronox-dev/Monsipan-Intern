@@ -203,6 +203,20 @@
 		};
 	});
 
+	// Am Handy liegt die Leiste über der Seite: Die Seite bleibt stehen, nur die Räder drehen
+	$effect(() => {
+		if (!open || !sheet) return;
+		const hold = (e: Event) => {
+			if (e.cancelable && !(e.target as Element).closest?.('.timewheel-wheel')) e.preventDefault();
+		};
+		document.addEventListener('touchmove', hold, { passive: false });
+		document.addEventListener('wheel', hold, { passive: false });
+		return () => {
+			document.removeEventListener('touchmove', hold);
+			document.removeEventListener('wheel', hold);
+		};
+	});
+
 	function onkeydown(e: KeyboardEvent) {
 		if (!open) {
 			if (e.key === 'ArrowDown' && e.altKey) show();

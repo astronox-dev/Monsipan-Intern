@@ -835,3 +835,16 @@ body.dnd-active * {
 		color: inherit;
 	}
 }
+
+/*
+ * iOS zoomt beim Antippen in jedes Feld mit weniger als 16 px Schrift und bleibt
+ * dann so stehen. Die Abfrage trifft nur iOS und iPadOS; mit zwei Fingern lässt
+ * sich dort weiter zoomen.
+ */
+@supports (-webkit-touch-callout: none) {
+	input,
+	select,
+	textarea {
+		font-size: 16px !important;
+	}
+}
