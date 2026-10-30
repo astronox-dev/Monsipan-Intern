@@ -228,6 +228,13 @@ export function segments(points: readonly TrackPoint[]): Segment[] {
 	});
 }
 
+/** Für die Karte reicht eine Auswahl gleichmäßig über die Strecke – Anfang und Ende bleiben */
+export function thinned<T>(points: readonly T[], max: number): T[] {
+	if (points.length <= max) return [...points];
+	const step = (points.length - 1) / (max - 1);
+	return Array.from({ length: max }, (_, i) => points[Math.round(i * step)]);
+}
+
 /** Was in den Zeitraum fällt – auch nur zum Teil (über Mitternacht) */
 export function overlapping<T extends { from: number; to: number }>(items: readonly T[], from: number, to: number): T[] {
 	return items.filter((s) => s.to >= from && s.from < to);

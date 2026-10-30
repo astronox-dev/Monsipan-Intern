@@ -7,6 +7,7 @@
 	import ChartColumn from '@lucide/svelte/icons/chart-column';
 	import BarChart from '$lib/components/BarChart.svelte';
 	import FleetTabs from '$lib/modules/fuhrpark/components/FleetTabs.svelte';
+	import PeriodTabs from '$lib/modules/fuhrpark/components/PeriodTabs.svelte';
 	import { kindOf } from '$lib/modules/fuhrpark/kinds';
 
 	let { data } = $props();
@@ -47,17 +48,7 @@
 
 <FleetTabs />
 
-<div class="mb-4 flex w-fit rounded-xl border border-line bg-surface p-1" role="tablist" aria-label="Zeitraum">
-	{#each data.periods as p (p.key)}
-		<a
-			href="?zeit={p.key}"
-			role="tab"
-			aria-selected={data.period === p.key}
-			data-sveltekit-noscroll
-			class="rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors {data.period === p.key ? 'bg-ink text-surface' : 'text-ink-2 hover:bg-surface-3 hover:text-ink'}">{p.label}</a
-		>
-	{/each}
-</div>
+<div class="mb-4"><PeriodTabs active={data.period} /></div>
 
 <section class="card mb-4 grid grid-cols-2 gap-px overflow-hidden bg-line lg:grid-cols-4" aria-label="Summen">
 	<div class="bg-surface p-4">

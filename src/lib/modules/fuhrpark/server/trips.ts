@@ -4,8 +4,9 @@
  * über den Zeitraum und einen Tag Rand zu beiden Seiten – was über Mitternacht
  * geht, bleibt so eine Fahrt.
  */
-import { overlapping, placeAt, segments, smoothTrack, viennaDayStart, WALK_SPEED, type FleetPlace, type LatLon, type Segment, type TrackPoint, type Trip } from '../track';
+import { overlapping, placeAt, segments, smoothTrack, thinned, viennaDayStart, WALK_SPEED, type FleetPlace, type LatLon, type Segment, type TrackPoint, type Trip } from '../track';
 import { addDays, isValidIsoDate } from '$lib/modules/stunden/week';
+import { periodByKey, periodOf, periodRange } from '../periods';
 import { viennaTime } from '$lib/weather';
 import { addressesFor, addressesPending, addressKey } from './addresses';
 import { driverAt, driverHistory, rangePoints, type VehicleRow } from './vehicles';
@@ -43,9 +44,12 @@ export function labelOf(p: LatLon, places: readonly FleetPlace[], addresses: Map
 /** Standorte, zu denen eine Anschrift gebraucht wird – nur, wo kein fester Ort ist */
 const needsAddress = (points: LatLon[], places: readonly FleetPlace[]) => points.filter((p) => !placeAt(p, places));
 
-/** Ein Tag eines Autos: alles, was hineinfällt – Fahrten und Standzeiten über Mitternacht ganz */
-export async function dayView(vehicle: Pick<VehicleRow, 'id' | 'lastSeenAt'>, date: string, places: readonly FleetPlace[]) {
-	const { from, to } = dayRange(date, date);
+/** Mehr Punkte schickt der Ablauf nicht an die Karte */
+const MAX_MAP_POINTS = 4000;
+
+/** Ein Zeitraum eines Autos: alles, was hineinfällt – Fahrten und Standzeiten über Mitternacht ganz */
+export async function rangeView(vehicle: Pick<VehicleRow, 'id' | 'lastSeenAt'>, fromDate: string, toDate: string, places: readonly FleetPlace[]) {
+	const { from, to } = dayRange(fromDate, toDate);
 	const track = await vehicleTrack(vehicle, from, to);
 	const parts = overlapping(track.segments, from, to);
 	const ends = parts.flatMap((s) => (s.kind === 'stopp' ? [s] : [s.start, s.end]));
@@ -57,7 +61,7 @@ export async function dayView(vehicle: Pick<VehicleRow, 'id' | 'lastSeenAt'>, da
 	);
 	const first = parts[0]?.from ?? from;
 	const last = parts[parts.length - 1]?.to ?? to;
-	return { items, track: track.points.filter((p) => p.at >= first && p.at <= last), pending: addressesPending() };
+	return { items, track: thinned(track.points.filter((p) => p.at >= first && p.at <= last), MAX_MAP_POINTS), pending: addressesPending() };
 }
 
 export interface LogbookEntry {
@@ -172,10 +176,15 @@ export async function fleetStats(vehicles: VehicleRow[], fromDate: string, toDat
 	);
 }
 
-/** Zeitraum aus der Adresse: gültige Tage, nicht in der Zukunft, nicht älter als gespeichert, höchstens 31 Tage */
+/**
+ * Zeitraum aus der Adresse: ein Reiter (?zeit=…) oder von/bis – gültige Tage,
+ * nicht in der Zukunft, nicht älter als gespeichert, höchstens 31 Tage
+ */
 export function readRange(url: URL, days: number, keepDays: number) {
 	const today = viennaTime(new Date()).date;
 	const oldest = addDays(today, -keepDays);
+	const period = periodByKey(url.searchParams.get('zeit'));
+	if (period) return { ...periodRange(period, today), today, oldest, period: period.key };
 	const day = (name: string, fallback: string) => {
 		const v = url.searchParams.get(name) ?? '';
 		return isValidIsoDate(v) && v <= today && v >= oldest ? v : fallback;
@@ -184,5 +193,6 @@ export function readRange(url: URL, days: number, keepDays: number) {
 	let from = day('von', addDays(to, 1 - days));
 	if (from > to) from = to;
 	if (from < addDays(to, 1 - MAX_RANGE_DAYS)) from = addDays(to, 1 - MAX_RANGE_DAYS);
-	return { from: from < oldest ? oldest : from, to, today, oldest };
+	if (from < oldest) from = oldest;
+	return { from, to, today, oldest, period: periodOf(from, to, today) };
 }

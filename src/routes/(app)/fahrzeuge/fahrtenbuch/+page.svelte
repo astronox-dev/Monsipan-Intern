@@ -10,6 +10,7 @@
 	import Download from '@lucide/svelte/icons/download';
 	import { liveSubmit } from '$lib/live-search';
 	import FleetTabs from '$lib/modules/fuhrpark/components/FleetTabs.svelte';
+	import PeriodTabs from '$lib/modules/fuhrpark/components/PeriodTabs.svelte';
 
 	let { data } = $props();
 
@@ -40,6 +41,8 @@
 </div>
 
 <FleetTabs />
+
+<div class="mb-4"><PeriodTabs active={data.range.period} keep={data.vehicle ? `&fahrzeug=${data.vehicle}` : ''} /></div>
 
 <form method="GET" class="card mb-4 flex flex-wrap items-end gap-3 p-3">
 	<label>

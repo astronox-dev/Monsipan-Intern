@@ -13,7 +13,7 @@ const { db, client, ensureDatabase } = await import('$lib/server/db');
 const { users, vehiclePositions } = await import('$lib/server/db/schema');
 const { formatAddress } = await import('./addresses');
 const { createPlace, listPlaces, readPlace } = await import('./places');
-const { dayView, logbook, readRange, summarize } = await import('./trips');
+const { logbook, rangeView, readRange, summarize } = await import('./trips');
 const { createVehicle, driverAt, driverHistory, getVehicle, listVehicles, parkedSince, readVehicle, updateVehicle } = await import('./vehicles');
 
 const LAGER = { lat: 48.3608, lon: 16.4925 };
@@ -64,7 +64,7 @@ const row = async () => (await listVehicles()).find((v) => v.id === id)!;
 
 describe('Fahrten über Mitternacht', () => {
 	it('der Tag zeigt die ganze Fahrt, auch wenn sie erst nach Mitternacht ankommt', async () => {
-		const view = await dayView(await row(), '2026-10-27', await listPlaces());
+		const view = await rangeView(await row(), '2026-10-27', '2026-10-27', await listPlaces());
 		const trips = view.items.filter((s) => s.kind === 'fahrt');
 		expect(trips).toHaveLength(1);
 		expect(trips[0].to - trips[0].from).toBeGreaterThan(40 * MIN);
@@ -74,10 +74,16 @@ describe('Fahrten über Mitternacht', () => {
 	});
 
 	it('der Tag danach beginnt mit derselben Fahrt', async () => {
-		const view = await dayView(await row(), '2026-10-28', await listPlaces());
+		const view = await rangeView(await row(), '2026-10-28', '2026-10-28', await listPlaces());
 		expect(view.items.map((s) => s.kind)).toEqual(['fahrt', 'stopp', 'fahrt', 'stopp']);
 		expect(view.items[1]).toMatchObject({ number: 1 });
 		expect(view.items[3]).toMatchObject({ number: 2, where: { place: 'Lager Eibesbrunn' } });
+	});
+
+	it('ein längerer Zeitraum zeigt alles am Stück, nummeriert von vorne', async () => {
+		const view = await rangeView(await row(), '2026-10-27', '2026-10-28', await listPlaces());
+		expect(view.items.map((s) => s.kind)).toEqual(['stopp', 'fahrt', 'stopp', 'fahrt', 'stopp']);
+		expect(view.items.filter((s) => s.kind === 'stopp').map((s) => s.number)).toEqual([1, 2, 3]);
 	});
 
 	it('im Fahrtenbuch steht sie einmal – am Tag ihres Beginns', async () => {
@@ -187,5 +193,15 @@ describe('Zeitraum', () => {
 		expect(b.from).toBe(a.from);
 		const c = readRange(url(`von=${a.oldest}`), 7, 90);
 		expect(c.from > a.oldest).toBe(true);
+		expect(c.period).toBeNull();
+	});
+
+	it('kennt die Reiter – auch wenn die Tage von Hand gewählt sind', () => {
+		const week = readRange(url(''), 7, 90);
+		expect(week.period).toBe('woche');
+		const today = readRange(url('zeit=heute'), 7, 90);
+		expect(today).toMatchObject({ from: today.today, to: today.today, period: 'heute' });
+		expect(readRange(url(`von=${today.today}&bis=${today.today}`), 7, 90).period).toBe('heute');
+		expect(readRange(url('zeit=monat'), 7, 90).period).toBe('monat');
 	});
 });

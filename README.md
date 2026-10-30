@@ -583,12 +583,14 @@ und schickt später nach.
 - **Feste Orte** (`/fahrzeuge/orte`): Lager, Firma, Baustellen mit Namen und Umkreis – Adresse
   suchen oder in die Karte klicken. Sie stehen auf der Karte; ist ein Auto in ihrem Umkreis, steht
   der Name beim Auto, im Verlauf und im Fahrtenbuch.
-- **Verlauf** je Fahrzeug und Tag: Strecke auf der Karte, Kilometer, Fahrzeit und der Ablauf aus
-  Fahrten und **Standzeiten** – die sind nummeriert wie auf der Karte. Eine Standzeit beginnt bei
-  10 Minuten (Umkreis 100 m), kürzere Halte zählen zur Fahrt. Was über Mitternacht geht, steht
-  ganz da – an beiden Tagen.
+- **Verlauf** je Fahrzeug für heute, gestern, 7 oder 30 Tage oder einen bestimmten Tag: Strecke
+  auf der Karte, Kilometer, Fahrzeit und der **Ablauf** – das Neueste oben, je Fahrt Ankunft und
+  Abfahrt, dazwischen die **Standzeiten** mit „P" und Dauer, nummeriert wie auf der Karte. Eine
+  Standzeit beginnt bei 10 Minuten (Umkreis 100 m), kürzere Halte zählen zur Fahrt. Was über
+  Mitternacht geht, steht ganz da – an beiden Tagen.
 - **Fahrtenbuch** (`/fahrzeuge/fahrtenbuch`): jede Fahrt mit Beginn, Ende, Abfahrt, Ankunft,
-  Strecke, Dauer, Fahrer und Fahrzeug, bis 31 Tage auf einmal, auch als CSV. Es gibt keinen Schnitt
+  Strecke, Dauer, Fahrer und Fahrzeug – für heute, gestern, 7 oder 30 Tage oder frei von/bis, bis
+  31 Tage auf einmal, auch als CSV. Es gibt keinen Schnitt
   am Tagesende: Eine Nachtfahrt steht einmal da, am Tag ihres Beginns. Wechselt der Fahrer, bleibt
   bei früheren Fahrten der von damals.
 - **Statistik** (`/fahrzeuge/statistik`): Strecke, Fahrzeit und Fahrten für heute, gestern, 7 oder

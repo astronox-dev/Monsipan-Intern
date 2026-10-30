@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { distance, kilometers, overlapping, placeAt, segments, smoothTrack, stops, vehicleState, viennaDayStart, type TrackPoint } from './track';
+import { distance, kilometers, overlapping, placeAt, segments, smoothTrack, stops, thinned, vehicleState, viennaDayStart, type TrackPoint } from './track';
 
 const MIN = 60_000;
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -138,6 +138,15 @@ describe('Fuhrpark – Fahrten und Standzeiten', () => {
 		const cut = Date.UTC(2026, 9, 27, 23);
 		expect(overlapping(trips, cut - 86_400_000, cut)).toHaveLength(1);
 		expect(overlapping(trips, cut, cut + 86_400_000)).toHaveLength(1);
+	});
+
+	it('dünnt lange Strecken für die Karte aus, Anfang und Ende bleiben', () => {
+		const all = Array.from({ length: 1000 }, (_, i) => i);
+		const few = thinned(all, 11);
+		expect(few).toHaveLength(11);
+		expect(few[0]).toBe(0);
+		expect(few[10]).toBe(999);
+		expect(thinned([1, 2], 11)).toEqual([1, 2]);
 	});
 
 	it('kennt feste Orte im Umkreis – der nächste gewinnt', () => {
