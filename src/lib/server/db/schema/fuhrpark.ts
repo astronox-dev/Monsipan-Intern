@@ -1,7 +1,7 @@
 /**
- * Fuhrpark: Fahrzeuge und ihre Standorte. In jedem Auto liegt ein Tablet mit
- * der App „Monsipan Fahrzeug" – einmal gekoppelt, schickt es den Standort.
- * Standorte älter als 90 Tage löscht die nächtliche Wartung. Dazu feste Orte
+ * Fuhrpark: Fahrzeuge und ihre Standorte. Geortet wird über ein Tablet mit der
+ * App „Monsipan Fahrzeug" im Auto, über einen fest eingebauten Teltonika-Tracker
+ * oder über beides – das stellt jedes Fahrzeug für sich ein. Standorte älter als 90 Tage löscht die nächtliche Wartung. Dazu feste Orte
  * (Lager, Firma, Baustellen) und die Anschriften, die zu Standzeiten gehören.
  */
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
@@ -12,6 +12,14 @@ import { parties, users } from './core';
 export const VEHICLE_KINDS = ['pkw', 'transporter', 'lkw'] as const;
 export type VehicleKind = (typeof VEHICLE_KINDS)[number];
 
+/** Womit ein Fahrzeug geortet wird – bei „beide" hat der Tracker Vorrang */
+export const VEHICLE_TRACKING = ['app', 'teltonika', 'beide'] as const;
+export type VehicleTracking = (typeof VEHICLE_TRACKING)[number];
+
+/** Woher ein Standort kommt */
+export const POSITION_SOURCES = ['app', 'teltonika'] as const;
+export type PositionSource = (typeof POSITION_SOURCES)[number];
+
 export const vehicles = sqliteTable(
 	'vehicles',
 	{
@@ -20,6 +28,15 @@ export const vehicles = sqliteTable(
 		name: text('name').notNull(),
 		plate: text('plate').notNull().default(''),
 		kind: text('kind', { enum: VEHICLE_KINDS }).notNull().default('transporter'),
+		tracking: text('tracking', { enum: VEHICLE_TRACKING }).notNull().default('app'),
+		/** IMEI des Teltonika-Trackers – steht auf dem Gerät */
+		trackerImei: text('tracker_imei'),
+		/** Zuletzt hat sich der Tracker gemeldet */
+		trackerSeenAt: integer('tracker_seen_at', { mode: 'timestamp_ms' }),
+		/** Zündung, Kilometerstand (km) und Bordspannung (V) laut Tracker */
+		ignition: integer('ignition', { mode: 'boolean' }),
+		odometerKm: real('odometer_km'),
+		voltage: real('voltage'),
 		/** Wer das Auto gerade fährt – Wechsel stehen in vehicle_drivers, fürs Fahrtenbuch */
 		driverId: integer('driver_id').references(() => users.id, { onDelete: 'set null' }),
 		/** Partie, die das Auto meist fährt – nur zur Anzeige */
@@ -49,7 +66,11 @@ export const vehicles = sqliteTable(
 		createdAt: createdAt(),
 		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
 	},
-	(t) => [uniqueIndex('vehicles_device_token_idx').on(t.deviceTokenHash), uniqueIndex('vehicles_pair_code_idx').on(t.pairCodeHash)]
+	(t) => [
+		uniqueIndex('vehicles_device_token_idx').on(t.deviceTokenHash),
+		uniqueIndex('vehicles_pair_code_idx').on(t.pairCodeHash),
+		uniqueIndex('vehicles_tracker_imei_idx').on(t.trackerImei)
+	]
 );
 
 export const vehiclePositions = sqliteTable(
@@ -66,7 +87,8 @@ export const vehiclePositions = sqliteTable(
 		speed: real('speed'),
 		heading: real('heading'),
 		/** Genauigkeit in m */
-		accuracy: real('accuracy')
+		accuracy: real('accuracy'),
+		source: text('source', { enum: POSITION_SOURCES }).notNull().default('app')
 	},
 	(t) => [index('vehicle_positions_vehicle_at_idx').on(t.vehicleId, t.at), index('vehicle_positions_at_idx').on(t.at)]
 );

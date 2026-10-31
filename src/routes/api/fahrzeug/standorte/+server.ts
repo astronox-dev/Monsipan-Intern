@@ -22,6 +22,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const positions = cleanPositions(body?.positions);
 	const battery = typeof body?.battery === 'number' && Number.isFinite(body.battery) ? body.battery : null;
 	const charging = typeof body?.charging === 'boolean' ? body.charging : null;
-	await recordPositions(vehicle, positions, { battery, charging });
-	return json({ ok: true, saved: positions.length, vehicle: vehicle.name });
+	// Fährt das Auto nur mit Tracker, nimmt das Portal nichts an – die App sendet trotzdem nicht weiter ins Leere
+	const counted = await recordPositions(vehicle, positions, { battery, charging });
+	return json({ ok: true, saved: counted ? positions.length : 0, vehicle: vehicle.name });
 };

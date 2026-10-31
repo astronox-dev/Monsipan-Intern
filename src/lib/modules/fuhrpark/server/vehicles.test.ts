@@ -16,7 +16,7 @@ let id: number;
 
 beforeAll(async () => {
 	await ensureDatabase();
-	id = await createVehicle({ name: 'Pritsche Nord', plate: 'MI-123AB', kind: 'lkw', driverId: null, partyId: null, note: '', active: true });
+	id = await createVehicle({ name: 'Pritsche Nord', plate: 'MI-123AB', kind: 'lkw', tracking: 'app', trackerImei: null, driverId: null, partyId: null, note: '', active: true });
 });
 
 afterAll(() => {
@@ -73,7 +73,7 @@ describe('Fuhrpark – Standorte', () => {
 
 	it('speichert sie, merkt sich den letzten – auch ein Lebenszeichen ohne Standort', async () => {
 		const day = Date.UTC(2026, 9, 27, 7); // 08:00 in Wien
-		await recordPositions({ id, lastAt: null }, [{ t: day, lat: 48.36, lon: 16.49, spd: 0, acc: 8 }, { t: day + 60_000, lat: 48.37, lon: 16.5, spd: 14, hdg: 45, acc: 6 }], {
+		await recordPositions({ id, lastAt: null, tracking: 'app', trackerSeenAt: null }, [{ t: day, lat: 48.36, lon: 16.49, spd: 0, acc: 8 }, { t: day + 60_000, lat: 48.37, lon: 16.5, spd: 14, hdg: 45, acc: 6 }], {
 			battery: 87,
 			charging: true
 		});
@@ -82,7 +82,7 @@ describe('Fuhrpark – Standorte', () => {
 		expect(v.lastAt?.getTime()).toBe(day + 60_000);
 
 		// Nachgereicht (älter): ändert den letzten Standort nicht
-		await recordPositions({ id, lastAt: v.lastAt }, [{ t: day - 3_600_000, lat: 48.1, lon: 16.1 }], { battery: null, charging: false });
+		await recordPositions({ id, lastAt: v.lastAt, tracking: 'app', trackerSeenAt: null }, [{ t: day - 3_600_000, lat: 48.1, lon: 16.1 }], { battery: null, charging: false });
 		v = (await getVehicle(id))!;
 		expect(v).toMatchObject({ lastLat: 48.37, charging: false, battery: 87 });
 

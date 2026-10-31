@@ -36,6 +36,6 @@ COPY --from=build --chown=node:node /app/fonts ./fonts
 COPY --from=build --chown=node:node /app/package.json ./
 USER node
 VOLUME ["/data"]
-EXPOSE 3000
+EXPOSE 3000 5027
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD wget -qO- http://127.0.0.1:3000/healthz || exit 1
 CMD ["node", "build"]

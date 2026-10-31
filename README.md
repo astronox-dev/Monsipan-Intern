@@ -578,6 +578,10 @@ geht alle 10 Sekunden an das Portal – die Karte dort ist live –, sonst jede 
 Lebenszeichen mit Akkustand und ob das Tablet lädt (= Zündung an). Ohne Netz sammelt die App
 und schickt später nach.
 
+Statt oder zusätzlich zum Tablet lässt sich ein fest eingebauter **Teltonika-Tracker** (FMC920 und
+andere mit Codec 8) verwenden – siehe unten. Je Fahrzeug stellt **Ortung** ein, was zählt: Tablet-App,
+Tracker oder beides. Eine Quelle, die nicht eingestellt ist, wird nicht gespeichert.
+
 - **Fahrzeuge** (`/fahrzeuge`, unter Planung – Recht „Fahrzeuge sehen", von Haus aus Admin,
   Geschäftsführung, Bauleitung): Karte (Österreich von [basemap.at](https://basemap.at), die
   Nachbarländer von [OpenStreetMap](https://www.openstreetmap.org)) und Liste mit
@@ -610,6 +614,28 @@ und schickt später nach.
 - Schnittstelle für die Tablets: `POST /api/fahrzeug/koppeln` (Code → Schlüssel) und
   `POST /api/fahrzeug/standorte` (Bearer-Schlüssel, bis 500 Standorte je Sendung); gespeichert
   wird nur die Prüfsumme des Schlüssels.
+- **Teltonika-Tracker:** Im Fahrzeug **Ortung** auf Teltonika-Tracker oder Beides stellen und die
+  IMEI eintragen (15 Ziffern, steht auf dem Gerät; Tippfehler fallen über die Prüfziffer auf). Bei
+  **Beides** führt der Tracker: Das Tablet speichert mit, bewegt die Karte aber nur, wenn der Tracker
+  seit 10 Minuten schweigt, und im Verlauf zählt es nur, wo der Tracker keine Punkte hat. Liefert
+  der Tracker sie, stehen Zündung, Kilometerstand und Bordspannung beim Fahrzeug.
+- **Tracker einrichten – drei Schritte außerhalb des Portals:**
+  1. **Server:** Die Tracker sprechen ein eigenes TCP-Protokoll und gehen **nicht durch den
+     Cloudflare Tunnel**. In Portainer `TELTONIKA_PORT=5027` setzen, den Port am Router bzw. in der
+     Firewall freigeben und auf den Server weiterleiten. Der Tracker braucht eine direkt erreichbare
+     Adresse: eine feste IP oder einen eigenen Hostnamen (DynDNS bzw. in Cloudflare „DNS only",
+     die graue Wolke) – den in `TELTONIKA_HOST` eintragen, er steht dann im Fahrzeug-Dialog.
+  2. **SIM:** Der Tracker braucht eine SIM-Karte mit Datentarif (grob 50 MB im Monat je Fahrzeug bei
+     den Werten unten) und den APN des Anbieters.
+  3. **Teltonika Configurator:** unter GPRS Domain, Port, Protokoll **TCP**, Codec 8 oder Codec 8
+     Extended. Empfohlen unter Data Acquisition: in Bewegung alle 10 Sekunden, 100 m oder 10°
+     Richtungsänderung; im Stehen alle 5 Minuten – meldet er sich länger nicht, gilt das Auto als
+     „Keine Meldung". Unter I/O Ignition, External Voltage und Total Odometer einschalten. Die
+     Bezeichnungen können je nach Firmware abweichen.
+- **Sicherheit des Tracker-Ports:** Das Protokoll kennt kein Passwort, die IMEI ist die einzige
+  Kennung. Nur eingetragene IMEIs werden angenommen, alles andere wird sofort getrennt, Verbindungen
+  und Paketgrößen sind begrenzt, und über den Port lässt sich nichts lesen. Wer eine eingetragene IMEI
+  kennt, könnte aber falsche Standorte einspielen – die IMEI darum nicht herumzeigen.
 - **Datenschutz:** Standorte bleiben **90 Tage** und werden dann von der nächtlichen Wartung
   gelöscht. Die Ortung von Fahrzeugen, die Mitarbeiter fahren, ist eine Kontrollmaßnahme – mit
   Betriebsrat braucht es eine Betriebsvereinbarung (§ 96 ArbVG), sonst die Zustimmung der
@@ -1432,6 +1458,8 @@ Compose path `portainer-stack.yml`. Die Datei ist kommentiert; nötig ist nur:
 | `INITIAL_ADMIN_PASSWORD` | Passwort des ersten Admins (leer lassen: die App erzeugt eines und zeigt es im Log) |
 | `SMTP_*`, `MAIL_FROM` | nur falls E-Mail gewünscht |
 | `SIGNATUR_*` | nur für die digitale Rechnungssignatur – siehe [Einrichten](#einrichten) |
+| `TELTONIKA_PORT`, `TELTONIKA_HOST` | nur für Teltonika-Tracker im Fuhrpark – leer bleibt der Empfang aus, siehe [Fahrzeuge](#fahrzeuge-standort-der-autos) |
+| `GEOCODE` | `aus` schaltet die Anschriften von OpenStreetMap im Fuhrpark ab |
 
 Der Tunnel zeigt auf `http://<Server-IP>:3000`. Läuft `cloudflared` als Container in
 einem eigenen Docker-Netz, stattdessen in `portainer-stack.yml` Variante B aktivieren

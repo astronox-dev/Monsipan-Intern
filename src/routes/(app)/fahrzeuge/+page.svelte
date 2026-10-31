@@ -3,8 +3,8 @@
 	 * Fahrzeuge: Wo die Autos gerade sind – Karte und Liste, live: Jeder neue
 	 * Standort kommt über die Ereignis-Leitung (siehe Layout), dazu alle 30
 	 * Sekunden neu für „seit …". Feste Orte stehen auf der Karte; ist ein Auto
-	 * dort, steht es in der Liste. Wer verwalten darf, legt Fahrzeuge an und
-	 * koppelt die Tablets.
+	 * dort, steht es in der Liste. Wer verwalten darf, legt Fahrzeuge an, koppelt
+	 * die Tablets und trägt Tracker ein – je Fahrzeug App, Tracker oder beides.
 	 */
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
@@ -24,7 +24,7 @@
 	import Dialog from '$lib/components/Dialog.svelte';
 	import FleetTabs from '$lib/modules/fuhrpark/components/FleetTabs.svelte';
 	import VehicleMap from '$lib/modules/fuhrpark/components/VehicleMap.svelte';
-	import { KIND_OPTIONS, kindOf } from '$lib/modules/fuhrpark/kinds';
+	import { KIND_OPTIONS, kindOf, TRACKING_OPTIONS, type VehicleTracking } from '$lib/modules/fuhrpark/kinds';
 	import type { MapVehicle, VehicleState } from '$lib/modules/fuhrpark/track';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -58,12 +58,25 @@
 	/** „seit 09:53 (für 2 Std. 48 Min.)" – bei mehr als einem Tag mit Datum */
 	const parkedText = (since: number) => `Steht seit ${data.now - since < 86_400_000 ? clock.format(since) : dayClock.format(since)} (${span(Math.max(0, Math.round((data.now - since) / 60_000)))})`;
 	function detail(v: Vehicle): string {
+		if (v.state === 'nie' && v.tracking !== 'app') return 'Wartet auf die erste Meldung';
 		if (!v.paired && v.state === 'nie') return 'Kein Tablet gekoppelt';
 		if (v.state === 'faehrt') return `${Math.round((v.lastSpeed ?? 0) * 3.6)} km/h · ${ago(v.lastAt!)}`;
 		if (v.state === 'steht' && v.parkedSince) return parkedText(v.parkedSince);
 		if (v.state === 'steht') return v.lastAt ? `hier ${ago(v.lastAt)}` : 'meldet sich, noch ohne Standort';
 		if (v.state === 'offline') return `zuletzt ${ago(Math.max(v.lastSeenAt ?? 0, v.lastAt ?? 0))}`;
 		return 'Gekoppelt, wartet auf den ersten Standort';
+	}
+
+	/** Was der Tracker über das Auto weiß – gibt es nur mit Tracker */
+	function trackerLine(v: Vehicle): string {
+		if (v.tracking === 'app' || !v.trackerSeenAt) return '';
+		return [
+			v.ignition == null ? '' : `Zündung ${v.ignition ? 'an' : 'aus'}`,
+			v.odometerKm == null ? '' : `${Math.round(v.odometerKm).toLocaleString('de-AT')} km`,
+			v.voltage == null ? '' : `${v.voltage.toLocaleString('de-AT')} V`
+		]
+			.filter(Boolean)
+			.join(' · ');
 	}
 
 	const onMap = $derived(
@@ -92,10 +105,13 @@
 	let removing = $state<Vehicle | null>(null);
 	let removeOpen = $state(false);
 	let busy = $state(false);
+	/** Im Dialog: Mit Tracker braucht es die IMEI */
+	let tracking = $state<VehicleTracking>('app');
 	const nameOf = (id: number) => data.vehicles.find((v) => v.id === id)?.name ?? '';
 
 	function openEdit(v: Vehicle | null) {
 		editing = v;
+		tracking = v?.tracking ?? 'app';
 		editOpen = true;
 	}
 	const done =
@@ -167,30 +183,33 @@
 					{/if}
 					<p class="mt-1 flex items-center gap-2 text-[0.8125rem] text-ink-2">
 						<span class="min-w-0 flex-1 truncate">{detail(v)}</span>
-						{#if v.battery != null}
+						{#if v.battery != null && v.tracking !== 'teltonika'}
 							<span class="num inline-flex shrink-0 items-center gap-1 text-ink-3" title={v.charging ? 'Tablet lädt (Zündung an)' : 'Akku des Tablets'}>
 								{#if v.charging}<BatteryCharging size={14} aria-hidden="true" />{:else}<Battery size={14} aria-hidden="true" />{/if}{v.battery} %
 							</span>
 						{/if}
 					</p>
+					{#if trackerLine(v)}<p class="num mt-0.5 text-[0.8125rem] text-ink-3">{trackerLine(v)}</p>{/if}
 					<div class="mt-2 flex flex-wrap gap-1">
 						<a href="/fahrzeuge/{v.id}" class="btn btn-secondary btn-sm"><Route size={15} aria-hidden="true" />Fahrten</a>
 						{#if data.canManage}
 							<button class="btn btn-ghost btn-sm" onclick={() => openEdit(v)}><Pencil size={15} aria-hidden="true" />Bearbeiten</button>
-							<form
-								method="POST"
-								action="?/pair"
-								use:enhance={() => async ({ result, update }) => {
-									if (result.type === 'success' && result.data?.pairing) {
-										pairing = result.data.pairing as typeof pairing;
-										pairOpen = true;
-									}
-									await update({ reset: false });
-								}}
-							>
-								<input type="hidden" name="id" value={v.id} />
-								<button class="btn btn-ghost btn-sm"><Link2 size={15} aria-hidden="true" />{v.paired ? 'Neu koppeln' : 'Koppeln'}</button>
-							</form>
+							{#if v.tracking !== 'teltonika'}
+								<form
+									method="POST"
+									action="?/pair"
+									use:enhance={() => async ({ result, update }) => {
+										if (result.type === 'success' && result.data?.pairing) {
+											pairing = result.data.pairing as typeof pairing;
+											pairOpen = true;
+										}
+										await update({ reset: false });
+									}}
+								>
+									<input type="hidden" name="id" value={v.id} />
+									<button class="btn btn-ghost btn-sm"><Link2 size={15} aria-hidden="true" />{v.paired ? 'Neu koppeln' : 'Koppeln'}</button>
+								</form>
+							{/if}
 						{/if}
 					</div>
 				</li>
@@ -200,8 +219,8 @@
 {/if}
 
 <p class="field-hint mt-4">
-	Die Tablets senden rund um die Uhr; jeder Standort bleibt 90 Tage gespeichert, dann wird er gelöscht. Die Fahrer sehen am Tablet dauerhaft, dass der Standort
-	geteilt wird. Anschriften kommen von OpenStreetMap.
+	Tablets und Tracker senden rund um die Uhr; jeder Standort bleibt 90 Tage gespeichert, dann wird er gelöscht. Die Fahrer sehen am Tablet dauerhaft, dass der
+	Standort geteilt wird. Anschriften kommen von OpenStreetMap.
 </p>
 
 {#if data.canManage}
@@ -240,6 +259,28 @@
 						</select>
 					</label>
 				</div>
+				<label class="block">
+					<span class="field-label">Ortung</span>
+					<select class="select" name="ortung" bind:value={tracking}>
+						{#each TRACKING_OPTIONS as t (t.value)}<option value={t.value}>{t.label}</option>{/each}
+					</select>
+				</label>
+				{#if tracking !== 'app'}
+					<label class="block">
+						<span class="field-label">IMEI des Trackers *</span>
+						<input class="input num" name="imei" required inputmode="numeric" autocomplete="off" maxlength="20" value={editing?.trackerImei ?? ''} placeholder="15 Ziffern, steht auf dem Gerät" />
+					</label>
+					{#if data.tracker?.port}
+						<p class="field-hint">
+							Im Tracker eintragen: Server <span class="num font-medium text-ink">{data.tracker.host || 'Adresse des Servers'}</span>, Port
+							<span class="num font-medium text-ink">{data.tracker.port}</span>, Protokoll TCP.
+						</p>
+					{:else}
+						<p class="field-hint text-warn">Der Empfang für Tracker ist am Server noch aus. Bis TELTONIKA_PORT gesetzt ist, kann sich kein Tracker melden.</p>
+					{/if}
+				{:else if editing?.trackerImei}
+					<input type="hidden" name="imei" value={editing.trackerImei} />
+				{/if}
 				<label class="block">
 					<span class="field-label">Notiz</span>
 					<input class="input" name="notiz" maxlength="500" value={editing?.note ?? ''} />

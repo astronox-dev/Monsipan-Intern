@@ -1,5 +1,7 @@
 /**
- * Fuhrpark: Fahrzeuge anlegen, Tablets koppeln, Standorte annehmen.
+ * Fuhrpark: Fahrzeuge anlegen, Tablets koppeln, Standorte annehmen – von der
+ * App und von Teltonika-Trackern (siehe ./teltonika). Welche Quelle zählt, stellt
+ * jedes Fahrzeug ein; was nicht dazugehört, wird nicht gespeichert.
  *
  * Koppeln: Im Portal bekommt ein Fahrzeug einen Code (8 Zeichen, 30 Minuten
  * gültig). Die App „Monsipan Fahrzeug" tauscht ihn einmal gegen einen eigenen
@@ -8,11 +10,22 @@
  * eine Weile kein Netz hatte. Entkoppeln macht den Schlüssel ungültig.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { and, asc, desc, eq, gt, gte, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, isNotNull, isNull, lt, lte, ne, sql } from 'drizzle-orm';
 import { fullName } from '$lib/format';
 import { db } from '$lib/server/db';
 import { broadcast } from '$lib/server/events';
-import { parties, users, VEHICLE_KINDS, vehicleDrivers, vehiclePositions, vehicles, type VehicleKind } from '$lib/server/db/schema';
+import {
+	parties,
+	users,
+	VEHICLE_KINDS,
+	VEHICLE_TRACKING,
+	vehicleDrivers,
+	vehiclePositions,
+	vehicles,
+	type PositionSource,
+	type VehicleKind,
+	type VehicleTracking
+} from '$lib/server/db/schema';
 import { addDays } from '$lib/modules/stunden/week';
 import { GOOD_ACCURACY, viennaDayStart, WALK_SPEED, type TrackPoint } from '../track';
 import { purgeOldAddresses } from './addresses';
@@ -34,6 +47,12 @@ export async function listVehicles() {
 			name: vehicles.name,
 			plate: vehicles.plate,
 			kind: vehicles.kind,
+			tracking: vehicles.tracking,
+			trackerImei: vehicles.trackerImei,
+			trackerSeenAt: vehicles.trackerSeenAt,
+			ignition: vehicles.ignition,
+			odometerKm: vehicles.odometerKm,
+			voltage: vehicles.voltage,
 			driverId: vehicles.driverId,
 			driverFirst: users.firstName,
 			driverLast: users.lastName,
@@ -81,10 +100,32 @@ export interface VehicleInput {
 	name: string;
 	plate: string;
 	kind: VehicleKind;
+	tracking: VehicleTracking;
+	trackerImei: string | null;
 	driverId: number | null;
 	partyId: number | null;
 	note: string;
 	active: boolean;
+}
+
+/** 15 Ziffern, die letzte ist die Prüfziffer (Luhn) – fängt Tippfehler ab */
+export function validImei(imei: string): boolean {
+	if (!/^\d{15}$/.test(imei)) return false;
+	const sum = [...imei].reduce((s, c, i) => {
+		const d = Number(c) * (i % 2 ? 2 : 1);
+		return s + (d > 9 ? d - 9 : d);
+	}, 0);
+	return sum % 10 === 0;
+}
+
+/** Hängt die IMEI schon an einem anderen Fahrzeug? */
+export async function imeiTaken(imei: string, exceptId: number | null): Promise<boolean> {
+	const row = await db
+		.select({ id: vehicles.id })
+		.from(vehicles)
+		.where(and(eq(vehicles.trackerImei, imei), exceptId ? ne(vehicles.id, exceptId) : undefined))
+		.get();
+	return !!row;
 }
 
 export function readVehicle(form: FormData): VehicleInput | { message: string } {
@@ -94,10 +135,18 @@ export function readVehicle(form: FormData): VehicleInput | { message: string } 
 	const party = Number(form.get('partie'));
 	const driver = Number(form.get('fahrer'));
 	const kind = s('art') as VehicleKind;
+	const wanted = s('ortung') as VehicleTracking;
+	const tracking = VEHICLE_TRACKING.includes(wanted) ? wanted : 'app';
+	const imei = s('imei').replace(/\s/g, '');
+	// Auch bei „nur App" bleibt eine eingetragene IMEI stehen – so lässt sich umschalten
+	if (imei && !validImei(imei)) return { message: 'Die IMEI stimmt nicht – sie hat 15 Ziffern und steht auf dem Tracker.' };
+	if (tracking !== 'app' && !imei) return { message: 'Für die Ortung mit Tracker fehlt die IMEI.' };
 	return {
 		name,
 		plate: s('kennzeichen').toUpperCase().slice(0, 20),
 		kind: VEHICLE_KINDS.includes(kind) ? kind : 'transporter',
+		tracking,
+		trackerImei: imei || null,
 		driverId: Number.isInteger(driver) && driver > 0 ? driver : null,
 		partyId: Number.isInteger(party) && party > 0 ? party : null,
 		note: s('notiz').slice(0, 500),
@@ -194,15 +243,24 @@ export async function unpair(id: number) {
 		.where(eq(vehicles.id, id));
 }
 
+/** Was das Annehmen von Standorten über das Fahrzeug wissen muss */
+const RECEIVER = { id: vehicles.id, name: vehicles.name, active: vehicles.active, lastAt: vehicles.lastAt, tracking: vehicles.tracking, trackerSeenAt: vehicles.trackerSeenAt };
+export type Receiver = { id: number; lastAt: Date | null; active: boolean; tracking: VehicleTracking; trackerSeenAt: Date | null };
+
 export async function vehicleByToken(token: string) {
 	if (!/^[A-Za-z0-9_-]{30,100}$/.test(token)) return null;
 	return (
 		(await db
-			.select({ id: vehicles.id, name: vehicles.name, active: vehicles.active, lastAt: vehicles.lastAt })
+			.select(RECEIVER)
 			.from(vehicles)
 			.where(eq(vehicles.deviceTokenHash, sha256(token)))
 			.get()) ?? null
 	);
+}
+
+/** Das Fahrzeug zu einem Tracker – null, wenn die IMEI nirgends eingetragen ist */
+export async function vehicleByImei(imei: string) {
+	return (await db.select(RECEIVER).from(vehicles).where(eq(vehicles.trackerImei, imei)).get()) ?? null;
 }
 
 export interface PositionInput {
@@ -244,17 +302,47 @@ export function cleanPositions(raw: unknown, now = Date.now()): PositionInput[] 
 	return out.sort((a, b) => a.t - b.t);
 }
 
-/** Eine Sendung des Tablets: Standorte speichern, das Fahrzeug als gemeldet markieren */
-export async function recordPositions(vehicle: { id: number; lastAt: Date | null }, positions: PositionInput[], status: { battery: number | null; charging: boolean | null }) {
+/** Zählt diese Quelle bei diesem Fahrzeug? */
+export const usesSource = (tracking: VehicleTracking, source: PositionSource) => tracking === 'beide' || tracking === source;
+
+/** Bei „Beides": So lange nach seiner letzten Meldung gilt der Tracker noch als da */
+const TRACKER_FRESH_MS = 10 * 60_000;
+/** Bei „Beides": Standorte vom Tablet in diesem Abstand zu einem vom Tracker zählen nicht */
+const OVERLAP_MS = 2 * 60_000;
+
+export interface PositionStatus {
+	battery: number | null;
+	charging: boolean | null;
+	ignition?: boolean | null;
+	odometerKm?: number | null;
+	voltage?: number | null;
+}
+
+/**
+ * Eine Sendung von Tablet oder Tracker: Standorte speichern, das Fahrzeug als
+ * gemeldet markieren. Eine Quelle, die beim Fahrzeug nicht eingestellt ist, wird
+ * still übergangen – das Gerät soll nicht endlos dieselben Daten nachschicken.
+ * Gibt zurück, ob die Sendung gezählt hat.
+ */
+export async function recordPositions(
+	vehicle: Omit<Receiver, 'active'> & { active?: boolean },
+	positions: PositionInput[],
+	status: PositionStatus,
+	source: PositionSource = 'app'
+): Promise<boolean> {
+	if (!usesSource(vehicle.tracking, source) || vehicle.active === false) return false;
 	const now = new Date();
+	const tracker = source === 'teltonika';
+	// Bei „Beides" führt der Tracker – das Tablet springt ein, wenn er schweigt
+	const trackerLeads = !tracker && vehicle.tracking === 'beide' && !!vehicle.trackerSeenAt && now.getTime() - vehicle.trackerSeenAt.getTime() < TRACKER_FRESH_MS;
 	await db.transaction(async (tx) => {
 		if (positions.length) {
 			await tx.insert(vehiclePositions).values(
-				positions.map((p) => ({ vehicleId: vehicle.id, at: new Date(p.t), lat: p.lat, lon: p.lon, speed: p.spd ?? null, heading: p.hdg ?? null, accuracy: p.acc ?? null }))
+				positions.map((p) => ({ vehicleId: vehicle.id, at: new Date(p.t), lat: p.lat, lon: p.lon, speed: p.spd ?? null, heading: p.hdg ?? null, accuracy: p.acc ?? null, source }))
 			);
 		}
 		// Für die Live-Karte nur ein genauer Standort – sonst springt das Auto im Stehen herum
-		const newest = positions.findLast((p) => p.acc == null || p.acc <= GOOD_ACCURACY);
+		const newest = trackerLeads ? undefined : positions.findLast((p) => p.acc == null || p.acc <= GOOD_ACCURACY);
 		const fresher = newest && (!vehicle.lastAt || newest.t >= vehicle.lastAt.getTime());
 		await tx
 			.update(vehicles)
@@ -262,6 +350,10 @@ export async function recordPositions(vehicle: { id: number; lastAt: Date | null
 				lastSeenAt: now,
 				...(status.battery != null ? { battery: Math.max(0, Math.min(100, Math.round(status.battery))) } : {}),
 				...(status.charging != null ? { charging: status.charging } : {}),
+				...(tracker ? { trackerSeenAt: now } : {}),
+				...(status.ignition != null ? { ignition: status.ignition } : {}),
+				...(status.odometerKm != null ? { odometerKm: status.odometerKm } : {}),
+				...(status.voltage != null ? { voltage: status.voltage } : {}),
 				...(fresher
 					? {
 							lastAt: new Date(newest.t),
@@ -277,6 +369,7 @@ export async function recordPositions(vehicle: { id: number; lastAt: Date | null
 	});
 	// Offene Karten laden neu – mitgeschickt wird nur die Nummer, die Lage holt jeder mit seinem Recht
 	if (positions.length) broadcast('fahrzeuge', { id: vehicle.id });
+	return true;
 }
 
 /**
@@ -285,7 +378,14 @@ export async function recordPositions(vehicle: { id: number; lastAt: Date | null
  * trotzdem Anfang und Ende.
  */
 export async function rangePoints(vehicleId: number, from: number, to: number): Promise<TrackPoint[]> {
-	const columns = { at: vehiclePositions.at, lat: vehiclePositions.lat, lon: vehiclePositions.lon, speed: vehiclePositions.speed, accuracy: vehiclePositions.accuracy };
+	const columns = {
+		at: vehiclePositions.at,
+		lat: vehiclePositions.lat,
+		lon: vehiclePositions.lon,
+		speed: vehiclePositions.speed,
+		accuracy: vehiclePositions.accuracy,
+		source: vehiclePositions.source
+	};
 	const good = sql`(${vehiclePositions.accuracy} is null or ${vehiclePositions.accuracy} <= ${GOOD_ACCURACY})`;
 	const [before, rows, after] = await Promise.all([
 		db
@@ -309,7 +409,24 @@ export async function rangePoints(vehicleId: number, from: number, to: number): 
 			.limit(1)
 			.get()
 	]);
-	return [...(before ? [before] : []), ...rows, ...(after ? [after] : [])].map((r) => ({ ...r, at: r.at.getTime() }));
+	return preferTracker([...(before ? [before] : []), ...rows, ...(after ? [after] : [])].map((r) => ({ ...r, at: r.at.getTime() }))).map(({ source: _, ...p }) => p);
+}
+
+/**
+ * Tablet und Tracker im selben Auto: Beide melden denselben Weg, zusammen gäbe
+ * das Zickzack. Standorte vom Tablet zählen nur dort, wo der Tracker nichts hat.
+ * Die Punkte kommen in zeitlicher Folge.
+ */
+export function preferTracker<T extends { at: number; source: PositionSource }>(points: T[]): T[] {
+	const tracker = points.filter((p) => p.source === 'teltonika').map((p) => p.at);
+	if (!tracker.length || tracker.length === points.length) return points;
+	let i = 0;
+	return points.filter((p) => {
+		if (p.source === 'teltonika') return true;
+		while (i + 1 < tracker.length && tracker[i + 1] <= p.at) i++;
+		const near = Math.abs(tracker[i] - p.at) < OVERLAP_MS || (i + 1 < tracker.length && Math.abs(tracker[i + 1] - p.at) < OVERLAP_MS);
+		return !near;
+	});
 }
 
 /** Seit wann ein Auto steht: die letzte Bewegung – im Stehen ist das nur eine Handvoll Punkte zurück */

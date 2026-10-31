@@ -2,6 +2,7 @@ import { json, redirect, type Handle, type HandleServerError, type ServerInit } 
 import { env } from '$env/dynamic/private';
 import { clearSessionCookie, SESSION_COOKIE, validateSession } from '$lib/server/auth';
 import { scheduleMaintenance } from '$lib/server/backup';
+import { initTeltonika } from '$lib/modules/fuhrpark/server/teltonika';
 import { ensureDatabase } from '$lib/server/db';
 import { ensurePermissions } from '$lib/server/permissions';
 import { reportTools } from '$lib/server/compress';
@@ -10,6 +11,7 @@ export const init: ServerInit = async () => {
 	await ensureDatabase();
 	await ensurePermissions();
 	scheduleMaintenance();
+	void initTeltonika();
 	void reportTools();
 };
 

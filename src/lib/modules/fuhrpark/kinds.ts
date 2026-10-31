@@ -12,6 +12,15 @@ export const KIND_OPTIONS: { value: VehicleKind; label: string; icon: Component 
 	{ value: 'lkw', label: 'LKW', icon: Truck }
 ];
 
+export type VehicleTracking = 'app' | 'teltonika' | 'beide';
+
+/** Womit ein Fahrzeug geortet wird */
+export const TRACKING_OPTIONS: { value: VehicleTracking; label: string }[] = [
+	{ value: 'app', label: 'Tablet-App' },
+	{ value: 'teltonika', label: 'Teltonika-Tracker' },
+	{ value: 'beide', label: 'Beides – Tracker hat Vorrang' }
+];
+
 export const kindOf = (kind: string) => KIND_OPTIONS.find((k) => k.value === kind) ?? KIND_OPTIONS[1];
 
 const svg = (inner: string) =>

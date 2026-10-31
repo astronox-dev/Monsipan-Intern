@@ -55,6 +55,13 @@ services:
       SIGNATUR_TSA_BENUTZER: ${SIGNATUR_TSA_BENUTZER:-}
       SIGNATUR_TSA_PASSWORT: ${SIGNATUR_TSA_PASSWORT:-}
 
+      # Teltonika-Tracker im Fuhrpark (README „Fahrzeuge"): Port setzen schaltet den Empfang
+      # ein, leer bleibt er aus. Die Tracker sprechen TCP und gehen NICHT durch den
+      # Cloudflare Tunnel – der Port muss direkt von außen erreichbar sein.
+      TELTONIKA_PORT: ${TELTONIKA_PORT:-}
+      # Adresse für die Tracker, wenn sie nicht die aus ORIGIN ist (ohne Cloudflare-Proxy)
+      TELTONIKA_HOST: ${TELTONIKA_HOST:-}
+
       # Beispieldaten beim allerersten Start (im Echtbetrieb false lassen)
       DEMO_DATA: ${DEMO_DATA:-false}
 
@@ -67,6 +74,8 @@ services:
     # (läuft cloudflared mit network_mode: host, geht auch http://localhost:3000).
     ports:
       - '3000:3000'
+      # Teltonika-Tracker – ohne TELTONIKA_PORT lauscht dort niemand
+      - '${TELTONIKA_PORT:-5027}:${TELTONIKA_PORT:-5027}'
 
     # Variante B: cloudflared läuft als Container in einem eigenen Docker-Netz.
     # Dann oben die Ports weglassen, hier und unten die Zeilen aktivieren und

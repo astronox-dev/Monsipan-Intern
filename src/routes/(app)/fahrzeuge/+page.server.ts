@@ -5,7 +5,8 @@ import { partyOptions } from '$lib/server/options';
 import { fullName } from '$lib/format';
 import { addressesFor, addressKey } from '$lib/modules/fuhrpark/server/addresses';
 import { listPlaces } from '$lib/modules/fuhrpark/server/places';
-import { createVehicle, deleteVehicle, driverOptions, listVehicles, parkedSince, readVehicle, startPairing, unpair, updateVehicle } from '$lib/modules/fuhrpark/server/vehicles';
+import { trackerSetup } from '$lib/modules/fuhrpark/server/teltonika';
+import { createVehicle, deleteVehicle, driverOptions, imeiTaken, listVehicles, parkedSince, readVehicle, startPairing, unpair, updateVehicle } from '$lib/modules/fuhrpark/server/vehicles';
 import { placeAt, vehicleState } from '$lib/modules/fuhrpark/track';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -36,13 +37,17 @@ export const load: PageServerLoad = async ({ locals, depends }) => {
 			parkedSince: since.get(v.id) ?? null,
 			lastAt: v.lastAt?.getTime() ?? null,
 			lastSeenAt: v.lastSeenAt?.getTime() ?? null,
-			pairedAt: v.pairedAt?.getTime() ?? null
+			pairedAt: v.pairedAt?.getTime() ?? null,
+			trackerSeenAt: v.trackerSeenAt?.getTime() ?? null,
+			// Die IMEI braucht nur, wer den Fuhrpark verwaltet
+			trackerImei: canManage ? v.trackerImei : null
 		})),
 		places: places.map((p) => ({ id: p.id, name: p.name, lat: p.lat, lon: p.lon, radius: p.radius })),
 		now,
 		canManage,
 		parties: canManage ? await partyOptions() : [],
 		drivers: canManage ? await driverOptions() : [],
+		tracker: canManage ? trackerSetup() : null,
 		apk: FAHRZEUG_APK
 	};
 };
@@ -60,6 +65,7 @@ export const actions: Actions = {
 		const input = readVehicle(form);
 		if ('message' in input) return fail(400, { message: input.message });
 		const id = idOf(form);
+		if (input.trackerImei && (await imeiTaken(input.trackerImei, id))) return fail(400, { message: 'Diese IMEI ist schon bei einem anderen Fahrzeug eingetragen.' });
 		if (id) await updateVehicle(id, input);
 		else await createVehicle(input);
 		return { saved: true };

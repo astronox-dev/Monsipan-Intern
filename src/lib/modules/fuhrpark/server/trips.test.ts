@@ -39,7 +39,7 @@ beforeAll(async () => {
 	await ensureDatabase();
 	const u = await db.insert(users).values({ username: 'fahrer', firstName: 'Erika', lastName: 'Lenker', passwordHash: 'x', role: 'partiefuehrer' }).returning({ id: users.id }).get();
 	driverId = u.id;
-	id = await createVehicle({ name: 'Bus 1', plate: 'W-1', kind: 'transporter', driverId: null, partyId: null, note: '', active: true });
+	id = await createVehicle({ name: 'Bus 1', plate: 'W-1', kind: 'transporter', tracking: 'app', trackerImei: null, driverId: null, partyId: null, note: '', active: true });
 	await createPlace({ name: 'Lager Eibesbrunn', address: '', ...LAGER, radius: 150 });
 	// Nachtschicht: 23:30 weg vom Lager, über Mitternacht zur Baustelle, zwei Stunden dort, zurück
 	await db.insert(vehiclePositions).values([
@@ -101,7 +101,7 @@ describe('Fahrten über Mitternacht', () => {
 describe('Fahrer', () => {
 	it('frühere Fahrten behalten den Fahrer von damals', async () => {
 		const before = await row();
-		const input = { name: before.name, plate: before.plate, kind: before.kind, partyId: null, note: '', active: true };
+		const input = { name: before.name, plate: before.plate, kind: before.kind, tracking: before.tracking, trackerImei: null, partyId: null, note: '', active: true };
 		await updateVehicle(id, { ...input, driverId });
 		expect(await getVehicle(id)).toMatchObject({ driverFirst: 'Erika', driverLast: 'Lenker' });
 		// Zweimal dasselbe ist kein Wechsel
