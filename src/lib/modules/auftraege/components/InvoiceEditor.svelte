@@ -1,5 +1,7 @@
 <script lang="ts" module>
 	export interface EditorHead {
+		/** Rechnungsnummer – von Hand, nicht die des Auftrags */
+		number: string;
 		kind: 'rechnung' | 'teilrechnung';
 		/** Fürs Summenblatt */
 		state: string;
@@ -66,7 +68,7 @@
 	import PaymentTermsFields from './PaymentTermsFields.svelte';
 	import DiscountRow from './DiscountRow.svelte';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
-	import { amountInput, discountFrom, discountInput, INVOICE_KIND_LABELS, invoiceTotals, lineTotal, money, parseAmount, quantityLabel, vatLabel } from '../offer';
+	import { amountInput, discountFrom, discountInput, INVOICE_KIND_LABELS, invoiceTotals, lineTotal, money, parseAmount, quantityLabel, spacedNumber, vatLabel } from '../offer';
 	import {
 		columnLabel,
 		invoiceLines,
@@ -92,11 +94,24 @@
 		mapping?: { columns: SummaryColumn[]; priced: PricedLine[]; initial: Mapping } | null;
 		/** Nur bei einer neuen Rechnung: die Berichte zur Wahl und was es zum Auftrag schon gibt */
 		selection?: { reports: SummaryReport[]; pending: number; previous: number; closed: boolean; flatBilled: number[] } | null;
+		/** Nur bei einer neuen Rechnung: die zuletzt vergebene Nummer, als Hilfe für die nächste */
+		lastNumber?: string | null;
 		busy?: boolean;
 		submitLabel: string;
 		message?: string;
 	}
-	let { head: initialHead, lines: initialLines, paymentDays, units = [], mapping = null, selection = null, busy = false, submitLabel, message = '' }: Props = $props();
+	let {
+		head: initialHead,
+		lines: initialLines,
+		paymentDays,
+		units = [],
+		mapping = null,
+		selection = null,
+		lastNumber = null,
+		busy = false,
+		submitLabel,
+		message = ''
+	}: Props = $props();
 
 	type Line = {
 		key: number;
@@ -376,7 +391,12 @@
 	<section class="card p-4 lg:p-5">
 		<h2 class="text-lg">Rechnung</h2>
 		<div class="mt-3 grid grid-cols-2 gap-3">
-			<label class="col-span-2 block">
+			<label class="block">
+				<span class="field-label">Rechnungsnummer *</span>
+				<input class="input num" name="nummer" required maxlength="40" autocomplete="off" bind:value={head.number} />
+				{#if lastNumber}<span class="field-hint">Zuletzt vergeben: <span class="num">{spacedNumber(lastNumber)}</span></span>{/if}
+			</label>
+			<label class="block">
 				<span class="field-label">Art</span>
 				<select class="select" name="rechnungsart" bind:value={head.kind} onchange={() => (kindTouched = true)}>
 					<!-- Stornorechnungen entstehen nur beim Stornieren einer ausgestellten Rechnung -->

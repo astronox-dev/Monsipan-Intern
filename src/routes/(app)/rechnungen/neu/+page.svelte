@@ -69,6 +69,7 @@
 >
 	<InvoiceEditor
 		head={data.head}
+		lastNumber={data.lastNumber}
 		lines={data.lines}
 		paymentDays={data.paymentDays}
 		units={data.units}

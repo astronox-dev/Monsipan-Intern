@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { requirePermission } from '$lib/server/guard';
 import { mayViewOrder } from '$lib/modules/auftraege/server/orders';
-import { createInvoice, draftLines, invoiceDraft, readInvoice, readMapping, readReports } from '$lib/modules/auftraege/server/invoices';
+import { createInvoice, draftLines, invoiceDraft, lastInvoiceNumber, readInvoice, readMapping, readReports } from '$lib/modules/auftraege/server/invoices';
 import { notifyInvoice } from '$lib/modules/auftraege/server/notify';
 import { unitOptions } from '$lib/server/options';
 import type { Actions, PageServerLoad } from './$types';
@@ -20,7 +20,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const { draft } = await open(url, locals);
 	return {
 		order: draft.order,
-		head: draft.head,
+		// Die Rechnungsnummer trägt man selbst ein – sie ist nicht die des Auftrags
+		head: { ...draft.head, number: '' },
+		lastNumber: await lastInvoiceNumber(),
 		paymentDays: draft.paymentDays,
 		units: await unitOptions(),
 		previous: draft.previous,

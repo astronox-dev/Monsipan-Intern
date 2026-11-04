@@ -936,8 +936,10 @@ elf Spalten in einem weiteren Blatt. Das Summenblatt gibt es zum ganzen Auftrag 
 Rechnung** (nur deren Berichte, Rechnungsnummer, Bundesland und Abschnitt ausgefüllt).
 
 **Rechnungen** (`/rechnungen`): Entweder **eine Rechnung** über alles oder nach und nach
-**Teilrechnungen** – jeder geprüfte Tagesbericht wird genau **einmal** abgerechnet. Die erste
-Rechnung trägt die **Nummer** von Angebot und Auftrag, weitere zum selben Auftrag „-2“, „-3“ …
+**Teilrechnungen** – jeder geprüfte Tagesbericht wird genau **einmal** abgerechnet. Die
+**Rechnungsnummer** trägt man beim Erstellen selbst ein – sie ist nicht die des Auftrags; darunter
+steht die zuletzt vergebene als Hilfe. Jede Nummer gibt es nur einmal, im Entwurf lässt sie sich noch
+ändern. Eine Stornorechnung bekommt die Nummer der stornierten mit „-2“, „-3“ …
 Eine Rechnung (als **Entwurf**) lässt sich aus **jedem Stand** des Auftrags erstellen – auch
 bevor er begonnen hat und ohne geprüfte Berichte. Dann steht oben ein Hinweis, die Mengen
 selbst zu prüfen, statt einer Sperre. Oben in der Liste stehen die

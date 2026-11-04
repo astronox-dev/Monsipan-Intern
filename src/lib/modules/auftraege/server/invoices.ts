@@ -10,7 +10,7 @@
  * signatur/signing.ts); Korrekturen gehen dann nur noch über ein Storno.
  * Unabhängig davon ist sie offen, bis sie als bezahlt markiert wird.
  */
-import { and, asc, desc, eq, gt, gte, inArray, isNull, like, lt, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, like, lt, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db, type Tx } from '$lib/server/db';
 import {
@@ -37,7 +37,6 @@ import {
 	billedLines,
 	COUNTED_STATUS,
 	invoiceLines,
-	nextInvoiceNumber,
 	selectedColumns,
 	selectedPeriod,
 	suggestKind,
@@ -428,6 +427,8 @@ export function draftLines(draft: InvoiceDraft, mapping: Mapping = draft.mapping
 
 export interface SaveInvoice {
 	head: {
+		/** Von Hand vergeben – sie folgt nicht der Auftragsnummer */
+		number: string;
 		kind: InvoiceKind;
 		state: string;
 		section: string;
@@ -460,8 +461,35 @@ export interface SaveInvoice {
  * Formular auslesen – Zeilen wie beim Angebot als z.<Nr>.art/text/menge/
  * einheit/preis. Gibt die Daten oder eine Meldung zurück.
  */
+/** Rechnungsnummer: ohne Leerzeichen gespeichert (die Anzeige gruppiert selbst), kein „/" – das trennt die Kostenstelle ab */
+export function readInvoiceNumber(raw: string): string | { message: string } {
+	const number = raw.replace(/\s+/g, '');
+	if (!number) return { message: 'Bitte die Rechnungsnummer eintragen.' };
+	if (number.length > 30) return { message: 'Die Rechnungsnummer ist zu lang (höchstens 30 Zeichen).' };
+	if (!/^[0-9A-Za-z][0-9A-Za-z._-]*$/.test(number)) return { message: 'Die Rechnungsnummer darf nur Ziffern, Buchstaben, Punkt, Bindestrich und Unterstrich enthalten.' };
+	return number;
+}
+
+/** Ist die Nummer schon vergeben – an eine andere Rechnung als `exceptId`? */
+export async function invoiceNumberTaken(number: string, exceptId: number | null = null, tx: Pick<typeof db, 'select'> = db): Promise<boolean> {
+	const row = await tx
+		.select({ id: invoices.id })
+		.from(invoices)
+		.where(and(eq(invoices.number, number), exceptId ? ne(invoices.id, exceptId) : undefined))
+		.get();
+	return !!row;
+}
+
+/** Die zuletzt vergebene Rechnungsnummer – als Hilfe beim Eintragen der nächsten */
+export async function lastInvoiceNumber(): Promise<string | null> {
+	const row = await db.select({ number: invoices.number }).from(invoices).where(ne(invoices.kind, 'storno')).orderBy(desc(invoices.id)).limit(1).get();
+	return row?.number ?? null;
+}
+
 export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 	const s = (k: string) => String(form.get(k) ?? '');
+	const number = readInvoiceNumber(s('nummer'));
+	if (typeof number !== 'string') return number;
 	const date = s('datum');
 	if (!isValidIsoDate(date)) return { message: 'Das Rechnungsdatum ist ungültig.' };
 	// „Zahlbar bis" ergibt sich aus dem Zahlungsziel
@@ -519,6 +547,7 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 	const kind = s('rechnungsart');
 	return {
 		head: {
+			number,
 			// Stornorechnungen entstehen nur beim Stornieren – nicht aus dem Formular
 			kind: kind === 'teilrechnung' ? 'teilrechnung' : 'rechnung',
 			state: s('bundesland').trim().slice(0, 60),
@@ -612,20 +641,12 @@ export async function createInvoice(
 		if (chosen.length !== reportIds.length) return { message: 'Ein gewählter Tagesbericht gehört nicht mehr zu diesem Auftrag – bitte neu laden.' };
 		if (chosen.some((r) => !COUNTED_STATUS.includes(r.status))) return { message: 'Abgerechnet werden nur geprüfte Tagesberichte.' };
 		if (chosen.some((r) => r.invoiceId != null)) return { message: 'Ein gewählter Tagesbericht ist inzwischen abgerechnet – bitte neu laden.' };
-		const taken = await tx
-			.select({ number: invoices.number })
-			.from(invoices)
-			.where(or(eq(invoices.number, order.number), like(invoices.number, `${order.number}-%`)))
-			.all();
+		const number = data.head.number;
+		if (await invoiceNumberTaken(number, null, tx)) return { message: `Die Rechnungsnummer ${number} ist schon vergeben.` };
 		const offer = order.offerId ? await tx.select({ customerId: offers.customerId }).from(offers).where(eq(offers.id, order.offerId)).get() : undefined;
-		const number = nextInvoiceNumber(
-			order.number,
-			new Set(taken.map((t) => t.number))
-		);
 		const row = await tx
 			.insert(invoices)
 			.values({
-				number,
 				orderId,
 				offerId: order.offerId,
 				customerId: offer?.customerId ?? null,

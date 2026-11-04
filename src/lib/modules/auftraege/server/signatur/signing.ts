@@ -270,8 +270,8 @@ export async function cancelInvoice(user: SessionUser, id: number, why: string, 
 
 async function createStorno(user: SessionUser, invoice: InvoiceDetail, why: string): Promise<number | { ok: false; message: string }> {
 	return db.transaction(async (tx) => {
-		// Nummer wie jede weitere Rechnung zum Auftrag („-2", „-3" …); ohne Auftrag an die stornierte angehängt
-		const base = invoice.orderNumber ?? invoice.number;
+		// Die Nummer der stornierten mit „-2", „-3" … – Rechnungsnummern folgen nicht mehr dem Auftrag
+		const base = invoice.number;
 		const taken = await tx
 			.select({ number: invoices.number })
 			.from(invoices)

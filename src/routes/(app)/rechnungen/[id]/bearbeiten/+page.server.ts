@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { requirePermission } from '$lib/server/guard';
 import { getSettings } from '$lib/server/settings';
-import { invoiceDetail, readInvoice, saveInvoice } from '$lib/modules/auftraege/server/invoices';
+import { invoiceDetail, invoiceNumberTaken, readInvoice, saveInvoice } from '$lib/modules/auftraege/server/invoices';
 import { audit } from '$lib/modules/auftraege/server/signatur/audit';
 import { unitOptions } from '$lib/server/options';
 import type { Actions, PageServerLoad } from './$types';
@@ -22,6 +22,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	return {
 		invoice: { id: invoice.id, number: invoice.number, costCenter: invoice.costCenter, title: invoice.title, kind: invoice.kind },
 		head: {
+			number: invoice.number,
 			kind: invoice.kind,
 			state: invoice.state,
 			section: invoice.section,
@@ -58,8 +59,15 @@ export const actions: Actions = {
 		const invoice = await open(Number(params.id), locals);
 		const data = readInvoice(await request.formData());
 		if ('message' in data) return fail(400, { message: data.message });
+		if (await invoiceNumberTaken(data.head.number, invoice.id)) return fail(400, { message: `Die Rechnungsnummer ${data.head.number} ist schon vergeben.` });
 		if (!(await saveInvoice(invoice.id, data))) return fail(400, { message: 'Die Rechnung ist inzwischen ausgestellt oder bezahlt und lässt sich nicht mehr ändern.' });
-		await audit({ invoiceId: invoice.id, invoiceNumber: invoice.number, user: invoice.user, action: 'geaendert' });
+		await audit({
+			invoiceId: invoice.id,
+			invoiceNumber: data.head.number,
+			user: invoice.user,
+			action: 'geaendert',
+			...(data.head.number !== invoice.number ? { detail: { vorherigeNummer: invoice.number } } : {})
+		});
 		redirect(303, `/rechnungen/${invoice.id}`);
 	}
 };
