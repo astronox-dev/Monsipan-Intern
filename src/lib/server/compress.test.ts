@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import PDFDocument from 'pdfkit';
-import { compressJpeg, compressPdf, compressPdfBuffer, hasTool, qpdfArgs } from './compress';
+import { compressJpeg, compressPdf, compressPdfBuffer, hasTool, PDF_WORK_FILE } from './compress';
 import { jpegSize } from '$lib/modules/tagesberichte/photos';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'verkleinern-'));
@@ -73,16 +73,7 @@ describe.runIf(qpdf)('PDF mit qpdf', () => {
 		const file = path.join(TMP, 'lose.pdf');
 		const original = await loosePdf();
 		fs.writeFileSync(file, original);
-		// Erst direkt: Geht der Aufruf schief, steht hier die Meldung von qpdf
-		const probe = path.join(TMP, 'probe.pdf');
-		execFileSync('qpdf', qpdfArgs(file, probe));
 		const version = execFileSync('qpdf', ['--version']).toString().split(/\r?\n/)[0];
-		expect(fs.statSync(probe).size, `${version}: ${original.length} → ${fs.statSync(probe).size} Bytes`).toBeLessThan(original.length * 0.6);
-		// Derselbe Aufruf mit dem Namen, den compressPdf verwendet
-		const tmp = `${file}.klein.tmp`;
-		execFileSync('qpdf', qpdfArgs(file, tmp));
-		expect(fs.statSync(tmp).size, `${version}: nach ${tmp}`).toBeLessThan(original.length * 0.6);
-		fs.rmSync(tmp);
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const smaller = await compressPdf(file);
 		const warned = warn.mock.calls.map((c) => c.join(' ')).join(' | ');
@@ -96,8 +87,19 @@ describe.runIf(qpdf)('PDF mit qpdf', () => {
 		console.info(`PDF: ${original.length} → ${out.length} Bytes`);
 	});
 
+	it('auch ohne „.pdf“ am Namen (Upload) – über einen zweiten Namen, der danach wieder weg ist', async () => {
+		const upload = path.join(TMP, 'upload-test.tmp');
+		fs.copyFileSync(path.join(TMP, 'lose.pdf'), upload);
+		const smaller = await compressPdf(upload);
+		expect(smaller).toBe(`${upload}.klein.pdf`);
+		expect(fs.existsSync(`${upload}.ein.pdf`)).toBe(false);
+		expect(fs.existsSync(upload)).toBe(true);
+		fs.rmSync(smaller!);
+		expect(PDF_WORK_FILE.test('upload-x.tmp.ein.pdf') && PDF_WORK_FILE.test('a.pdf.klein.pdf') && !PDF_WORK_FILE.test('plan.pdf')).toBe(true);
+	});
+
 	it('im Speicher – ein schon dichtes PDF bleibt, wie es ist', async () => {
-		const dense = fs.readFileSync(path.join(TMP, 'lose.pdf.klein.tmp'));
+		const dense = fs.readFileSync(path.join(TMP, 'lose.pdf.klein.pdf'));
 		expect(await compressPdfBuffer(dense, TMP)).toBe(dense);
 		expect(fs.readdirSync(TMP).filter((f) => f.startsWith('pdf-'))).toEqual([]);
 	});

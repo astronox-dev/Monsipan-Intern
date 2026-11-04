@@ -68,6 +68,9 @@ async function mustStayAsIs(file: string): Promise<boolean> {
  * Aufruf für qpdf. Kein „--" vor den Dateien – neuere qpdf-Versionen lesen das
  * anders; absolute Pfade beginnen nie mit „-" und gelten so nie als Option.
  * Ungepackte Inhalte packen steht ausdrücklich da – darauf verlassen wir uns.
+ *
+ * Beide Dateien müssen auf „.pdf" enden: Ubuntu (ab 26.04) sperrt qpdf per
+ * AppArmor für andere Dateien – „Permission denied", obwohl die Rechte stimmen.
  */
 export const qpdfArgs = (input: string, output: string) => [
 	'--compress-streams=y',
@@ -78,22 +81,29 @@ export const qpdfArgs = (input: string, output: string) => [
 	path.resolve(output)
 ];
 
+/** Zwischendateien von compressPdf – bleibt eine liegen, räumt sie das tägliche Aufräumen weg */
+export const PDF_WORK_FILE = /\.(klein|ein)\.pdf$/;
+
 /**
  * PDF verlustfrei verkleinern. Gibt den Pfad der kleineren Fassung zurück
- * (neben der Datei, mit .tmp am Ende – aufräumen tut der Aufrufer) oder null,
- * wenn es nichts bringt oder nicht geht.
+ * (neben der Datei, mit .klein.pdf am Ende – aufräumen tut der Aufrufer) oder
+ * null, wenn es nichts bringt oder nicht geht.
  */
 export async function compressPdf(file: string): Promise<string | null> {
 	if (!(await hasTool('qpdf')) || (await mustStayAsIs(file))) return null;
-	const out = `${file}.klein.tmp`;
+	const out = `${file}.klein.pdf`;
+	// Ohne „.pdf" am Ende liest qpdf unter AppArmor nicht – dann über einen zweiten Namen (Hardlink, keine Kopie)
+	const input = /\.pdf$/i.test(file) ? file : `${file}.ein.pdf`;
+	if (input !== file) await fs.promises.link(file, input).catch(() => fs.promises.copyFile(file, input));
 	const ok = await new Promise<boolean>((resolve) => {
-		execFile('qpdf', qpdfArgs(file, out), { timeout: PDF_TIMEOUT }, (err, _stdout, stderr) => {
+		execFile('qpdf', qpdfArgs(input, out), { timeout: PDF_TIMEOUT }, (err, _stdout, stderr) => {
 			// 3 heißt: fertig, mit Warnungen (etwa kleine Fehler im Original, die qpdf repariert)
 			const ok = !err || (err as { code?: unknown }).code === 3;
 			if (!ok) console.warn('[verkleinern] qpdf:', String(stderr || (err as Error).message).trim().slice(0, 300));
 			resolve(ok);
 		});
 	});
+	if (input !== file) await fs.promises.rm(input, { force: true });
 	try {
 		const before = (await fs.promises.stat(file)).size;
 		const after = ok ? (await fs.promises.stat(out)).size : Infinity;
@@ -112,7 +122,7 @@ export async function compressPdf(file: string): Promise<string | null> {
 export async function compressPdfBuffer(buf: Buffer, dir: string): Promise<Buffer> {
 	if (!(await hasTool('qpdf'))) return buf;
 	await fs.promises.mkdir(dir, { recursive: true });
-	const temp = `${dir}/pdf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.tmp`;
+	const temp = `${dir}/pdf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.pdf`;
 	await fs.promises.writeFile(temp, buf);
 	try {
 		const smaller = await compressPdf(temp);

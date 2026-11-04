@@ -17,7 +17,7 @@ import { MAX_DOCUMENT_BYTES } from '$lib/documents';
 import { DATA_DIR, db } from './db';
 import { inquiryDocuments, offerDocuments, orderDocuments, policyDocuments, productDocuments, users } from './db/schema';
 import { appendPart, isWriting, partFile } from './parts';
-import { compressPdf } from './compress';
+import { compressPdf, PDF_WORK_FILE } from './compress';
 
 export const DOC_DIR = path.join(DATA_DIR, 'dokumente');
 
@@ -223,7 +223,7 @@ export function tidyFolder(dir: string, pattern: RegExp, used: Set<string>, now 
 		try {
 			const match = pattern.exec(name);
 			if (!match) {
-				if (name.endsWith('.tmp') && fs.statSync(file).mtimeMs < staleUpload) fs.rmSync(file, { force: true });
+				if ((name.endsWith('.tmp') || PDF_WORK_FILE.test(name)) && fs.statSync(file).mtimeMs < staleUpload) fs.rmSync(file, { force: true });
 				continue;
 			}
 			if (used.has(match[1])) {
