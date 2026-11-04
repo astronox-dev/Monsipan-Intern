@@ -67,8 +67,16 @@ async function mustStayAsIs(file: string): Promise<boolean> {
 /**
  * Aufruf für qpdf. Kein „--" vor den Dateien – neuere qpdf-Versionen lesen das
  * anders; absolute Pfade beginnen nie mit „-" und gelten so nie als Option.
+ * Ungepackte Inhalte packen steht ausdrücklich da – darauf verlassen wir uns.
  */
-export const qpdfArgs = (input: string, output: string) => ['--object-streams=generate', '--recompress-flate', '--compression-level=9', path.resolve(input), path.resolve(output)];
+export const qpdfArgs = (input: string, output: string) => [
+	'--compress-streams=y',
+	'--object-streams=generate',
+	'--recompress-flate',
+	'--compression-level=9',
+	path.resolve(input),
+	path.resolve(output)
+];
 
 /**
  * PDF verlustfrei verkleinern. Gibt den Pfad der kleineren Fassung zurück

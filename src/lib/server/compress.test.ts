@@ -74,9 +74,12 @@ describe.runIf(qpdf)('PDF mit qpdf', () => {
 		const original = await loosePdf();
 		fs.writeFileSync(file, original);
 		// Erst direkt: Geht der Aufruf schief, steht hier die Meldung von qpdf
-		execFileSync('qpdf', qpdfArgs(file, path.join(TMP, 'probe.pdf')));
+		const probe = path.join(TMP, 'probe.pdf');
+		execFileSync('qpdf', qpdfArgs(file, probe));
+		const version = execFileSync('qpdf', ['--version']).toString().split(/\r?\n/)[0];
+		expect(fs.statSync(probe).size, `${version}: ${original.length} → ${fs.statSync(probe).size} Bytes`).toBeLessThan(original.length * 0.6);
 		const smaller = await compressPdf(file);
-		expect(smaller).not.toBeNull();
+		expect(smaller, `${version}: compressPdf liefert nichts`).not.toBeNull();
 		const out = fs.readFileSync(smaller!);
 		expect(out.length).toBeLessThan(original.length * 0.6);
 		// Struktur in Ordnung, gleiche Seitenzahl
