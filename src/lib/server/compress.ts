@@ -15,6 +15,7 @@
  */
 import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 import { jpegSize } from '$lib/modules/tagesberichte/photos';
 
 /** Lohnt erst ab 2 % weniger – sonst bleibt das Original */
@@ -64,6 +65,12 @@ async function mustStayAsIs(file: string): Promise<boolean> {
 }
 
 /**
+ * Aufruf für qpdf. Kein „--" vor den Dateien – neuere qpdf-Versionen lesen das
+ * anders; absolute Pfade beginnen nie mit „-" und gelten so nie als Option.
+ */
+export const qpdfArgs = (input: string, output: string) => ['--object-streams=generate', '--recompress-flate', '--compression-level=9', path.resolve(input), path.resolve(output)];
+
+/**
  * PDF verlustfrei verkleinern. Gibt den Pfad der kleineren Fassung zurück
  * (neben der Datei, mit .tmp am Ende – aufräumen tut der Aufrufer) oder null,
  * wenn es nichts bringt oder nicht geht.
@@ -72,9 +79,11 @@ export async function compressPdf(file: string): Promise<string | null> {
 	if (!(await hasTool('qpdf')) || (await mustStayAsIs(file))) return null;
 	const out = `${file}.klein.tmp`;
 	const ok = await new Promise<boolean>((resolve) => {
-		execFile('qpdf', ['--object-streams=generate', '--recompress-flate', '--compression-level=9', '--', file, out], { timeout: PDF_TIMEOUT }, (err) => {
+		execFile('qpdf', qpdfArgs(file, out), { timeout: PDF_TIMEOUT }, (err, _stdout, stderr) => {
 			// 3 heißt: fertig, mit Warnungen (etwa kleine Fehler im Original, die qpdf repariert)
-			resolve(!err || (err as { code?: unknown }).code === 3);
+			const ok = !err || (err as { code?: unknown }).code === 3;
+			if (!ok) console.warn('[verkleinern] qpdf:', String(stderr || (err as Error).message).trim().slice(0, 300));
+			resolve(ok);
 		});
 	});
 	try {

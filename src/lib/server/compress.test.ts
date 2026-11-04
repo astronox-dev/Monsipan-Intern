@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import PDFDocument from 'pdfkit';
-import { compressJpeg, compressPdf, compressPdfBuffer, hasTool } from './compress';
+import { compressJpeg, compressPdf, compressPdfBuffer, hasTool, qpdfArgs } from './compress';
 import { jpegSize } from '$lib/modules/tagesberichte/photos';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'verkleinern-'));
@@ -73,6 +73,8 @@ describe.runIf(qpdf)('PDF mit qpdf', () => {
 		const file = path.join(TMP, 'lose.pdf');
 		const original = await loosePdf();
 		fs.writeFileSync(file, original);
+		// Erst direkt: Geht der Aufruf schief, steht hier die Meldung von qpdf
+		execFileSync('qpdf', qpdfArgs(file, path.join(TMP, 'probe.pdf')));
 		const smaller = await compressPdf(file);
 		expect(smaller).not.toBeNull();
 		const out = fs.readFileSync(smaller!);
