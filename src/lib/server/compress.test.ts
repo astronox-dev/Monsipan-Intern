@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import PDFDocument from 'pdfkit';
 import { compressJpeg, compressPdf, compressPdfBuffer, hasTool, qpdfArgs } from './compress';
 import { jpegSize } from '$lib/modules/tagesberichte/photos';
@@ -78,8 +78,16 @@ describe.runIf(qpdf)('PDF mit qpdf', () => {
 		execFileSync('qpdf', qpdfArgs(file, probe));
 		const version = execFileSync('qpdf', ['--version']).toString().split(/\r?\n/)[0];
 		expect(fs.statSync(probe).size, `${version}: ${original.length} → ${fs.statSync(probe).size} Bytes`).toBeLessThan(original.length * 0.6);
+		// Derselbe Aufruf mit dem Namen, den compressPdf verwendet
+		const tmp = `${file}.klein.tmp`;
+		execFileSync('qpdf', qpdfArgs(file, tmp));
+		expect(fs.statSync(tmp).size, `${version}: nach ${tmp}`).toBeLessThan(original.length * 0.6);
+		fs.rmSync(tmp);
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const smaller = await compressPdf(file);
-		expect(smaller, `${version}: compressPdf liefert nichts`).not.toBeNull();
+		const warned = warn.mock.calls.map((c) => c.join(' ')).join(' | ');
+		warn.mockRestore();
+		expect(smaller, `${version}: compressPdf liefert nichts – ${warned || 'ohne Warnung'}`).not.toBeNull();
 		const out = fs.readFileSync(smaller!);
 		expect(out.length).toBeLessThan(original.length * 0.6);
 		// Struktur in Ordnung, gleiche Seitenzahl
