@@ -13,7 +13,8 @@ import { customers, offerPositions, offers, orders, planEntries, users, type Off
 import { col } from '$lib/server/db/sql';
 import { getSettings } from '$lib/server/settings';
 import type { SessionUser } from '$lib/server/auth';
-import { MAX_OFFER_LINES, parseAmount } from '../offer';
+import { userName, type Conflict, type SaveGuard } from '$lib/server/concurrency';
+import { effectiveSub, MAX_OFFER_LINES, parseAmount } from '../offer';
 
 const creator = alias(users, 'creator');
 const releaser = alias(users, 'releaser');
@@ -318,8 +319,11 @@ async function loadOffer(where: SQL) {
 			acceptedByFirst: accepter.firstName,
 			acceptedByLast: accepter.lastName,
 			billedAt: offers.billedAt,
+			numberingLegacy: offers.numberingLegacy,
 			createdBy: offers.createdBy,
 			createdAt: offers.createdAt,
+			updatedAt: offers.updatedAt,
+			updatedBy: offers.updatedBy,
 			creatorFirst: creator.firstName,
 			creatorLast: creator.lastName,
 			creatorEmail: creator.email
@@ -342,7 +346,8 @@ async function loadOffer(where: SQL) {
 				quantity: offerPositions.quantity,
 				unit: offerPositions.unit,
 				unitPrice: offerPositions.unitPrice,
-				alternative: offerPositions.alternative
+				alternative: offerPositions.alternative,
+				sub: offerPositions.sub
 			})
 			.from(offerPositions)
 			.where(eq(offerPositions.offerId, offer.id))
@@ -381,7 +386,7 @@ export interface SaveOffer {
 		discountPercent: number;
 		discountAmount: number;
 	};
-	lines: { kind: 'position' | 'titel'; text: string; note?: string; quantity: string; unit: string; unitPrice: string; alternative?: boolean }[];
+	lines: { kind: 'position' | 'titel'; text: string; note?: string; quantity: string; unit: string; unitPrice: string; alternative?: boolean; sub?: boolean }[];
 }
 
 const qty = (v: string) => {
@@ -393,10 +398,16 @@ const price = (v: string) => {
 	return n == null ? null : Math.round(n * 10000) / 10000;
 };
 
-export async function saveOffer(id: number, data: SaveOffer) {
+/**
+ * Speichern. Mit `guard`: nur, wenn seit dem Laden niemand anderer gespeichert
+ * hat – sonst kommt zurück, wer (und nichts wird geschrieben).
+ */
+export async function saveOffer(id: number, data: SaveOffer, guard?: SaveGuard): Promise<{ version: number } | { conflict: Conflict }> {
 	const h = data.head;
-	await db.transaction(async (tx) => {
-		await tx
+	const now = new Date();
+	const checked = guard && guard.version != null && !guard.force;
+	return db.transaction(async (tx) => {
+		const done = await tx
 			.update(offers)
 			.set({
 				number: h.number.slice(0, 30),
@@ -422,14 +433,27 @@ export async function saveOffer(id: number, data: SaveOffer) {
 				skontoDays: h.skontoDays,
 				discountPercent: h.discountPercent,
 				discountAmount: h.discountAmount,
-				updatedAt: new Date()
+				...(guard ? { updatedBy: guard.userId } : {}),
+				updatedAt: now
 			})
-			.where(eq(offers.id, id));
+			.where(checked ? and(eq(offers.id, id), eq(offers.updatedAt, new Date(guard.version!))) : eq(offers.id, id))
+			.returning({ id: offers.id });
+		if (!done.length) {
+			const current = await tx
+				.select({ at: offers.updatedAt, first: users.firstName, last: users.lastName })
+				.from(offers)
+				.leftJoin(users, eq(users.id, offers.updatedBy))
+				.where(eq(offers.id, id))
+				.get();
+			return { conflict: { by: userName(current), at: current?.at?.getTime() ?? 0 } };
+		}
 		// Positionen werden neu geschrieben; ganz leere Zeilen fallen weg
 		await tx.delete(offerPositions).where(eq(offerPositions.offerId, id));
 		const lines = data.lines
 			.filter((l) => l.text.trim() || (l.kind === 'position' && (l.quantity.trim() || l.unitPrice.trim())))
 			.slice(0, MAX_OFFER_LINES);
+		// Unterposition bleibt nur, wo sie auch als solche zählt – sonst hinge sie nach dem Verschieben fest
+		const sub = effectiveSub(lines);
 		for (const [i, l] of lines.entries()) {
 			const titel = l.kind === 'titel';
 			await tx.insert(offerPositions).values({
@@ -441,9 +465,11 @@ export async function saveOffer(id: number, data: SaveOffer) {
 				quantity: titel ? null : qty(l.quantity),
 				unit: titel ? '' : l.unit.trim().slice(0, 20),
 				unitPrice: titel ? null : price(l.unitPrice),
-				alternative: !titel && !!l.alternative
+				alternative: !titel && !!l.alternative,
+				sub: sub[i]
 			});
 		}
+		return { version: now.getTime() };
 	});
 }
 

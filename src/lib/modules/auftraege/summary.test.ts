@@ -143,8 +143,14 @@ describe('Zuordnung und Rechnungszeilen', () => {
 			{ key: columnKey('1.3', 'm²'), lbPos: '1.3', unit: 'm²', label: '', slot: null, total: 2 },
 			{ key: columnKey('', 'lfm', { slot: 2 }), lbPos: '', unit: 'lfm', label: '', slot: 2, total: 5 }
 		];
-		// 1.3 = Pfeile; die Spalte ohne LB-Pos. passt per Einheit eindeutig auf die Leitlinie
-		expect(suggestMapping(cols, lines, null)).toEqual({ '1.3|m²': 13, '|lfm#2': 11 });
+		// Bisherige Zählung: 1.3 = Pfeile; die Spalte ohne LB-Pos. passt per Einheit eindeutig auf die Leitlinie
+		expect(suggestMapping(cols, lines, null, true)).toEqual({ '1.3|m²': 13, '|lfm#2': 11 });
+		// Neue Zählung: die Überschriften zählen mit, ohne Unterpositionen sind die Pfeile 4
+		const neu = [{ ...cols[0], key: columnKey('4', 'm²'), lbPos: '4' }, cols[1]];
+		expect(suggestMapping(neu, lines, null)).toEqual({ '4|m²': 13, '|lfm#2': 11 });
+		// … als Unterpositionen der Überschrift 1.3
+		const unter = lines.map((l) => ({ ...l, sub: true }));
+		expect(suggestMapping(cols, unter, null)).toEqual({ '1.3|m²': 13, '|lfm#2': 11 });
 		expect(invoiceLines(lines, cols, { '|lfm#2': 11 })[1].source).toBe('Spalte 2 (lfm)');
 	});
 
@@ -217,7 +223,7 @@ describe('Teilrechnungen', () => {
 describe('Eigene Positionen aus den Tagesberichten', () => {
 	const lines: PricedLine[] = [
 		{ id: 1, kind: 'titel', text: 'Markierung', quantity: null, unit: '', unitPrice: null },
-		{ id: 2, kind: 'position', text: 'RRL 0,15 MSK C ref', quantity: 5680, unit: 'lfd. m', unitPrice: 3.5 }
+		{ id: 2, kind: 'position', text: 'RRL 0,15 MSK C ref', quantity: 5680, unit: 'lfd. m', unitPrice: 3.5, sub: true }
 	];
 	const col = (label: string, unit: string, total: number) => ({ key: columnKey('', unit, { label }), lbPos: '', unit, label, slot: null, total });
 	const cols = [col('RRL 0,15 MSK C ref', 'lfm', 1150), col('Absperrung', 'Std', 4), col('Pfeil', 'Stk', 0)];

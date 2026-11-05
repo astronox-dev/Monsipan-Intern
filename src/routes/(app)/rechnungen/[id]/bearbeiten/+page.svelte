@@ -5,9 +5,24 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import InvoiceEditor from '$lib/modules/auftraege/components/InvoiceEditor.svelte';
 	import { invoiceLabel, invoiceNo } from '$lib/modules/auftraege/offer';
+	import { Autosave } from '$lib/autosave.svelte';
+	import SaveState from '$lib/components/SaveState.svelte';
 
 	let { data, form } = $props();
 	let busy = $state(false);
+	// svelte-ignore state_referenced_locally
+	let version = $state(data.version);
+	let formEl = $state<HTMLFormElement>();
+	const saver = new Autosave({
+		form: () => formEl,
+		action: '',
+		enabled: () => !busy,
+		extra: { auto: '1' },
+		onsaved: (d) => {
+			if (typeof d.version === 'number') version = d.version;
+		}
+	});
+	const message = $derived(form && 'message' in form && !('conflict' in form) ? String(form.message ?? '') : '');
 </script>
 
 <svelte:head><title>{pageTitle(`${invoiceLabel(data.invoice.kind)} ${invoiceNo(data.invoice)} bearbeiten`)}</title></svelte:head>
@@ -23,13 +38,31 @@
 
 <form
 	method="POST"
+	bind:this={formEl}
 	use:enhance={() => {
 		busy = true;
-		return async ({ update }) => {
+		saver.cancel();
+		return async ({ result, update }) => {
 			busy = false;
+			if (result.type === 'failure' && result.data?.conflict) {
+				saver.markConflict(String((result.data.conflict as { by?: string }).by ?? ''), String(result.data.message ?? ''));
+			}
 			await update({ reset: false });
 		};
 	}}
 >
-	<InvoiceEditor head={data.head} lines={data.lines} paymentDays={data.paymentDays} units={data.units} {busy} submitLabel="Speichern" message={form?.message ?? ''} />
+	<input type="hidden" name="version" value={version} />
+	<SaveState {saver} what="die Rechnung" />
+	<InvoiceEditor
+		head={data.head}
+		lines={data.lines}
+		paymentDays={data.paymentDays}
+		units={data.units}
+		{busy}
+		submitLabel="Speichern"
+		{message}
+		onchange={() => saver.touch()}
+	>
+		{#snippet status()}<SaveState {saver} what="die Rechnung" compact />{/snippet}
+	</InvoiceEditor>
 </form>

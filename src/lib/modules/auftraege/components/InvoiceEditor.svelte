@@ -21,6 +21,8 @@
 		customerCity: string;
 		customerUid: string;
 		intro: string;
+		/** Eigener Text dieser Rechnung, unter der Einleitung */
+		extraText: string;
 		closing: string;
 		vatRate: number;
 		reverseCharge: boolean;
@@ -59,8 +61,9 @@
 	 * und die Zuordnung: je Mengenspalte die Angebotsposition, deren Preis gilt.
 	 * Ändert sich Auswahl oder Zuordnung, bekommen die Positionen ihre Menge neu.
 	 */
-	import X from '@lucide/svelte/icons/x';
 	import Plus from '@lucide/svelte/icons/plus';
+	import Heading from '@lucide/svelte/icons/heading';
+	import { tick, untrack, type Snippet } from 'svelte';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import { addDays, daysBetween, isValidIsoDate } from '$lib/modules/stunden/week';
 	import { date as dateLabel } from '$lib/format';
@@ -68,7 +71,25 @@
 	import PaymentTermsFields from './PaymentTermsFields.svelte';
 	import DiscountRow from './DiscountRow.svelte';
 	import { reportDateLabel } from '$lib/modules/tagesberichte/sheet';
-	import { amountInput, discountFrom, discountInput, INVOICE_KIND_LABELS, invoiceTotals, lineTotal, money, parseAmount, quantityLabel, spacedNumber, vatLabel } from '../offer';
+	import {
+		amountInput,
+		discountFrom,
+		discountInput,
+		INVOICE_KIND_LABELS,
+		invoiceTotals,
+		lineTotal,
+		MAX_OFFER_LINES,
+		money,
+		moveItem,
+		nextLineNumber,
+		parseAmount,
+		quantityLabel,
+		spacedNumber,
+		vatLabel
+	} from '../offer';
+	import LineTools from './LineTools.svelte';
+	import RichTextarea from '$lib/components/RichTextarea.svelte';
+	import { dropzone, type DragItem } from '$lib/dnd';
 	import {
 		columnLabel,
 		invoiceLines,
@@ -90,8 +111,8 @@
 		paymentDays: number;
 		/** Vorschläge für die Einheit – aus den Stammdaten; frei eintippen geht weiter */
 		units?: string[];
-		/** Nur bei einer neuen Rechnung: Spalten aus den Tagesberichten und die Angebotspositionen */
-		mapping?: { columns: SummaryColumn[]; priced: PricedLine[]; initial: Mapping } | null;
+		/** Nur bei einer neuen Rechnung: Spalten aus den Tagesberichten und die Angebotspositionen; `legacy`: Zählung 1.1, 1.2 … */
+		mapping?: { columns: SummaryColumn[]; priced: PricedLine[]; initial: Mapping; legacy?: boolean } | null;
 		/** Nur bei einer neuen Rechnung: die Berichte zur Wahl und was es zum Auftrag schon gibt */
 		selection?: { reports: SummaryReport[]; pending: number; previous: number; closed: boolean; flatBilled: number[] } | null;
 		/** Nur bei einer neuen Rechnung: die zuletzt vergebene Nummer, als Hilfe für die nächste */
@@ -99,6 +120,10 @@
 		busy?: boolean;
 		submitLabel: string;
 		message?: string;
+		/** Etwas wurde geändert – fürs automatische Speichern */
+		onchange?: () => void;
+		/** Neben dem Knopf: Stand des automatischen Speicherns */
+		status?: Snippet;
 	}
 	let {
 		head: initialHead,
@@ -110,7 +135,9 @@
 		lastNumber = null,
 		busy = false,
 		submitLabel,
-		message = ''
+		message = '',
+		onchange,
+		status
 	}: Props = $props();
 
 	type Line = {
@@ -175,6 +202,17 @@
 	/** Art und Leistungszeitraum folgen der Auswahl der Berichte, bis jemand sie selbst ändert */
 	let kindTouched = $state(false);
 	let periodTouched = $state(false);
+	// Jede Änderung melden – die Seite speichert dann von selbst
+	let watching = false;
+	$effect(() => {
+		JSON.stringify(head);
+		JSON.stringify(lines);
+		if (!watching) {
+			watching = true;
+			return;
+		}
+		untrack(() => onchange?.());
+	});
 	// svelte-ignore state_referenced_locally
 	let picked = $state<Record<number, boolean>>(Object.fromEntries((selection?.reports ?? []).map((r) => [r.id, true])));
 	const chosen = $derived(new Set((selection?.reports ?? []).filter((r) => picked[r.id]).map((r) => r.id)));
@@ -200,7 +238,7 @@
 		if (!mapping) return;
 		const current: Mapping = {};
 		for (const [k, v] of Object.entries(assigned)) current[k] = v === 'nein' ? null : v === OWN_LINE ? OWN_LINE : v ? Number(v) : undefined;
-		const all_ = invoiceLines(mapping.priced, columns, current, selection?.flatBilled);
+		const all_ = invoiceLines(mapping.priced, columns, current, selection?.flatBilled, mapping.legacy);
 		const drafts = new Map(all_.filter((d) => d.offerLineId != null).map((d) => [d.offerLineId, d]));
 		for (const l of lines) {
 			if (l.offerLineId == null || l.kind !== 'position') continue;
@@ -250,27 +288,63 @@
 		reselect();
 	}
 
-	function addLine() {
-		lines.push({
-			key: nextKey++,
-			number: '',
-			kind: 'position',
-			text: '',
-			note: '',
-			quantity: '',
-			unit: '',
-			price: '',
-			offerLineId: null,
-			offerQuantity: null,
-			source: '',
-			columnKey: null,
-			ownTitle: false,
-			alternative: false
-		});
+	/**
+	 * Nummer für eine neue Zeile nach `prev`: unter einer Überschrift „2" → „2.1",
+	 * sonst die nächste („2.1" → „2.2", „3" → „4"); eine Überschrift bekommt die
+	 * nächste ganze Nummer. Bleibt änderbar.
+	 */
+	function suggestNumber(prev: Line | undefined, kind: 'position' | 'titel'): string {
+		if (!prev) return '1';
+		if (kind === 'titel') {
+			const top = Number(prev.number.split('.')[0]);
+			return Number.isInteger(top) && top > 0 ? String(top + 1) : '';
+		}
+		return prev.kind === 'titel' && prev.number ? `${prev.number}.1` : nextLineNumber(prev.number);
+	}
+	const blank = (kind: 'position' | 'titel', number: string): Line => ({
+		key: nextKey++,
+		number,
+		kind,
+		text: '',
+		note: '',
+		quantity: '',
+		unit: '',
+		price: '',
+		offerLineId: null,
+		offerQuantity: null,
+		source: '',
+		columnKey: null,
+		ownTitle: false,
+		alternative: false
+	});
+	async function insertLine(at: number, kind: 'position' | 'titel') {
+		if (lines.length >= MAX_OFFER_LINES) return;
+		lines.splice(at, 0, blank(kind, suggestNumber(lines[at - 1], kind)));
+		await tick();
+		document.querySelector<HTMLElement>(`[data-rechnung-zeile="${at}"]`)?.focus();
+	}
+	const addLine = (kind: 'position' | 'titel' = 'position') => insertLine(lines.length, kind);
+	/** Kopie direkt darunter – ohne Bezug zum Angebot und zu den Berichten, die gehören zum Original */
+	function copyLine(i: number) {
+		if (lines.length >= MAX_OFFER_LINES) return;
+		const l = lines[i];
+		lines.splice(i + 1, 0, { ...l, key: nextKey++, number: nextLineNumber(l.number), offerLineId: null, offerQuantity: null, source: '', columnKey: null, ownTitle: false });
 	}
 	function removeLine(key: number) {
 		lines = lines.filter((l) => l.key !== key);
 	}
+	function moveLine(i: number, by: -1 | 1) {
+		const j = i + by;
+		if (j >= 0 && j < lines.length) lines = moveItem(lines, i, j);
+	}
+	const dropOn = (i: number) => (item: DragItem, at: { y: number; zone: Element }) => {
+		const from = lines.findIndex((l) => l.key === item.data);
+		if (from < 0) return;
+		const rect = at.zone.getBoundingClientRect();
+		let to = at.y > rect.top + rect.height / 2 ? i + 1 : i;
+		if (from < to) to--;
+		lines = moveItem(lines, from, to);
+	};
 
 	const positionLabel = (p: PricedLine, nr: string) => `${nr} ${p.text.split('\n')[0].slice(0, 60)}${p.unit ? ` (${p.unit})` : ''}${p.alternative ? ' – Alternativposition' : ''}`;
 	const pricedNumbers = $derived.by(() => {
@@ -449,35 +523,47 @@
 	</section>
 </div>
 
-<section class="card mt-4 p-4 lg:p-5">
+<section class="card mt-4 grid gap-4 p-4 lg:p-5">
 	<label class="block">
 		<span class="field-label">Einleitung</span>
 		<textarea class="textarea auto" name="einleitung" rows="2" maxlength="3000" bind:value={head.intro}></textarea>
 	</label>
+	<RichTextarea name="zusatztext" label="Text zu dieser Rechnung" rows={2} maxlength={5000} placeholder="Steht unter der Einleitung – etwa ein Hinweis nur für diese Rechnung" bind:value={head.extraText} />
 </section>
 
 <section class="card mt-4 p-4 lg:p-5">
 	<h2 class="text-lg">Positionen</h2>
 	<p class="mt-1 text-sm text-ink-2">Positionen ohne Menge kommen nicht auf die Rechnung, Überschriften nur, wenn darunter etwas steht.</p>
-	<div class="mt-3 hidden gap-2 text-[0.8125rem] text-ink-3 xl:grid xl:grid-cols-[2.5rem_minmax(0,1fr)_6rem_6.5rem_7rem_7rem_2.25rem]">
+	<div class="mt-3 hidden gap-2 text-[0.8125rem] text-ink-3 xl:grid xl:grid-cols-[3.75rem_minmax(0,1fr)_6rem_6.5rem_7rem_7rem_9.5rem]">
 		<span>Nr.</span><span>Bezeichnung</span><span class="text-right">Menge</span><span>Einheit</span><span class="text-right">EP in €</span><span class="text-right">GP</span><span></span>
 	</div>
 	<ul class="mt-1 divide-y divide-line">
 		{#each lines as l, i (l.key)}
 			{@const empty = l.kind === 'position' && !parsed[i].quantity}
-			<li class={l.kind === 'titel' ? 'heading-row' : `py-2.5 ${empty ? 'opacity-60 focus-within:opacity-100' : ''}`}>
+			<li
+				class={l.kind === 'titel' ? 'heading-row' : `py-2.5 ${empty ? 'opacity-60 focus-within:opacity-100' : ''}`}
+				use:dropzone={{ accepts: ['rechnung-zeile'], onDrop: dropOn(i) }}
+			>
 				<input type="hidden" name="z.{i}.art" value={l.kind} />
-				<input type="hidden" name="z.{i}.nr" value={l.number} />
 				{#if l.kind === 'titel'}
-					<div class="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-2">
-						<span class="num text-[1.0625rem] font-bold">{l.number}</span>
-						<input class="input text-[1.0625rem] font-bold" name="z.{i}.text" maxlength="300" bind:value={l.text} aria-label="Überschrift Zeile {i + 1}" />
+					<div class="grid grid-cols-[3.75rem_minmax(0,1fr)_auto] items-center gap-2">
+						<input class="input num px-2 font-bold" name="z.{i}.nr" maxlength="12" bind:value={l.number} aria-label="Nummer Zeile {i + 1}" />
+						<input class="input text-[1.0625rem] font-bold" name="z.{i}.text" maxlength="300" data-rechnung-zeile={i} bind:value={l.text} aria-label="Überschrift Zeile {i + 1}" />
+						{@render tools(i, l.key)}
 					</div>
 				{:else}
-					<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-2 xl:grid-cols-[2.5rem_minmax(0,1fr)_6rem_6.5rem_7rem_7rem_2.25rem] xl:items-start">
-						<span class="num pt-2 text-sm">{l.number}</span>
+					<div class="grid grid-cols-[3.75rem_minmax(0,1fr)_auto] gap-2 xl:grid-cols-[3.75rem_minmax(0,1fr)_6rem_6.5rem_7rem_7rem_9.5rem] xl:items-start">
+						<input class="input num px-2 text-sm" name="z.{i}.nr" maxlength="12" bind:value={l.number} aria-label="Nummer Zeile {i + 1}" />
 						<div class="min-w-0">
-							<textarea class="textarea auto min-h-10 py-2 font-medium" name="z.{i}.text" rows="1" maxlength="4000" bind:value={l.text} aria-label="Bezeichnung Zeile {i + 1}"></textarea>
+							<textarea
+								class="textarea auto min-h-10 py-2 font-medium"
+								name="z.{i}.text"
+								rows="1"
+								maxlength="4000"
+								data-rechnung-zeile={i}
+								bind:value={l.text}
+								aria-label="Bezeichnung Zeile {i + 1}"
+							></textarea>
 							<!-- Bemerkung: steht im PDF unter der Bezeichnung, nicht fett -->
 							<textarea
 								class="textarea auto mt-1.5 min-h-8 py-1.5 text-sm"
@@ -503,9 +589,7 @@
 								</p>
 							{/if}
 						</div>
-						<button type="button" class="grid size-9 place-items-center rounded-lg text-ink-3 hover:bg-surface-3 hover:text-danger xl:hidden" aria-label="Zeile {i + 1} entfernen" onclick={() => removeLine(l.key)}>
-							<X size={16} />
-						</button>
+						<div class="xl:hidden">{@render tools(i, l.key)}</div>
 						<div class="col-span-3 grid grid-cols-4 gap-2 xl:contents">
 							<label class="block">
 								<span class="field-label xl:sr-only">Menge</span>
@@ -524,16 +608,17 @@
 								<p class="num py-2 text-right font-medium">{money(lineTotal(parsed[i])) || '–'}</p>
 							</div>
 						</div>
-						<button type="button" class="hidden size-9 place-items-center rounded-lg text-ink-3 hover:bg-surface-3 hover:text-danger xl:grid" aria-label="Zeile {i + 1} entfernen" onclick={() => removeLine(l.key)}>
-							<X size={16} />
-						</button>
+						<div class="hidden xl:block">{@render tools(i, l.key)}</div>
 					</div>
 				{/if}
 			</li>
 		{/each}
 	</ul>
 	<datalist id="rechnung-einheiten">{#each units as u (u)}<option value={u}></option>{/each}</datalist>
-	<button type="button" class="btn btn-secondary btn-sm mt-3" onclick={addLine}><Plus size={16} aria-hidden="true" />Position</button>
+	<div class="mt-3 flex flex-wrap gap-2">
+		<button type="button" class="btn btn-secondary btn-sm" disabled={lines.length >= MAX_OFFER_LINES} onclick={() => addLine('position')}><Plus size={16} aria-hidden="true" />Position</button>
+		<button type="button" class="btn btn-ghost btn-sm" disabled={lines.length >= MAX_OFFER_LINES} onclick={() => addLine('titel')}><Heading size={16} aria-hidden="true" />Überschrift</button>
+	</div>
 
 	<dl class="num mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 border-t border-line pt-3">
 		<dt>Gesamt Netto</dt>
@@ -552,15 +637,27 @@
 <PaymentTermsFields bind:days={head.days} bind:percent={head.skonto} bind:skontoDays={head.skontoDays} gross={totals.gross} {dates} />
 
 <section class="card mt-4 p-4 lg:p-5">
-	<label class="block">
-		<span class="field-label">Schlusstext</span>
-		<textarea class="textarea auto" name="schluss" rows="2" maxlength="5000" bind:value={head.closing}></textarea>
-	</label>
+	<RichTextarea name="schluss" label="Schlusstext" rows={2} maxlength={5000} bind:value={head.closing} />
 	<p class="mt-2 text-[0.8125rem] text-ink-3">Darüber stehen auf der Rechnung die Zahlungsbedingungen; die Bankverbindung steht in der Fußzeile.</p>
 </section>
 
 <div class="card lg:sticky mt-4 flex flex-wrap items-center gap-3 p-3 lg:bottom-6">
 	<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : submitLabel}</button>
+	{@render status?.()}
 	<span class="num text-sm text-ink-2">Gesamtbetrag {money(totals.gross)}</span>
 	{#if message}<p class="w-full text-sm text-danger" role="alert">{message}</p>{/if}
 </div>
+
+{#snippet tools(i: number, key: number)}
+	<LineTools
+		index={i}
+		count={lines.length}
+		dragKind="rechnung-zeile"
+		dragKey={key}
+		canAdd={lines.length < MAX_OFFER_LINES}
+		onmove={(by) => moveLine(i, by)}
+		oninsert={(kind) => insertLine(i + 1, kind)}
+		oncopy={() => copyLine(i)}
+		onremove={() => removeLine(key)}
+	/>
+{/snippet}

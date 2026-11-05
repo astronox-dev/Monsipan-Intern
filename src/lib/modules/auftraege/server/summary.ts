@@ -5,7 +5,17 @@
  */
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { dailyReportMaterials, dailyReportPositions, dailyReportRows, dailyReports, invoices, offerPositions, orders, parties } from '$lib/server/db/schema';
+import {
+	dailyReportMaterials,
+	dailyReportPositions,
+	dailyReportRows,
+	dailyReports,
+	invoices,
+	offerPositions,
+	offers,
+	orders,
+	parties
+} from '$lib/server/db/schema';
 import { today } from '$lib/modules/stunden/week';
 import { invoiceNo, lineNumbers } from '../offer';
 import { summarize, type OrderSummary, type SummaryReportInput } from '../summary';
@@ -78,15 +88,20 @@ export async function orderSummary(orderId: number | null, { invoiceId }: { invo
  */
 export async function lvNumbers(orderId: number | null): Promise<Record<string, string>> {
 	if (orderId == null) return {};
-	const order = await db.select({ offerId: orders.offerId, mapping: orders.invoiceMapping }).from(orders).where(eq(orders.id, orderId)).get();
+	const order = await db
+		.select({ offerId: orders.offerId, mapping: orders.invoiceMapping, legacy: offers.numberingLegacy })
+		.from(orders)
+		.leftJoin(offers, eq(offers.id, orders.offerId))
+		.where(eq(orders.id, orderId))
+		.get();
 	if (!order?.offerId || !order.mapping) return {};
 	const lines = await db
-		.select({ id: offerPositions.id, kind: offerPositions.kind })
+		.select({ id: offerPositions.id, kind: offerPositions.kind, sub: offerPositions.sub })
 		.from(offerPositions)
 		.where(eq(offerPositions.offerId, order.offerId))
 		.orderBy(asc(offerPositions.sortOrder), asc(offerPositions.id))
 		.all();
-	const numbers = lineNumbers(lines);
+	const numbers = lineNumbers(lines, !!order.legacy);
 	const byId = new Map(lines.map((l, i) => [l.id, numbers[i]]));
 	const out: Record<string, string> = {};
 	for (const [key, id] of Object.entries(order.mapping)) {

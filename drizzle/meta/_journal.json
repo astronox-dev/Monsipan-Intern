@@ -407,6 +407,13 @@
       "when": 1793486341548,
       "tag": "0057_fahrzeug_tracker",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1793888291156,
+      "tag": "0058_angebot_unterpositionen",
+      "breakpoints": true
     }
   ]
 }

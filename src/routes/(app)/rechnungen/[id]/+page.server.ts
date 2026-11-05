@@ -49,6 +49,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		canSign: settings.enabled && can(user.role, 'rechnungen.ausstellen') && ['ausgestellt', 'fehlgeschlagen', 'signierung'].includes(invoice.stage),
 		canCancel: can(user.role, 'rechnungen.stornieren') && invoice.kind !== 'storno' && ['ausgestellt', 'signiert', 'fehlgeschlagen', 'importiert'].includes(invoice.stage),
 		canSeeOrder: !!invoice.orderId && can(user.role, 'auftraege.sehen'),
+		// Kopie als neuer Entwurf – auch von einer stornierten; nicht von Stornorechnungen und Altbestand ohne Auftrag
+		canCopy: !!invoice.orderId && invoice.kind !== 'storno' && can(user.role, 'rechnungen.erstellen'),
 		canSeeReports: can(user.role, 'tagesberichte.sehen'),
 		signing: { enabled: settings.enabled, level: settings.level, verify: settings.verifyEnabled },
 		files,

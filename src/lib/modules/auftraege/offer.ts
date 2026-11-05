@@ -242,27 +242,88 @@ export function readPaymentTerms(get: (key: string) => string): PaymentTerms | {
 	return { paymentDays: days, skontoPercent: percent > 0 ? Math.round(percent * 100) / 100 : 0, skontoDays: percent > 0 ? skontoDays : 0 };
 }
 
+export interface NumberedLine {
+	kind: 'position' | 'titel';
+	/** Unterposition der Überschrift darüber */
+	sub?: boolean;
+}
+
 /**
- * Nummern wie im Angebot: Positionen 1.1, 1.2 …; jede Zwischenüberschrift
- * beginnt eine neue Gruppe (2, dann 2.1, 2.2 …). Ohne Überschriften bleibt
- * alles in Gruppe 1.
+ * Welche Positionen wirklich Unterpositionen sind: Eine gilt nur, solange
+ * davor die Überschrift oder deren Unterpositionen stehen – nach einer
+ * eigenständigen Position ist die Gruppe zu Ende.
  */
-export function lineNumbers(lines: { kind: 'position' | 'titel' }[]): string[] {
-	let group = 1;
-	let pos = 0;
-	let seen = false;
+export function effectiveSub(lines: readonly NumberedLine[]): boolean[] {
+	let inGroup = false;
 	return lines.map((l) => {
 		if (l.kind === 'titel') {
-			// Die erste Überschrift ganz oben ist Gruppe 1, sonst beginnt eine neue
-			if (seen) group++;
-			seen = true;
-			pos = 0;
-			return String(group);
+			inGroup = true;
+			return false;
 		}
-		seen = true;
-		pos++;
-		return `${group}.${pos}`;
+		const sub = inGroup && !!l.sub;
+		if (!sub) inGroup = false;
+		return sub;
 	});
+}
+
+/** Kann die Zeile an dieser Stelle Unterposition sein? Direkt nach einer Überschrift oder einer ihrer Unterpositionen */
+export function canBeSub(lines: readonly NumberedLine[], i: number): boolean {
+	if (i <= 0 || lines[i]?.kind === 'titel') return false;
+	const prev = lines[i - 1];
+	return prev.kind === 'titel' || effectiveSub(lines.slice(0, i))[i - 1];
+}
+
+/**
+ * Nummern der Positionen: 1, 2, 3 …; eine Überschrift bekommt die nächste
+ * Nummer, ihre Unterpositionen 2.1, 2.2 … – danach geht es mit 3 weiter.
+ *
+ * `legacy`: die bisherige Zählung, für Angebote und Aufträge von vor der
+ * Umstellung (ihre Tagesberichte beziehen sich darauf) – Positionen 1.1, 1.2 …,
+ * jede Überschrift beginnt eine neue Gruppe, ohne Überschrift bleibt alles in 1.
+ */
+export function lineNumbers(lines: readonly NumberedLine[], legacy = false): string[] {
+	if (legacy) {
+		let group = 1;
+		let pos = 0;
+		let seen = false;
+		return lines.map((l) => {
+			if (l.kind === 'titel') {
+				// Die erste Überschrift ganz oben ist Gruppe 1, sonst beginnt eine neue
+				if (seen) group++;
+				seen = true;
+				pos = 0;
+				return String(group);
+			}
+			seen = true;
+			pos++;
+			return `${group}.${pos}`;
+		});
+	}
+	const sub = effectiveSub(lines);
+	let top = 0;
+	let inner = 0;
+	return lines.map((l, i) => {
+		if (sub[i]) return `${top}.${++inner}`;
+		inner = 0;
+		return String(++top);
+	});
+}
+
+/** Vorschlag für die Nummer einer neuen Zeile nach `prev` – „2.1" → „2.2", „3" → „4"; ohne Zahl am Ende leer */
+export function nextLineNumber(prev: string): string {
+	const m = /^(.*?)(\d+)$/.exec(prev.trim());
+	return m ? `${m[1]}${Number(m[2]) + 1}` : '';
+}
+
+/* -------------------------------------------- Zeilen bearbeiten (Angebot, Rechnung) */
+
+/** Zeile von `from` an die Stelle `to` verschieben (Index in der Liste ohne die Zeile) */
+export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
+	if (from === to || from < 0 || from >= list.length) return [...list];
+	const out = [...list];
+	const [item] = out.splice(from, 1);
+	out.splice(Math.max(0, Math.min(out.length, to)), 0, item);
+	return out;
 }
 
 /** „26659" → „26 659" wie in der Überschrift des Angebots */

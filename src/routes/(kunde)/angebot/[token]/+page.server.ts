@@ -30,7 +30,8 @@ function forCustomer(o: OfferDetail) {
 		paymentDays: o.paymentDays,
 		skontoPercent: o.skontoPercent,
 		skontoDays: o.skontoDays,
-		lines: o.lines.map((l) => ({ id: l.id, kind: l.kind, text: l.text, note: l.note, quantity: l.quantity, unit: l.unit, unitPrice: l.unitPrice, alternative: l.alternative })),
+		lines: o.lines.map((l) => ({ id: l.id, kind: l.kind, text: l.text, note: l.note, quantity: l.quantity, unit: l.unit, unitPrice: l.unitPrice, alternative: l.alternative, sub: l.sub })),
+		numberingLegacy: o.numberingLegacy,
 		acceptedName: o.acceptedName,
 		acceptedSignature: o.acceptedSignature,
 		acceptedAt: o.acceptedAt

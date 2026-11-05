@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
+	import { Autosave, autosaveForm } from '$lib/autosave.svelte';
+	import SaveState from '$lib/components/SaveState.svelte';
 	import { onMount, tick } from 'svelte';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Printer from '@lucide/svelte/icons/printer';
@@ -109,6 +111,8 @@
 	);
 
 	let busy = $state(false);
+	// Jede Eingabe speichert kurz danach von selbst
+	const saver = new Autosave({ action: '?/save', enabled: () => data.editable && !busy });
 	let confirmDelete = $state(false);
 	let confirmReopen = $state(false);
 	let confirmUncheck = $state(false);
@@ -328,8 +332,10 @@
 	id="bericht"
 	method="POST"
 	action="?/save"
+	use:autosaveForm={saver}
 	use:enhance={({ action }) => {
 		busy = true;
+		saver.cancel();
 		const step = action.search.includes('kundeVorOrt')
 			? 'onsite'
 			: action.search.includes('release')
@@ -340,6 +346,7 @@
 		return async ({ result, update }) => {
 			busy = false;
 			if (result.type === 'success') {
+				saver.markSaved();
 				if (step === 'release') {
 					toast.success('Bericht freigegeben');
 					releaseOpen = false;
@@ -652,6 +659,7 @@
 		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			{#if data.editable}
 				<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
+				<SaveState {saver} what="den Bericht" compact />
 			{/if}
 			{#if data.canRelease}
 				<button type="button" class="btn {data.editable ? 'btn-secondary' : 'btn-primary'}" disabled={busy} onclick={() => (releaseOpen = true)}>
@@ -828,11 +836,18 @@
 	{#if confirmColumn !== null}
 		{@const p = positions[confirmColumn]}
 		<p class="text-ink-2">
-			Spalte {confirmColumn + 1}{p?.lbPos ? ` (LB-Pos. ${p.lbPos})` : ''} wird samt ihren Mengen entfernt. Erst mit „Speichern" ist es endgültig.
+			Spalte {confirmColumn + 1}{p?.lbPos ? ` (LB-Pos. ${p.lbPos})` : ''} wird samt ihren Mengen entfernt.
 		</p>
 		<div class="mt-5 flex justify-end gap-2">
 			<button type="button" class="btn btn-ghost" onclick={() => (confirmColumn = null)}>Abbrechen</button>
-			<button type="button" class="btn btn-primary" onclick={() => confirmColumn !== null && removePosition(confirmColumn)}>Entfernen</button>
+			<button
+				type="button"
+				class="btn btn-primary"
+				onclick={() => {
+					if (confirmColumn !== null) removePosition(confirmColumn);
+					saver.touch();
+				}}>Entfernen</button
+			>
 		</div>
 	{/if}
 </Dialog>

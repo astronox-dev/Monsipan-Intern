@@ -1,6 +1,7 @@
 <script lang="ts">
 	/** Das Angebot untereinander statt als Blatt – am Handy ohne Zoomen lesbar */
 	import { date as dateLabel } from '$lib/format';
+	import RichText from '$lib/components/RichText.svelte';
 	import {
 		addressLines,
 		lineNumbers,
@@ -37,11 +38,13 @@
 		skontoDays: number;
 		discountPercent?: number;
 		discountAmount?: number;
-		lines: { id: number; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null; alternative?: boolean }[];
+		lines: { id: number; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null; alternative?: boolean; sub?: boolean }[];
+		/** Bisherige Zählung 1.1, 1.2 … (ältere Angebote) */
+		numberingLegacy?: boolean;
 	}
 	let { offer }: { offer: Offer } = $props();
 
-	const numbers = $derived(lineNumbers(offer.lines));
+	const numbers = $derived(lineNumbers(offer.lines, offer.numberingLegacy));
 	const totals = $derived(offerTotals(offer.lines, offer.vatRate, offer.reverseCharge, offer));
 	const terms = $derived(
 		offer.paymentDays == null
@@ -110,5 +113,5 @@
 	{/if}
 	{#if terms.length}<p class="text-sm">{#each terms as t, i (i)}<span class="block">{t}</span>{/each}</p>{/if}
 
-	{#if offer.closing}<p class="text-sm whitespace-pre-line text-ink-2">{offer.closing}</p>{/if}
+	{#if offer.closing}<RichText class="text-sm text-ink-2" text={offer.closing} />{/if}
 </div>

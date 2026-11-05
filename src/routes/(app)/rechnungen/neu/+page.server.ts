@@ -28,7 +28,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		previous: draft.previous,
 		// Ohne neue geprüfte Berichte: Mengen selbst prüfen
 		notice: draft.notice,
-		mapping: { columns: draft.columns, priced: draft.lines, initial: draft.mapping },
+		mapping: { columns: draft.columns, priced: draft.lines, initial: draft.mapping, legacy: draft.legacy },
 		selection: {
 			reports: draft.reports,
 			pending: draft.pending,

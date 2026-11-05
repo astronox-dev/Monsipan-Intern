@@ -510,6 +510,7 @@ async function planInvoices(rows: Row[], mapping: TransferMapping, items: Item[]
 				['customerZip', 12],
 				['customerCity', 120],
 				['intro', 3000],
+				['extraText', 5000],
 				['closing', 5000]
 			]),
 			customerName,
@@ -933,6 +934,7 @@ export async function exportTable(kind: TransferKind): Promise<ExportTable> {
 			i.customerCity,
 			i.customerUid,
 			i.intro,
+			i.extraText,
 			i.closing,
 			i.vatRate,
 			yesNo(i.reverseCharge),

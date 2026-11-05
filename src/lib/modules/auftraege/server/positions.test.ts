@@ -364,3 +364,26 @@ describe('Angebot duplizieren', () => {
 		expect(strip(b)).toHaveLength(3);
 	});
 });
+
+describe('Gleichzeitig bearbeiten', () => {
+	it('überschreibt nicht, was jemand anderer inzwischen gespeichert hat – außer ausdrücklich', async () => {
+		const lines: Line[] = [{ kind: 'position', text: 'Leitlinie', quantity: '10', unit: 'lfm', unitPrice: '2' }];
+		const id = await offerWith('26770', lines);
+		const me = (await db.select({ id: users.id }).from(users).get())!.id;
+		const loaded = (await db.select({ at: offers.updatedAt }).from(offers).where(eq(offers.id, id)).get())!.at!.getTime();
+
+		// A speichert mit dem geladenen Stand – klappt, der Stand ist neu
+		const a = await saveOffer(id, { head: head('26770'), lines: [{ ...lines[0], text: 'Fassung A' }] }, { userId: me, version: loaded, force: false });
+		expect('version' in a && a.version).toBeGreaterThanOrEqual(loaded);
+
+		// B hatte denselben Stand geladen – wird nicht gespeichert, A bleibt
+		const b = await saveOffer(id, { head: head('26770'), lines: [{ ...lines[0], text: 'Fassung B' }] }, { userId: me, version: loaded - 1, force: false });
+		expect(b).toMatchObject({ conflict: { by: expect.any(String) } });
+		expect((await offerDetail(id))!.lines[0].text).toBe('Fassung A');
+
+		// … außer B will ausdrücklich die eigene Fassung
+		const forced = await saveOffer(id, { head: head('26770'), lines: [{ ...lines[0], text: 'Fassung B' }] }, { userId: me, version: loaded - 1, force: true });
+		expect('version' in forced).toBe(true);
+		expect((await offerDetail(id))!.lines[0].text).toBe('Fassung B');
+	});
+});

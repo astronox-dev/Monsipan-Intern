@@ -32,7 +32,7 @@
 	let { data, form } = $props();
 	const order = $derived(data.order);
 	const st = $derived(ORDER_STATUS_LABELS[order.status] ?? ORDER_STATUS_LABELS.erstellt);
-	const numbers = $derived(lineNumbers(order.lines));
+	const numbers = $derived(lineNumbers(order.lines, order.numberingLegacy));
 	const statusBy = $derived([order.statusByFirst, order.statusByLast].filter(Boolean).join(' '));
 
 	let busy = $state(false);

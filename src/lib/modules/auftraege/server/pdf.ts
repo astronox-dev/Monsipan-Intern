@@ -9,6 +9,7 @@
  */
 import QRCode from 'qrcode';
 import { dateTime } from '$lib/format';
+import { parseRich } from '$lib/richtext';
 import { bufferResponse, drawLogo, startPdf } from '$lib/server/pdf';
 import { getSettings } from '$lib/server/settings';
 import { letterheadPath } from '$lib/server/letterhead';
@@ -233,6 +234,35 @@ function paragraph(doc: Doc, text: string, y: number, size = 9.5): number {
 	return y;
 }
 
+/**
+ * Absatz mit **fett** und __unterstrichen__ (Schlusstext, eigener Text der
+ * Rechnung). Die Höhe misst die fette Schrift – die läuft etwas breiter, so
+ * reicht der Platz sicher.
+ */
+function richParagraph(doc: Doc, text: string, y: number, size = 9.5): number {
+	if (!text.trim()) return y;
+	const opts = { width: WIDTH, lineGap: 1.5 };
+	for (const line of parseRich(text)) {
+		const plain = line.map((s) => s.text).join('') || ' ';
+		doc.font(line.some((s) => s.bold) ? 'Helvetica-Bold' : 'Helvetica').fontSize(size);
+		const h = doc.heightOfString(plain, opts);
+		if (y + h > FOOTER_TOP - 4 * MM) {
+			doc.addPage();
+			y = 20 * MM;
+		}
+		doc.fillColor(INK);
+		if (!line.length) doc.font('Helvetica').text(' ', LEFT, y, opts);
+		line.forEach((s, i) => {
+			const more = i < line.length - 1;
+			doc.font(s.bold ? 'Helvetica-Bold' : 'Helvetica');
+			if (i === 0) doc.text(s.text, LEFT, y, { ...opts, underline: s.underline, continued: more });
+			else doc.text(s.text, { ...opts, underline: s.underline, continued: more });
+		});
+		y += h;
+	}
+	return y;
+}
+
 /** Summen rechtsbündig unter der Tabelle: Beschriftung, Betrag, die letzte fett */
 function sumsBlock(doc: Doc, y: number, sums: [string, string, boolean][]): number {
 	if (y + 30 * MM > FOOTER_TOP - 4 * MM) {
@@ -326,7 +356,7 @@ export async function offerPdf(offer: OfferDetail, { forCustomer = false } = {})
 
 	y = paragraph(doc, offer.intro, y, 10) + 5 * MM;
 
-	const numbers = lineNumbers(offer.lines);
+	const numbers = lineNumbers(offer.lines, offer.numberingLegacy);
 	const rows: Row[] = offer.lines.map((l, i) => ({
 		kind: l.kind,
 		nr: numbers[i],
@@ -355,7 +385,7 @@ export async function offerPdf(offer: OfferDetail, { forCustomer = false } = {})
 		const terms = paymentTermsText({ paymentDays: offer.paymentDays, skontoPercent: offer.skontoPercent, skontoDays: offer.skontoDays }, totals.gross);
 		y = paragraph(doc, terms.join('\n'), y) + 3 * MM;
 	}
-	y = paragraph(doc, offer.closing, y);
+	y = richParagraph(doc, offer.closing, y);
 
 	// Angenommen: Name, Tag und Unterschrift des Kunden
 	if (offer.acceptedAt && offer.acceptedSignature) {
@@ -416,7 +446,7 @@ export async function orderPdf(order: OrderDetail): Promise<Response> {
 	// Einleitung aus den Einstellungen – für alle Aufträge gleich
 	if (settings.orderIntro.trim()) y = paragraph(doc, settings.orderIntro, y, 10) + 5 * MM;
 
-	const numbers = lineNumbers(order.lines);
+	const numbers = lineNumbers(order.lines, order.numberingLegacy);
 	y = table(
 		doc,
 		y,
@@ -450,7 +480,7 @@ export async function orderPdf(order: OrderDetail): Promise<Response> {
 		y = labeled(doc, 'Unterlagen in der App', documents.map((d) => d.title).join(', '), y);
 	}
 
-	if (settings.orderClosing.trim()) y = paragraph(doc, settings.orderClosing, y + 6 * MM);
+	if (settings.orderClosing.trim()) y = richParagraph(doc, settings.orderClosing, y + 6 * MM);
 
 	finishPages(doc, null);
 	const buffer = await finish();
@@ -558,6 +588,7 @@ export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }
 	y += 1 * MM;
 
 	y = paragraph(doc, invoice.intro, y, 10) + 5 * MM;
+	if (invoice.extraText.trim()) y = richParagraph(doc, invoice.extraText, y - 2 * MM, 10) + 5 * MM;
 
 	// Nummern wie im Angebot – ältere Zeilen ohne Nummer werden durchgezählt
 	const numbers = lineNumbers(invoice.lines);
@@ -592,7 +623,7 @@ export async function invoicePdfBuffer(invoice: InvoiceDetail, { issued = null }
 		y += 16;
 		if (skonto.length) y = paragraph(doc, skonto.join('\n'), y - 2, 10) + 3;
 	}
-	y = paragraph(doc, invoice.closing, y + 3 * MM);
+	y = richParagraph(doc, invoice.closing, y + 3 * MM);
 
 	if (issued?.verifyUrl) {
 		y += 6 * MM;

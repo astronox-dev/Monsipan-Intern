@@ -28,8 +28,10 @@
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 	import Ban from '@lucide/svelte/icons/ban';
 	import History from '@lucide/svelte/icons/history';
+	import CopyPlus from '@lucide/svelte/icons/copy-plus';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import PdfButton from '$lib/components/PdfButton.svelte';
+	import RichText from '$lib/components/RichText.svelte';
 	import { date as dateLabel, dateTime } from '$lib/format';
 	import {
 		addressLines,
@@ -125,6 +127,10 @@
 			<a href="/rechnungen/{invoice.id}/summenblatt" class="btn btn-secondary"><Sigma size={18} aria-hidden="true" />Summenblatt</a>
 		{/if}
 		{#if data.canEdit}<a href="/rechnungen/{invoice.id}/bearbeiten" class="btn btn-secondary"><Pencil size={18} aria-hidden="true" />Bearbeiten</a>{/if}
+		{#if data.canCopy}<a href="/rechnungen/{invoice.id}/kopie" class="btn btn-secondary"><CopyPlus size={18} aria-hidden="true" />Kopieren</a>{/if}
+		{#if data.canCancel}
+			<button type="button" class="btn btn-secondary text-danger hover:bg-danger-soft" onclick={() => (cancelOpen = true)}><Ban size={18} aria-hidden="true" />Stornieren</button>
+		{/if}
 	</div>
 </div>
 
@@ -159,6 +165,7 @@
 		{#if invoice.stornoId}
 			<a href="/rechnungen/{invoice.stornoId}" class="btn btn-secondary">Stornorechnung {stornoNo}</a>
 		{/if}
+		{#if data.canCopy}<a href="/rechnungen/{invoice.id}/kopie" class="btn btn-primary"><CopyPlus size={18} aria-hidden="true" />Als neue Rechnung kopieren</a>{/if}
 	</section>
 {/if}
 {#if isStorno && invoice.cancelsId}
@@ -402,6 +409,7 @@
 <section class="card mt-4 overflow-hidden">
 	<h2 class="px-4 pt-4 text-lg lg:px-5">Positionen</h2>
 	{#if invoice.intro}<p class="px-4 pt-1 text-sm whitespace-pre-line text-ink-2 lg:px-5">{invoice.intro}</p>{/if}
+	{#if invoice.extraText}<RichText class="px-4 pt-2 text-sm text-ink-2 lg:px-5" text={invoice.extraText} />{/if}
 	<ul class="mt-2 divide-y divide-line">
 		{#each invoice.lines as l, i (l.id)}
 			{#if l.kind === 'titel'}
@@ -442,7 +450,7 @@
 			<span class="font-semibold">{money(afterSkonto(totals.gross, invoice.skontoPercent))}</span>
 		</p>
 	{/if}
-	{#if invoice.closing}<p class="border-t border-line px-4 py-3 text-sm whitespace-pre-line text-ink-2 lg:px-5">{invoice.closing}</p>{/if}
+	{#if invoice.closing}<RichText class="border-t border-line px-4 py-3 text-sm text-ink-2 lg:px-5" text={invoice.closing} />{/if}
 </section>
 
 {#if data.trail.length}

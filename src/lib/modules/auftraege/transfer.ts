@@ -175,6 +175,7 @@ export const TRANSFER: Record<TransferKind, TransferDef> = {
 			...customerAddress,
 			f('customerUid', 'UID des Kunden', ['uiddeskunden', 'uid', 'kundenuid', 'uidnummer', 'ustid']),
 			f('intro', 'Einleitung', ['einleitung', 'kopftext', 'einleitungstext']),
+			f('extraText', 'Zusatztext', ['zusatztext', 'rechnungstext', 'freitext']),
 			f('closing', 'Schlusstext', ['schlusstext', 'fusstext', 'schluss']),
 			f('vatRate', 'USt-Satz', ['ustsatz', 'mwstsatz', 'steuersatz', 'ust', 'mwst', 'ustprozent'], { hint: 'Leer: 20 %' }),
 			f('reverseCharge', 'Reverse Charge', ['reversecharge', 'uebergangdersteuerschuld', 'steuerschuld', 'rc'], { hint: 'ja/nein' }),

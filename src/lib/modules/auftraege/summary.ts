@@ -224,6 +224,8 @@ export interface PricedLine {
 	unitPrice: number | null;
 	/** Alternativposition im Angebot – kommt nur, wenn sie gemacht wurde */
 	alternative?: boolean;
+	/** Unterposition der Überschrift darüber */
+	sub?: boolean;
 }
 
 /** Zuordnung „eigene Position": steht nicht im Auftrag, kommt mit Menge aus den Berichten und eigenem Preis */
@@ -253,8 +255,13 @@ const words = (s: string) =>
  * Position, in deren Text die LB-Position steht; sonst die einzige Position
  * mit passender Einheit.
  */
-export function suggestMapping(columns: SummaryColumn[], lines: PricedLine[], saved: Record<string, MappingTarget> | null | undefined): Mapping {
-	const numbers = lineNumbers(lines);
+export function suggestMapping(
+	columns: SummaryColumn[],
+	lines: PricedLine[],
+	saved: Record<string, MappingTarget> | null | undefined,
+	legacy = false
+): Mapping {
+	const numbers = lineNumbers(lines, legacy);
 	const positions = lines.filter((l) => l.kind === 'position');
 	const byNumber = new Map(lines.map((l, i) => [numbers[i], l]).filter(([, l]) => (l as PricedLine).kind === 'position') as [string, PricedLine][]);
 	const out: Mapping = {};
@@ -325,9 +332,19 @@ export interface InvoiceLineDraft {
  * unter eine eigene Überschrift – mit Bezeichnung und Menge aus den Berichten,
  * den Einheitspreis trägt man selbst ein.
  */
-export function invoiceLines(lines: PricedLine[], columns: SummaryColumn[], mapping: Mapping, flatBilled: readonly number[] = []): InvoiceLineDraft[] {
+export function invoiceLines(
+	lines: PricedLine[],
+	columns: SummaryColumn[],
+	mapping: Mapping,
+	flatBilled: readonly number[] = [],
+	legacy = false
+): InvoiceLineDraft[] {
 	const own = columns.filter((c) => mapping[c.key] === OWN_LINE);
-	const numbers = lineNumbers([...lines, ...(own.length ? [{ kind: 'titel' as const }, ...own.map(() => ({ kind: 'position' as const }))] : [])]);
+	// Eigene Positionen stehen als Unterpositionen unter ihrer Überschrift
+	const numbers = lineNumbers(
+		[...lines, ...(own.length ? [{ kind: 'titel' as const }, ...own.map(() => ({ kind: 'position' as const, sub: true }))] : [])],
+		legacy
+	);
 	const out: InvoiceLineDraft[] = lines.map((l, i) => {
 		const number = numbers[i];
 		if (l.kind === 'titel')

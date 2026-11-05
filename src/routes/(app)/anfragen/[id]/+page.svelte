@@ -5,6 +5,8 @@
 	 */
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
+	import { Autosave, autosaveForm } from '$lib/autosave.svelte';
+	import SaveState from '$lib/components/SaveState.svelte';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import FilePen from '@lucide/svelte/icons/file-pen-line';
 	import Archive from '@lucide/svelte/icons/archive';
@@ -29,6 +31,8 @@
 	let customerOpen = $state(false);
 	let deleteOpen = $state(false);
 	let busy = $state(false);
+	// Jede Eingabe speichert kurz danach von selbst
+	const saver = new Autosave({ action: '?/save', enabled: () => data.canEdit && !busy });
 
 	const stand = $derived(inquiry.closedAt ? { label: 'Erledigt', tone: 'badge-ok' } : { label: 'Offen', tone: 'badge-info' });
 	const author = $derived([inquiry.creatorFirst, inquiry.creatorLast].filter(Boolean).join(' '));
@@ -66,11 +70,16 @@
 	method="POST"
 	action="?/save"
 	class="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]"
+	use:autosaveForm={saver}
 	use:enhance={() => {
 		busy = true;
+		saver.cancel();
 		return async ({ result, update }) => {
 			busy = false;
-			if (result.type === 'success') toast.success('Anfrage gespeichert');
+			if (result.type === 'success') {
+				saver.markSaved();
+				toast.success('Anfrage gespeichert');
+			}
 			await update({ reset: false });
 		};
 	}}
@@ -153,7 +162,12 @@
 				</label>
 			</div>
 		</fieldset>
-		{#if data.canEdit}<button class="btn btn-secondary mt-4" disabled={busy}>Speichern</button>{/if}
+		{#if data.canEdit}
+			<div class="mt-4 flex flex-wrap items-center gap-3">
+				<button class="btn btn-secondary" disabled={busy}>Speichern</button>
+				<SaveState {saver} what="die Anfrage" compact />
+			</div>
+		{/if}
 		<p class="mt-4 text-[0.8125rem] text-ink-3">
 			{fromWebsite ? `Über das Kontaktformular der Webseite eingegangen am ${dateTime(inquiry.createdAt)}.` : `Angelegt ${dateTime(inquiry.createdAt)}${author ? ` von ${author}` : ''}.`}
 		</p>

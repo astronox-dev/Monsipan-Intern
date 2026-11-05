@@ -29,6 +29,7 @@ import {
 import { col } from '$lib/server/db/sql';
 import { getSettings } from '$lib/server/settings';
 import type { SessionUser } from '$lib/server/auth';
+import { userName, type Conflict, type SaveGuard } from '$lib/server/concurrency';
 import { addDays, isValidIsoDate, today } from '$lib/modules/stunden/week';
 import { notify } from '$lib/server/notifications';
 import { date as dateLabel } from '$lib/format';
@@ -270,14 +271,14 @@ export async function invoiceStates(orderIds: number[]): Promise<Record<number, 
  * Pauschalen, die schon auf einer früheren Rechnung zum Auftrag stehen – die
  * kommen nicht von selbst noch einmal. Erkannt an der Positionsnummer.
  */
-async function flatBilledLines(invoiceIds: number[], lines: PricedLine[]): Promise<number[]> {
+async function flatBilledLines(invoiceIds: number[], lines: PricedLine[], legacy = false): Promise<number[]> {
 	if (!invoiceIds.length) return [];
 	const billed = await db
 		.select({ number: invoicePositions.number })
 		.from(invoicePositions)
 		.where(and(inArray(invoicePositions.invoiceId, invoiceIds), eq(invoicePositions.kind, 'position'), gt(invoicePositions.quantity, 0)))
 		.all();
-	const numbers = lineNumbers(lines);
+	const numbers = lineNumbers(lines, legacy);
 	const done = new Set(billed.map((b) => b.number));
 	return lines.filter((l, i) => l.kind === 'position' && unitFamily(l.unit) === 'pauschal' && done.has(numbers[i])).map((l) => l.id);
 }
@@ -302,7 +303,8 @@ export async function invoiceDraft(orderId: number) {
 					quantity: offerPositions.quantity,
 					unit: offerPositions.unit,
 					unitPrice: offerPositions.unitPrice,
-					alternative: offerPositions.alternative
+					alternative: offerPositions.alternative,
+					sub: offerPositions.sub
 				})
 				.from(offerPositions)
 				.where(eq(offerPositions.offerId, offer.id))
@@ -317,13 +319,15 @@ export async function invoiceDraft(orderId: number) {
 						note: orderPositions.note,
 						quantity: orderPositions.quantity,
 						unit: orderPositions.unit,
-						alternative: orderPositions.alternative
+						alternative: orderPositions.alternative,
+						sub: orderPositions.sub
 					})
 					.from(orderPositions)
 					.where(eq(orderPositions.orderId, orderId))
 					.orderBy(asc(orderPositions.sortOrder), asc(orderPositions.id))
 					.all()
 			).map((l) => ({ ...l, unitPrice: null }));
+	const legacy = offer ? offer.numberingLegacy : order.numberingLegacy;
 	const [summary, settings, previous] = await Promise.all([
 		orderSummary(orderId),
 		getSettings(),
@@ -373,16 +377,19 @@ export async function invoiceDraft(orderId: number) {
 			offerNumber: offer?.number ?? null
 		},
 		lines,
+		// Ältere Angebote zählen weiter 1.1, 1.2 … – die Tagesberichte beziehen sich darauf
+		legacy,
 		columns,
 		reports,
 		pending,
 		previous,
 		flatBilled: await flatBilledLines(
 			previous.map((p) => p.id),
-			lines
+			lines,
+			legacy
 		),
 		notice: invoiceNotice({ status: order.status, previous: previous.length, available: reports.length }),
-		mapping: suggestMapping(columns, lines, order.invoiceMapping),
+		mapping: suggestMapping(columns, lines, order.invoiceMapping, legacy),
 		head: {
 			kind: suggestKind({ closed: order.status === 'abgeschlossen', previous: previous.length, available: reports.length, selected: reports.length, pending }) as Exclude<InvoiceKind, 'storno'>,
 			// Bundesland und Abschnitt wie auf der letzten Rechnung zum Auftrag
@@ -394,7 +401,8 @@ export async function invoiceDraft(orderId: number) {
 			serviceTo: period?.to ?? '',
 			// Die Kostenstelle wie auf der letzten Rechnung zum Auftrag
 			costCenter: last?.costCenter ?? '',
-			title: order.title,
+			// Das BV trägt jede Rechnung selbst ein – nicht einfach die Bezeichnung des Auftrags
+			title: '',
 			location: order.location,
 			customerName: offer?.customerName ?? order.customerName,
 			customerAddition: offer?.customerAddition ?? order.customerAddition,
@@ -403,6 +411,7 @@ export async function invoiceDraft(orderId: number) {
 			customerCity: offer?.customerCity ?? order.customerCity,
 			customerUid: offer?.customerUid ?? '',
 			intro: settings.invoiceIntro,
+			extraText: '',
 			closing: settings.invoiceClosing,
 			vatRate: offer?.vatRate ?? 20,
 			reverseCharge: !!offer?.reverseCharge || !!customer?.reverseCharge,
@@ -420,7 +429,7 @@ export type InvoiceDraft = NonNullable<Awaited<ReturnType<typeof invoiceDraft>>>
 
 /** Die vorgeschlagenen Zeilen zum Entwurf – Mengen aller noch offenen Berichte nach der Zuordnung */
 export function draftLines(draft: InvoiceDraft, mapping: Mapping = draft.mapping) {
-	return invoiceLines(draft.lines, draft.columns, mapping, draft.flatBilled);
+	return invoiceLines(draft.lines, draft.columns, mapping, draft.flatBilled, draft.legacy);
 }
 
 /* ------------------------------------------------------------ Speichern */
@@ -446,6 +455,8 @@ export interface SaveInvoice {
 		customerCity: string;
 		customerUid: string;
 		intro: string;
+		/** Eigener Text dieser Rechnung, unter der Einleitung – mit **fett** und __unterstrichen__ */
+		extraText: string;
 		closing: string;
 		vatRate: number;
 		reverseCharge: boolean;
@@ -566,6 +577,7 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 			customerCity: s('k_ort').trim().slice(0, 120),
 			customerUid: uid,
 			intro: s('einleitung').replace(/\r\n/g, '\n').trimEnd().slice(0, 3000),
+			extraText: s('zusatztext').replace(/\r\n/g, '\n').trimEnd().slice(0, 5000),
 			closing: s('schluss').replace(/\r\n/g, '\n').trimEnd().slice(0, 5000),
 			vatRate: Math.round(vat * 100) / 100,
 			reverseCharge,
@@ -670,18 +682,35 @@ export async function createInvoice(
 	});
 }
 
-/** Entwurf ändern – ausgestellte und bezahlte bleiben, wie sie sind */
-export async function saveInvoice(id: number, data: SaveInvoice): Promise<boolean> {
+/**
+ * Entwurf ändern – ausgestellte und bezahlte bleiben, wie sie sind (`false`).
+ * Mit `guard`: nur, wenn seit dem Laden niemand anderer gespeichert hat – sonst
+ * kommt zurück, wer.
+ */
+export async function saveInvoice(id: number, data: SaveInvoice, guard?: SaveGuard): Promise<false | { version: number } | { conflict: Conflict }> {
+	const now = new Date();
+	const checked = guard && guard.version != null && !guard.force;
 	return db.transaction(async (tx) => {
+		const editable = and(eq(invoices.id, id), eq(invoices.status, 'offen'), eq(invoices.stage, 'entwurf'));
 		const done = await tx
 			.update(invoices)
 			// Neues Zahlungsziel: „überfällig" gilt dann wieder neu
-			.set({ ...data.head, overdueNotifiedAt: null, updatedAt: new Date() })
-			.where(and(eq(invoices.id, id), eq(invoices.status, 'offen'), eq(invoices.stage, 'entwurf')))
+			.set({ ...data.head, overdueNotifiedAt: null, ...(guard ? { updatedBy: guard.userId } : {}), updatedAt: now })
+			.where(checked ? and(editable, eq(invoices.updatedAt, new Date(guard.version!))) : editable)
 			.returning({ id: invoices.id });
-		if (!done.length) return false;
+		if (!done.length) {
+			if (!checked) return false;
+			const current = await tx
+				.select({ at: invoices.updatedAt, status: invoices.status, stage: invoices.stage, first: users.firstName, last: users.lastName })
+				.from(invoices)
+				.leftJoin(users, eq(users.id, invoices.updatedBy))
+				.where(eq(invoices.id, id))
+				.get();
+			if (!current || current.status !== 'offen' || current.stage !== 'entwurf') return false;
+			return { conflict: { by: userName(current), at: current.at?.getTime() ?? 0 } };
+		}
 		await writeLines(tx, id, data.lines);
-		return true;
+		return { version: now.getTime() };
 	});
 }
 
@@ -713,6 +742,7 @@ export async function invoiceDetail(id: number) {
 			customerCity: invoices.customerCity,
 			customerUid: invoices.customerUid,
 			intro: invoices.intro,
+			extraText: invoices.extraText,
 			closing: invoices.closing,
 			vatRate: invoices.vatRate,
 			reverseCharge: invoices.reverseCharge,

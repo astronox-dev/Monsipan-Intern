@@ -71,6 +71,12 @@ Die Knöpfe zum Speichern und Freigeben (Tagesbericht, Stundenzettel, Angebot, R
 am Handy und Tablet am Ende des Formulars, damit beim Scrollen nichts verdeckt wird; erst am PC
 bleiben sie unten am Rand stehen.
 
+**Automatisch gespeichert** wird in Angeboten, Rechnungsentwürfen, Tagesberichten,
+Stundenzetteln, Anfragen und Arbeitsaufträgen: kurz nach jeder Eingabe und beim Verlassen der
+Seite. Neben dem Speichern-Knopf steht der Stand („Gespeichert 14:32“, „Nicht gespeichert: …“).
+Eine neue Rechnung entsteht erst mit „Rechnung anlegen“ – danach speichert auch sie von selbst.
+Freigeben, Unterschreiben, Ausstellen bleiben eigene Schritte.
+
 ## Lagermanagement
 
 Lagerverwaltung für die Bodenmarkierung: Bestand je Lagerort, Ein-/Ausbuchen per Scan,
@@ -706,16 +712,22 @@ links, rechts Angebotsdatum, Kunden-UID und Angebotsnummer, darunter
 „Angebot Nr. 26 659 / BV: …“, die Einleitung, die Positionen mit **Nr., Bezeichnung, Menge,
 Einheit, Einheitspreis (EP) und Gesamtpreis (GP)**, darunter Gesamt Netto, Umsatzsteuer
 und Gesamtbetrag, die Zahlungsbedingungen, der Schlusstext und unten Anschrift,
-Bankverbindung und Kontakt. Die Einheit wählt man aus der Liste unter
-**Stammdaten → Einheiten**; in Rechnungen stehen dieselben Einheiten als Vorschlag, dort
-bleibt sie frei eintippbar.
+Bankverbindung und Kontakt. Die Einheit schlägt die Liste unter **Stammdaten → Einheiten**
+vor; man kann aber auch selbst eine eintippen (etwa „kg“) – im Angebot wie in der Rechnung.
 
 - Der **Ausführungsort** (wo gearbeitet wird) steht im PDF unter der Überschrift und geht in
   den Auftrag über.
-- Positionen werden 1.1, 1.2 … nummeriert; eine **Überschrift** beginnt eine neue Gruppe (2,
-  2.1, 2.2 …). Positionen lassen sich verschieben und entfernen. Überschriften stehen im Editor
-  als Band mit gelbem Rand und im PDF grau hinterlegt über die ganze Breite; unten auf einer
-  Seite steht keine Überschrift allein.
+- Positionen werden **1, 2, 3 …** nummeriert. Unterpunkte gibt es nur unter einer
+  **Überschrift**: Eine Position direkt darunter wird eingerückt (2.1, 2.2 …); mit **Ausrücken –
+  eigene Nummer** (im Menü „⋯“ der Zeile) geht es danach wieder normal weiter – etwa Pos. 1
+  normal, Pos. 2 Überschrift, 2.1 Unterposition, Pos. 3 wieder normal. Eine Überschrift ohne
+  Unterpositionen zählt wie eine Position. Angebote, die bei der Umstellung schon angenommen
+  waren, und ihre Aufträge zählen weiter 1.1, 1.2 … – ihre Tagesberichte beziehen sich darauf.
+- Jede Zeile hat rechts ihre Werkzeuge: **ziehen** am Griff (oder ↑ ↓) zum Verschieben, im Menü
+  „⋯“ **Position darunter einfügen**, **Überschrift darunter einfügen**, **Kopieren** (direkt
+  darunter) und Ein-/Ausrücken, dazu ✕ zum Entfernen. Überschriften stehen im Editor als Band
+  mit gelbem Rand und im PDF grau hinterlegt über die ganze Breite; unten auf einer Seite steht
+  keine Überschrift allein.
 - **Bemerkung** zu jeder Position: steht im PDF unter der fetten Bezeichnung, in normaler
   Schrift, und geht mit in Auftrag und Rechnung.
 - **Vorschläge:** Beim Tippen der Bezeichnung erscheinen Positionen aus früheren Angeboten (alle
@@ -755,6 +767,15 @@ bleibt sie frei eintippbar.
   Kundenstamm bzw. aus der Anfrage (Absender), änderbar. Sie geht in den Auftrag (Ansprechpartner
   und Telefon für die Partie, auch im Arbeitsauftrag), die E-Mail wird beim Verschicken des Links
   vorgeschlagen.
+- **Fett und unterstrichen im Schlusstext:** Text markieren und **B** bzw. **U** drücken (oder
+  Strg+B / Strg+U). Im Feld steht dann `**fett**` bzw. `__unterstrichen__`, darunter die
+  Vorschau; im PDF, in der Ansicht und beim Kunden steht es fett bzw. unterstrichen. Geht auch
+  in den Vorlagen unter Einstellungen und im eigenen Text der Rechnung.
+- **Automatisch gespeichert** wird kurz nach jeder Eingabe – neben dem Speichern-Knopf steht
+  „Gespeichert 14:32“. Haben zwei Leute dasselbe Angebot offen und die andere Person hat
+  inzwischen gespeichert, wird **nichts überschrieben**: Oben erscheint, wer gespeichert hat,
+  mit **Neu laden** (zeigt deren Fassung) oder **Meine Fassung speichern** (überschreibt sie).
+  So geht keine von zwei gleichzeitig geschriebenen Fassungen mehr still verloren.
 - Einleitung und Schlusstext kommen aus der Vorlage unter **Einstellungen → Angebote,
   Aufträge und Rechnungen** – je Art eine eigene; die für Aufträge stehen im Auftrags-PDF,
   leer bleibt dort nichts stehen – und lassen sich im einzelnen Angebot ändern. Dort stehen auch die drei Spalten
@@ -982,9 +1003,14 @@ alles andere auf der Rechnung.
   im Angebot** (1.3 bleibt 1.3).
 - Kopf: Rechnungsdatum, **zahlbar bis** (Rechnungsdatum plus Zahlungsziel unten bei den
   Zahlungsbedingungen), **Leistungszeitraum**
-  (aus den gewählten Berichten), BV, Ausführungsort, Anschrift und UID des Kunden aus dem
+  (aus den gewählten Berichten), Ausführungsort, Anschrift und UID des Kunden aus dem
   Angebot, dazu **Bundesland** und **Abschnitt** fürs Summenblatt (von der letzten Rechnung zum
-  Auftrag übernommen).
+  Auftrag übernommen). Das **BV** ist leer und wird je Rechnung eingetragen; ohne BV steht im
+  PDF nur „Rechnung Nr. …“.
+- **Text zu dieser Rechnung:** ein eigenes Feld unter der Einleitung für einen Text nur dieser
+  Rechnung (mit fett/unterstrichen) – steht im PDF direkt unter der Einleitung.
+- Positionen wie im Angebot: verschieben (ziehen oder ↑ ↓), dazwischen einfügen, kopieren,
+  Überschriften; die Nummer jeder Zeile ist hier frei änderbar.
 - **Umsatzsteuer** wie im Angebot zur Wahl, darunter **0 % – Übergang der Steuerschuld
   (Reverse Charge)** für Bauleistungen an Bauunternehmen: ohne Umsatzsteuer, mit Hinweis auf
   § 19 Abs. 1a UStG und der UID des Kunden (dann Pflicht). Kommt von selbst, wenn das Angebot
@@ -1002,7 +1028,9 @@ alles andere auf der Rechnung.
   die Zahlungsbedingungen, Schlusstext und Fußzeile mit Bankverbindung. Die
   Rechnung zeigt ihre Tagesberichte und hat ein eigenes **Summenblatt**.
 - Eine neue Rechnung ist ein **Entwurf** (PDF mit „ENTWURF“) – nur Entwürfe lassen sich
-  **bearbeiten** und löschen (löschen: Admin, Geschäftsführung). Wird ein Entwurf gelöscht,
+  **bearbeiten** und löschen (löschen: Admin, Geschäftsführung). Beim Bearbeiten wird
+  automatisch gespeichert, mit demselben Schutz gegen gleichzeitiges Überschreiben wie beim
+  Angebot. Wird ein Entwurf gelöscht,
   sind seine Tagesberichte wieder abzurechnen. Welche Berichte drin sind, lässt sich
   nachträglich nicht ändern – dafür den Entwurf löschen und neu erstellen. Mit **Rechnung
   endgültig ausstellen** wird sie archiviert, auf Wunsch digital signiert und gesperrt –
@@ -1053,12 +1081,17 @@ bzw. *Signierung fehlgeschlagen*; danach jederzeit *Storniert*.
   …), heißt die Rechnung „Signierung fehlgeschlagen“ – nie „signiert“. Sie ist trotzdem
   ausgestellt und archiviert; **Signierung erneut versuchen** signiert dasselbe Original.
   Die Benachrichtigung „Digitale Signatur fehlgeschlagen“ geht an Admin, GF und Buchhaltung.
-- **Korrekturen nur per Storno** (Recht „Stornieren“, von Haus aus Admin, GF, Buchhaltung):
+- **Korrekturen nur per Storno** (Recht „Stornieren“, von Haus aus Admin, GF, Buchhaltung) –
+  der Knopf **Stornieren** steht oben in der Rechnung –
   mit Grund; es entsteht eine **Stornorechnung** mit umgekehrten Mengen und Bezug auf die
   Rechnung („Storno zu Rechnung Nr. …“), selbst ausgestellt und signiert, Nummer wie jede
   weitere Rechnung zum Auftrag. Die Rechnung bleibt unverändert archiviert und gilt als
   storniert; ihre Tagesberichte sind wieder frei für eine neue (Korrektur-)Rechnung.
   Stornierte Rechnungen und Stornorechnungen zählen nicht bei offenen Beträgen und Mahnungen.
+- **Rechnung kopieren** (oben in der Rechnung, wer Rechnungen erstellen darf): ein neuer
+  Entwurf zum selben Auftrag mit allem aus der Vorlage – Kunde, Texte, Konditionen, Positionen.
+  Rechnungsnummer leer, Datum heute, ohne Tagesberichte. Geht auch bei einer stornierten
+  Rechnung („Als neue Rechnung kopieren“) – so stellt man sie richtig neu aus.
 - **Löschen zum Testen:** Mit dem Recht „Löschen → Alle“ (von Haus aus nur Admin) lassen
   sich auch ausgestellte Rechnungen und Stornorechnungen löschen – mit Grund, samt
   Archivdateien und Signatur. Die Sperren werden dafür nur innerhalb der Lösch-Transaktion

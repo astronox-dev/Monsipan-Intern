@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
 import { requirePermission } from '$lib/server/guard';
+import { conflictMessage, readGuard } from '$lib/server/concurrency';
 import { customerOfferMail, isMailConfigured, sendMail } from '$lib/server/mail';
 import { createCustomer, customerProblem, getCustomer, listCustomers, readCustomer } from '$lib/modules/auftraege/server/customers';
 import {
@@ -114,7 +115,8 @@ function readOffer(form: FormData): SaveOffer | { message: string } {
 			quantity: s(`z.${i}.menge`),
 			unit: s(`z.${i}.einheit`),
 			unitPrice: s(`z.${i}.preis`),
-			alternative: s(`z.${i}.alternativ`) === 'on'
+			alternative: s(`z.${i}.alternativ`) === 'on',
+			sub: s(`z.${i}.unter`) === '1'
 		}));
 	for (const [i, l] of lines.entries()) {
 		if (l.kind === 'titel') continue;
@@ -149,13 +151,18 @@ function readOffer(form: FormData): SaveOffer | { message: string } {
 	};
 }
 
-/** Speichern, wenn das Formular mitkam und das Angebot änderbar ist – sonst null */
-async function saveFrom(form: FormData, offer: { id: number }) {
+/**
+ * Speichern, wenn das Formular mitkam und das Angebot änderbar ist. Gibt den
+ * neuen Stand zurück – oder den Fehler, auch wenn inzwischen jemand anderer
+ * gespeichert hat.
+ */
+async function saveFrom(form: FormData, offer: { id: number }, userId: number) {
 	const data = readOffer(form);
-	if ('message' in data) return fail(400, { message: data.message });
-	if (await numberTaken(data.head.number, offer.id)) return fail(400, { message: `Die Angebotsnummer ${data.head.number} gibt es schon.` });
-	await saveOffer(offer.id, data);
-	return null;
+	if ('message' in data) return { failed: fail(400, { message: data.message }) };
+	if (await numberTaken(data.head.number, offer.id)) return { failed: fail(400, { message: `Die Angebotsnummer ${data.head.number} gibt es schon.` }) };
+	const result = await saveOffer(offer.id, data, readGuard(form, userId));
+	if ('conflict' in result) return { failed: fail(409, { conflict: result.conflict, message: conflictMessage(result.conflict, 'das Angebot') }) };
+	return { version: result.version };
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -164,8 +171,8 @@ export const actions: Actions = {
 	save: async ({ params, request, locals }) => {
 		const { user, offer } = await open(Number(params.id), locals);
 		if (!mayEditOffer(user, offer)) return fail(403, { message: 'Dieses Angebot ist nicht (mehr) änderbar.' });
-		const invalid = await saveFrom(await request.formData(), offer);
-		return invalid ?? { saved: true };
+		const result = await saveFrom(await request.formData(), offer, user.id);
+		return 'failed' in result ? result.failed : { saved: true, version: result.version };
 	},
 
 	/** Freigeben – was im Formular steht, wird vorher gespeichert */
@@ -175,8 +182,8 @@ export const actions: Actions = {
 		if (offer.status !== 'entwurf') return fail(400, { message: 'Dieses Angebot ist bereits freigegeben.' });
 		const form = await request.formData();
 		if (mayEditOffer(user, offer) && form.has('datum')) {
-			const invalid = await saveFrom(form, offer);
-			if (invalid) return invalid;
+			const result = await saveFrom(form, offer, user.id);
+			if ('failed' in result) return result.failed;
 		}
 		const saved = await offerDetail(offer.id);
 		const problem = saved && releaseProblem(saved);

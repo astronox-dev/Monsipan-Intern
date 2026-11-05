@@ -3,6 +3,7 @@ import { requirePermission } from '$lib/server/guard';
 import { getSettings } from '$lib/server/settings';
 import { invoiceDetail, invoiceNumberTaken, readInvoice, saveInvoice } from '$lib/modules/auftraege/server/invoices';
 import { audit } from '$lib/modules/auftraege/server/signatur/audit';
+import { conflictMessage, readGuard } from '$lib/server/concurrency';
 import { unitOptions } from '$lib/server/options';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -21,6 +22,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const settings = await getSettings();
 	return {
 		invoice: { id: invoice.id, number: invoice.number, costCenter: invoice.costCenter, title: invoice.title, kind: invoice.kind },
+		/** Der geladene Stand – gegen gleichzeitiges Überschreiben */
+		version: invoice.updatedAt?.getTime() ?? 0,
 		head: {
 			number: invoice.number,
 			kind: invoice.kind,
@@ -40,6 +43,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			customerCity: invoice.customerCity,
 			customerUid: invoice.customerUid,
 			intro: invoice.intro,
+			extraText: invoice.extraText,
 			closing: invoice.closing,
 			vatRate: invoice.vatRate,
 			reverseCharge: invoice.reverseCharge,
@@ -57,10 +61,17 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 export const actions: Actions = {
 	default: async ({ params, request, locals }) => {
 		const invoice = await open(Number(params.id), locals);
-		const data = readInvoice(await request.formData());
+		const form = await request.formData();
+		// Automatisch gespeichert: bleibt auf der Seite
+		const auto = form.get('auto') === '1';
+		const data = readInvoice(form);
 		if ('message' in data) return fail(400, { message: data.message });
 		if (await invoiceNumberTaken(data.head.number, invoice.id)) return fail(400, { message: `Die Rechnungsnummer ${data.head.number} ist schon vergeben.` });
-		if (!(await saveInvoice(invoice.id, data))) return fail(400, { message: 'Die Rechnung ist inzwischen ausgestellt oder bezahlt und lässt sich nicht mehr ändern.' });
+		const saved = await saveInvoice(invoice.id, data, readGuard(form, invoice.user.id));
+		if (!saved) return fail(400, { message: 'Die Rechnung ist inzwischen ausgestellt oder bezahlt und lässt sich nicht mehr ändern.' });
+		if ('conflict' in saved) return fail(409, { conflict: saved.conflict, message: conflictMessage(saved.conflict, 'die Rechnung') });
+		// Im Protokoll nur das Speichern mit dem Knopf – nicht jede automatische Zwischenspeicherung
+		if (auto) return { saved: true, version: saved.version };
 		await audit({
 			invoiceId: invoice.id,
 			invoiceNumber: data.head.number,

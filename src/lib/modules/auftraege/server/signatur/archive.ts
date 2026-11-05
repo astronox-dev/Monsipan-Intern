@@ -94,6 +94,7 @@ export interface InvoiceContent {
 	customerCity: string;
 	customerUid: string;
 	intro: string;
+	extraText?: string;
 	closing: string;
 	state: string;
 	section: string;
@@ -133,6 +134,8 @@ export function contentHash(i: InvoiceContent): string {
 			// Die Bemerkung nur, wenn eine da ist – so bleibt die Prüfsumme älterer Rechnungen gleich
 			i.lines.map((l) => [l.number, l.kind, l.text, l.quantity, l.unit, l.unitPrice, ...(l.note ? [l.note] : [])]),
 			...(i.costCenter ? [i.costCenter] : []),
+			// Der eigene Text ebenso nur, wenn einer da ist
+			...(i.extraText ? [['text', i.extraText]] : []),
 			// Skonto ebenso nur, wenn eines gewährt wird
 			...(i.skontoPercent ? [['skonto', i.skontoPercent, i.skontoDays ?? 0]] : []),
 			// Nachlass ebenso nur, wenn einer gewährt wird

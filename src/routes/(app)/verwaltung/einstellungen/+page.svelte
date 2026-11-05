@@ -26,6 +26,7 @@
 	import { can } from '$lib/permissions';
 	import { isResetPhrase } from '$lib/reset-phrase';
 	import { toast } from '$lib/stores/toast.svelte';
+	import RichTextarea from '$lib/components/RichTextarea.svelte';
 	import { uploadInParts, UploadError } from '$lib/upload';
 
 	let { data } = $props();
@@ -260,10 +261,7 @@
 					<span class="field-label">Einleitung</span>
 					<textarea class="textarea" name="intro" rows="3" maxlength="3000">{data.settings.offerIntro}</textarea>
 				</label>
-				<label class="block">
-					<span class="field-label">Schlusstext</span>
-					<textarea class="textarea" name="closing" rows="5" maxlength="5000">{data.settings.offerClosing}</textarea>
-				</label>
+				<RichTextarea name="closing" label="Schlusstext" rows={5} maxlength={5000} grow={false} value={data.settings.offerClosing} />
 				<button class="btn btn-secondary mt-auto self-start" disabled={busy === 'offerTexts'}>Speichern</button>
 			</form>
 
@@ -274,10 +272,7 @@
 					<span class="field-label">Einleitung</span>
 					<textarea class="textarea" name="intro" rows="3" maxlength="3000">{data.settings.orderIntro}</textarea>
 				</label>
-				<label class="block">
-					<span class="field-label">Schlusstext</span>
-					<textarea class="textarea" name="closing" rows="5" maxlength="5000">{data.settings.orderClosing}</textarea>
-				</label>
+				<RichTextarea name="closing" label="Schlusstext" rows={5} maxlength={5000} grow={false} value={data.settings.orderClosing} />
 				<button class="btn btn-secondary mt-auto self-start" disabled={busy === 'orderTexts'}>Speichern</button>
 			</form>
 
@@ -288,10 +283,7 @@
 					<span class="field-label">Einleitung</span>
 					<textarea class="textarea" name="intro" rows="3" maxlength="3000">{data.settings.invoiceIntro}</textarea>
 				</label>
-				<label class="block">
-					<span class="field-label">Schlusstext</span>
-					<textarea class="textarea" name="closing" rows="3" maxlength="5000">{data.settings.invoiceClosing}</textarea>
-				</label>
+				<RichTextarea name="closing" label="Schlusstext" rows={3} maxlength={5000} grow={false} value={data.settings.invoiceClosing} />
 				<button class="btn btn-secondary mt-auto self-start" disabled={busy === 'invoiceTexts'}>Speichern</button>
 			</form>
 		</div>

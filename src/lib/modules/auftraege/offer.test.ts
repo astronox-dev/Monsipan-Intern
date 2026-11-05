@@ -5,8 +5,12 @@ import {
 	discountInput,
 	discountOf,
 	invoiceNo,
+	canBeSub,
+	effectiveSub,
 	lineNumbers,
 	money,
+	moveItem,
+	nextLineNumber,
 	offerState,
 	offerTotals,
 	parseAmount,
@@ -86,13 +90,49 @@ describe('Nachlass', () => {
 });
 
 describe('lineNumbers', () => {
-	it('zählt ohne Überschriften 1.1, 1.2 …', () => {
-		expect(lineNumbers([pos(1, 1), pos(1, 1), pos(1, 1)])).toEqual(['1.1', '1.2', '1.3']);
+	const unter = { ...pos(1, 1), sub: true };
+
+	it('zählt ohne Überschriften 1, 2, 3', () => {
+		expect(lineNumbers([pos(1, 1), pos(1, 1), pos(1, 1)])).toEqual(['1', '2', '3']);
 	});
 
-	it('beginnt mit jeder Überschrift eine neue Gruppe', () => {
-		expect(lineNumbers([titel, pos(1, 1), pos(1, 1), titel, pos(1, 1)])).toEqual(['1', '1.1', '1.2', '2', '2.1']);
-		expect(lineNumbers([pos(1, 1), titel, pos(1, 1)])).toEqual(['1.1', '2', '2.1']);
+	it('Unterpunkte nur nach Überschriften – danach geht es normal weiter', () => {
+		// Pos. 1 normal, 2 Überschrift, 2.1 Unterposition, 3 wieder normal
+		expect(lineNumbers([pos(1, 1), titel, unter, pos(1, 1)])).toEqual(['1', '2', '2.1', '3']);
+		expect(lineNumbers([titel, unter, unter, titel, unter])).toEqual(['1', '1.1', '1.2', '2', '2.1']);
+		// Eine Überschrift ohne Unterpositionen zählt wie eine Position
+		expect(lineNumbers([titel, pos(1, 1), pos(1, 1)])).toEqual(['1', '2', '3']);
+	});
+
+	it('nach einer eigenständigen Position ist die Gruppe zu Ende', () => {
+		// „Unterposition" ohne Überschrift davor zählt normal
+		expect(lineNumbers([unter, titel, unter, pos(1, 1), unter])).toEqual(['1', '2', '2.1', '3', '4']);
+		expect(effectiveSub([unter, titel, unter, pos(1, 1), unter])).toEqual([false, false, true, false, false]);
+	});
+
+	it('weiß, wo eine Unterposition möglich ist', () => {
+		const lines = [pos(1, 1), titel, unter, pos(1, 1)];
+		expect([0, 1, 2, 3].map((i) => canBeSub(lines, i))).toEqual([false, false, true, true]);
+		expect(canBeSub([pos(1, 1), pos(1, 1)], 1)).toBe(false);
+	});
+
+	it('bisherige Zählung für ältere Angebote: 1.1, 1.2 …, jede Überschrift eine neue Gruppe', () => {
+		expect(lineNumbers([pos(1, 1), pos(1, 1), pos(1, 1)], true)).toEqual(['1.1', '1.2', '1.3']);
+		expect(lineNumbers([titel, pos(1, 1), pos(1, 1), titel, pos(1, 1)], true)).toEqual(['1', '1.1', '1.2', '2', '2.1']);
+		expect(lineNumbers([pos(1, 1), titel, pos(1, 1)], true)).toEqual(['1.1', '2', '2.1']);
+	});
+
+	it('schlägt die nächste Nummer vor', () => {
+		expect(nextLineNumber('2.1')).toBe('2.2');
+		expect(nextLineNumber('3')).toBe('4');
+		expect(nextLineNumber('1.9')).toBe('1.10');
+		expect(nextLineNumber('')).toBe('');
+	});
+
+	it('verschiebt Zeilen', () => {
+		expect(moveItem(['a', 'b', 'c', 'd'], 0, 2)).toEqual(['b', 'c', 'a', 'd']);
+		expect(moveItem(['a', 'b', 'c', 'd'], 3, 0)).toEqual(['d', 'a', 'b', 'c']);
+		expect(moveItem(['a', 'b'], 1, 1)).toEqual(['a', 'b']);
 	});
 });
 

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
+	import { Autosave, autosaveForm } from '$lib/autosave.svelte';
+	import SaveState from '$lib/components/SaveState.svelte';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Printer from '@lucide/svelte/icons/printer';
 	import FileText from '@lucide/svelte/icons/file-text';
@@ -100,6 +102,8 @@
 	// svelte-ignore state_referenced_locally
 	let note = $state(data.sheet.note);
 	let busy = $state(false);
+	// Jede Eingabe speichert kurz danach von selbst
+	const saver = new Autosave({ action: '?/save', enabled: () => (data.editable || data.guestDays.length > 0) && !busy });
 	let confirmDelete = $state(false);
 	let signOpen = $state(false);
 	let signature = $state('');
@@ -278,12 +282,15 @@
 	id="zettel"
 	method="POST"
 	action="?/save"
+	use:autosaveForm={saver}
 	use:enhance={({ action }) => {
 		busy = true;
+		saver.cancel();
 		const releasing = action.search.includes('release');
 		return async ({ result, update }) => {
 			busy = false;
 			if (result.type === 'success') {
+				saver.markSaved();
 				toast.success(releasing ? 'Woche freigegeben' : 'Gespeichert');
 				if (releasing) {
 					signOpen = false;
@@ -511,6 +518,7 @@
 	{#if data.editable || data.guestDays.length}
 		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
+			<SaveState {saver} what="die Woche" compact />
 			{#if sheet.status === 'entwurf' && data.canRelease && data.editable}
 				<button type="button" class="btn btn-secondary" disabled={busy} onclick={() => (signOpen = true)}>
 					<Lock size={18} aria-hidden="true" />Freigeben

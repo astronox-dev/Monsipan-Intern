@@ -1,16 +1,15 @@
 <script lang="ts">
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
+	import { Autosave } from '$lib/autosave.svelte';
+	import SaveState from '$lib/components/SaveState.svelte';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
-	import ArrowUp from '@lucide/svelte/icons/arrow-up';
-	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import Copy from '@lucide/svelte/icons/copy';
 	import Printer from '@lucide/svelte/icons/printer';
 	import FileText from '@lucide/svelte/icons/file-text';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Heading from '@lucide/svelte/icons/heading';
-	import X from '@lucide/svelte/icons/x';
 	import Send from '@lucide/svelte/icons/send';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import LockOpen from '@lucide/svelte/icons/lock-open';
@@ -25,6 +24,9 @@
 	import PdfButton from '$lib/components/PdfButton.svelte';
 	import CustomerFields from '$lib/modules/auftraege/components/CustomerFields.svelte';
 	import PositionInput, { type PositionMemory } from '$lib/modules/auftraege/components/PositionInput.svelte';
+	import LineTools from '$lib/modules/auftraege/components/LineTools.svelte';
+	import RichTextarea from '$lib/components/RichTextarea.svelte';
+	import { dropzone, type DragItem } from '$lib/dnd';
 	import TaxSelect from '$lib/modules/auftraege/components/TaxSelect.svelte';
 	import PaymentTermsFields from '$lib/modules/auftraege/components/PaymentTermsFields.svelte';
 	import DiscountRow from '$lib/modules/auftraege/components/DiscountRow.svelte';
@@ -35,9 +37,11 @@
 		amountInput,
 		discountFrom,
 		discountInput,
+		effectiveSub,
 		lineNumbers,
 		lineTotal,
 		MAX_OFFER_LINES,
+		moveItem,
 		money,
 		OFFER_STATUS_LABELS,
 		offerState,
@@ -49,12 +53,12 @@
 	} from '$lib/modules/auftraege/offer';
 	import { date as dateLabel, dateTime } from '$lib/format';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { canonicalUnit, unitChoices } from '$lib/units';
+	import { canonicalUnit } from '$lib/units';
 
 	let { data, form } = $props();
 	const offer = $derived(data.offer);
 
-	type Line = { key: number; kind: 'position' | 'titel'; text: string; note: string; quantity: string; unit: string; price: string; alternative: boolean };
+	type Line = { key: number; kind: 'position' | 'titel'; text: string; note: string; quantity: string; unit: string; price: string; alternative: boolean; sub: boolean };
 
 	let nextKey = 1;
 	// Das Angebot wird nur beim Öffnen übernommen – danach gehört der Stand dem Formular
@@ -94,17 +98,59 @@
 			quantity: l.quantity == null ? '' : String(l.quantity).replace('.', ','),
 			unit: canonicalUnit(data.units, l.unit),
 			price: amountInput(l.unitPrice),
-			alternative: l.alternative
+			alternative: l.alternative,
+			sub: l.sub
 		}))
 	);
 
-	const numbers = $derived(lineNumbers(lines));
+	/** Ältere, schon angenommene Angebote zählen weiter 1.1, 1.2 … – dort gibt es kein Einrücken */
+	const legacy = $derived(data.offer.numberingLegacy);
+	const numbers = $derived(lineNumbers(lines, legacy));
+	const subs = $derived(effectiveSub(lines));
 	const parsed = $derived(lines.map((l) => ({ kind: l.kind, quantity: parseAmount(l.quantity), unitPrice: parseAmount(l.price), alternative: l.alternative })));
 	const totals = $derived(offerTotals(parsed, parseAmount(head.vat) ?? 0, head.reverse, discountFrom(head.discount, head.discountKind)));
 	const alternatives = $derived(lines.filter((l) => l.kind === 'position' && l.alternative).length);
 	const st = $derived(OFFER_STATUS_LABELS[offerState(offer)] ?? OFFER_STATUS_LABELS.entwurf);
 
 	let busy = $state(false);
+
+	/*
+	 * Gegen gleichzeitiges Überschreiben: der geladene Stand geht mit jedem Speichern
+	 * mit. Neu übernommen wird er nur, wenn das Speichern ihn zurückgibt oder ein
+	 * frisch geladenes Angebot einen anderen trägt (nach Freigeben, Überarbeiten …).
+	 */
+	// svelte-ignore state_referenced_locally
+	let version = $state((data.offer.updatedAt?.getTime() ?? 0));
+	// svelte-ignore state_referenced_locally
+	let loadedVersion = (data.offer.updatedAt?.getTime() ?? 0);
+	$effect(() => {
+		const v = (data.offer.updatedAt?.getTime() ?? 0);
+		if (v !== loadedVersion) {
+			loadedVersion = v;
+			version = v;
+		}
+	});
+	let formEl = $state<HTMLFormElement>();
+	const saver = new Autosave({
+		form: () => formEl,
+		action: '?/save',
+		enabled: () => data.editable && !busy,
+		onsaved: (d) => {
+			if (typeof d.version === 'number') version = d.version;
+		}
+	});
+	// Jede Änderung an Kopf oder Zeilen speichert kurz danach von selbst
+	let watching = false;
+	$effect(() => {
+		JSON.stringify(head);
+		JSON.stringify(lines);
+		if (!watching) {
+			watching = true;
+			return;
+		}
+		untrack(() => saver.touch());
+	});
+
 	let releaseOpen = $state(false);
 	let withdrawOpen = $state(false);
 	let reopenOpen = $state(false);
@@ -137,11 +183,25 @@
 		head.reverse = c.reverseCharge;
 	}
 
-	async function addLine(kind: 'position' | 'titel') {
+	/** Neue Zeile an Stelle `at` – eine Position direkt unter einer Überschrift (oder deren Unterposition) wird Unterposition */
+	async function insertLine(at: number, kind: 'position' | 'titel') {
 		if (lines.length >= MAX_OFFER_LINES) return;
-		lines.push({ key: nextKey++, kind, text: '', note: '', quantity: '', unit: '', price: '', alternative: false });
+		const prev = lines[at - 1];
+		const sub = kind === 'position' && !!prev && (prev.kind === 'titel' || subs[at - 1]);
+		lines.splice(at, 0, { key: nextKey++, kind, text: '', note: '', quantity: '', unit: '', price: '', alternative: false, sub });
 		await tick();
-		listBox?.querySelector<HTMLElement>(`[data-zeile="${lines.length - 1}"]`)?.focus();
+		listBox?.querySelector<HTMLElement>(`[data-zeile="${at}"]`)?.focus();
+	}
+	const addLine = (kind: 'position' | 'titel') => insertLine(lines.length, kind);
+	/** Kopie direkt darunter – mit allem, was in der Zeile steht */
+	async function copyLine(i: number) {
+		if (lines.length >= MAX_OFFER_LINES) return;
+		lines.splice(i + 1, 0, { ...lines[i], key: nextKey++ });
+		await tick();
+		listBox?.querySelector<HTMLElement>(`[data-zeile="${i + 1}"]`)?.focus();
+	}
+	function toggleSub(i: number) {
+		lines[i].sub = !subs[i];
 	}
 	/** Frühere Position gewählt: Einheit, Preis und Bemerkung vom letzten Mal – nur, wo noch nichts steht */
 	function pickMemory(i: number, m: PositionMemory) {
@@ -156,13 +216,21 @@
 	function moveLine(i: number, by: -1 | 1) {
 		const j = i + by;
 		if (j < 0 || j >= lines.length) return;
-		const copy = [...lines];
-		[copy[i], copy[j]] = [copy[j], copy[i]];
-		lines = copy;
+		lines = moveItem(lines, i, j);
 	}
+	/** Gezogene Zeile abgelegt: über oder unter der Zeile, je nachdem, wo der Finger ist */
+	const dropOn = (i: number) => (item: DragItem, at: { y: number; zone: Element }) => {
+		const from = lines.findIndex((l) => l.key === item.data);
+		if (from < 0) return;
+		const rect = at.zone.getBoundingClientRect();
+		let to = at.y > rect.top + rect.height / 2 ? i + 1 : i;
+		if (from < to) to--;
+		lines = moveItem(lines, from, to);
+	};
 
 	const name = (first: string | null, last: string | null) => [first, last].filter(Boolean).join(' ');
-	const message = $derived(form && 'message' in form ? form.message : '');
+	// Ein Konflikt steht im eigenen Hinweis (SaveState)
+	const message = $derived(form && 'message' in form && !('conflict' in form) ? form.message : '');
 	/** Änderungswunsch, der noch nicht mit einer neuen Freigabe beantwortet ist */
 	const openRequest = $derived(
 		!!offer.changeRequest && (offer.status === 'aenderung' || (offer.status === 'entwurf' && !offer.releasedAt))
@@ -301,21 +369,32 @@
 	id="angebot"
 	method="POST"
 	action="?/save"
+	bind:this={formEl}
 	use:enhance={({ action }) => {
 		busy = true;
+		saver.cancel();
 		const release = action.search.includes('release');
 		return async ({ result, update }) => {
 			busy = false;
 			if (result.type === 'success') {
+				if (typeof result.data?.version === 'number') version = result.data.version;
 				if (release) {
 					toast.success('Angebot freigegeben', 'Der Link für den Kunden ist bereit.');
 					releaseOpen = false;
-				} else toast.success('Gespeichert');
+				} else {
+					saver.markSaved();
+					toast.success('Gespeichert');
+				}
+			} else if (result.type === 'failure' && result.data?.conflict) {
+				releaseOpen = false;
+				saver.markConflict(String((result.data.conflict as { by?: string }).by ?? ''), String(result.data.message ?? ''));
 			}
 			await update({ reset: false });
 		};
 	}}
 >
+	<input type="hidden" name="version" value={version} />
+	{#if data.editable}<SaveState {saver} what="das Angebot" />{/if}
 	<fieldset disabled={!data.editable} class="contents">
 		<div class="grid gap-4 lg:grid-cols-2">
 			<section class="card p-4 lg:p-5">
@@ -385,14 +464,19 @@
 
 		<section class="card mt-4 p-4 lg:p-5" bind:this={listBox}>
 			<h2 class="text-lg">Positionen</h2>
-			<div class="mt-3 hidden gap-2 text-[0.8125rem] text-ink-3 xl:grid xl:grid-cols-[2.5rem_minmax(0,1fr)_5rem_7.5rem_7rem_7rem_5.5rem]">
+			<div class="mt-3 hidden gap-2 text-[0.8125rem] text-ink-3 xl:grid xl:grid-cols-[2.5rem_minmax(0,1fr)_5rem_7rem_7rem_7rem_9.5rem]">
 				<span>Nr.</span><span>Bezeichnung</span><span class="text-right">Menge</span><span>Einheit</span><span class="text-right">EP in €</span><span class="text-right">GP</span><span></span>
 			</div>
+			<datalist id="angebot-einheiten">{#each data.units as u (u)}<option value={u}></option>{/each}</datalist>
 			<ul class="mt-1 divide-y divide-line">
 				{#each lines as l, i (l.key)}
 					<!-- Überschriften als Band über die ganze Breite – heben sich klar von den Positionen ab -->
-					<li class={l.kind === 'titel' ? 'heading-row' : `py-2.5 ${l.alternative ? 'alt' : ''}`}>
+					<li
+						class={l.kind === 'titel' ? 'heading-row' : `py-2.5 ${l.alternative ? 'alt' : ''} ${subs[i] && !legacy ? 'sub' : ''}`}
+						use:dropzone={{ accepts: ['angebot-zeile'], onDrop: dropOn(i), disabled: !data.editable }}
+					>
 						<input type="hidden" name="z.{i}.art" value={l.kind} />
+						<input type="hidden" name="z.{i}.unter" value={subs[i] ? '1' : ''} />
 						{#if l.kind === 'titel'}
 							<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-2">
 								<span class="num text-[1.0625rem] font-bold">{numbers[i]}</span>
@@ -408,7 +492,7 @@
 								{@render tools(i, l.key)}
 							</div>
 						{:else}
-							<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-2 xl:grid-cols-[2.5rem_minmax(0,1fr)_5rem_7.5rem_7rem_7rem_5.5rem] xl:items-start">
+							<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-2 xl:grid-cols-[2.5rem_minmax(0,1fr)_5rem_7rem_7rem_7rem_9.5rem] xl:items-start">
 								<span class="num pt-2 text-sm">
 									{numbers[i]}{#if l.alternative}<span class="block text-[0.6875rem] font-semibold text-ink-3 uppercase">Alt.</span>{/if}
 								</span>
@@ -450,10 +534,8 @@
 									</label>
 									<label class="block">
 										<span class="field-label xl:sr-only">Einheit</span>
-										<select class="select" name="z.{i}.einheit" bind:value={l.unit}>
-											<option value="">–</option>
-											{#each unitChoices(data.units, l.unit) as u (u)}<option value={u}>{u}</option>{/each}
-										</select>
+										<!-- Aus den Stammdaten wählen oder selbst eintragen, etwa „kg" -->
+										<input class="input" name="z.{i}.einheit" maxlength="20" list="angebot-einheiten" autocomplete="off" bind:value={l.unit} />
 									</label>
 									<label class="block">
 										<span class="field-label xl:sr-only">EP in €</span>
@@ -506,17 +588,15 @@
 		<PaymentTermsFields bind:days={head.days} bind:percent={head.skonto} bind:skontoDays={head.skontoDays} gross={totals.gross} />
 
 		<section class="card mt-4 p-4 lg:p-5">
-			<label class="block">
-				<span class="field-label">Schlusstext</span>
-				<textarea class="textarea auto" name="schluss" rows="3" maxlength="5000" bind:value={head.closing}></textarea>
-			</label>
+			<RichTextarea name="schluss" label="Schlusstext" rows={3} maxlength={5000} bind:value={head.closing} />
 		</section>
 	</fieldset>
 
 	{#if data.editable || data.canRelease || data.canWithdraw || data.canAccept}
 		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			{#if data.editable}
-				<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
+				<button class="btn btn-primary" disabled={busy || saver.state === 'conflict'}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
+				<SaveState {saver} what="das Angebot" compact />
 			{/if}
 			{#if data.canRelease}
 				<button type="button" class="btn {data.editable ? 'btn-secondary' : 'btn-primary'}" disabled={busy} onclick={() => (releaseOpen = true)}>
@@ -565,11 +645,20 @@
 
 {#snippet tools(i: number, key: number)}
 	{#if data.editable}
-		<div class="flex items-center justify-end gap-0.5">
-			<button type="button" class="tool" aria-label="Zeile {i + 1} nach oben" disabled={i === 0} onclick={() => moveLine(i, -1)}><ArrowUp size={15} /></button>
-			<button type="button" class="tool" aria-label="Zeile {i + 1} nach unten" disabled={i === lines.length - 1} onclick={() => moveLine(i, 1)}><ArrowDown size={15} /></button>
-			<button type="button" class="tool hover:text-danger" aria-label="Zeile {i + 1} entfernen" onclick={() => removeLine(key)}><X size={15} /></button>
-		</div>
+		<LineTools
+			index={i}
+			count={lines.length}
+			dragKind="angebot-zeile"
+			dragKey={key}
+			canAdd={lines.length < MAX_OFFER_LINES}
+			canIndent={!legacy && lines[i].kind === 'position' && i > 0 && (lines[i - 1].kind === 'titel' || subs[i - 1])}
+			indented={!legacy && subs[i]}
+			onmove={(by) => moveLine(i, by)}
+			oninsert={(kind) => insertLine(i + 1, kind)}
+			oncopy={() => copyLine(i)}
+			onindent={legacy ? undefined : () => toggleSub(i)}
+			onremove={() => removeLine(key)}
+		/>
 	{/if}
 {/snippet}
 
@@ -768,19 +857,10 @@
 		min-height: 2.5rem;
 		resize: vertical;
 	}
-	.tool {
-		display: grid;
-		width: 2rem;
-		height: 2rem;
-		place-items: center;
-		border-radius: 0.5rem;
-		color: var(--c-ink-3);
-	}
-	.tool:hover:not(:disabled) {
-		background: var(--c-surface-3);
-	}
-	.tool:disabled {
-		opacity: 0.3;
+	/* Unterposition einer Überschrift: eingerückt, mit Linie davor */
+	.sub {
+		padding-left: 1.25rem;
+		box-shadow: inset 2px 0 0 var(--c-line);
 	}
 	/* Alternativposition: am Rand markiert */
 	.alt {

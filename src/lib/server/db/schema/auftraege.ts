@@ -101,8 +101,16 @@ export const offers = sqliteTable(
 		acceptedBy: integer('accepted_by').references(() => users.id, { onDelete: 'set null' }),
 		/** Abgerechnet: Auftrag abgeschlossen und seine Rechnungen bezahlt – bzw. so übernommen */
 		billedAt: integer('billed_at', { mode: 'timestamp_ms' }),
+		/**
+		 * Bisherige Zählung 1.1, 1.2 … auch ohne Überschrift – für Angebote, die schon
+		 * angenommen waren, als die Zählung umgestellt wurde: Ihre Tagesberichte
+		 * beziehen sich auf diese Nummern.
+		 */
+		numberingLegacy: integer('numbering_legacy', { mode: 'boolean' }).notNull().default(false),
 		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: createdAt(),
+		/** Zuletzt gespeichert – zusammen mit updatedAt gegen gleichzeitiges Überschreiben */
+		updatedBy: integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
 		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
 	},
 	(t) => [
@@ -133,7 +141,9 @@ export const offerPositions = sqliteTable(
 		/** Einheitspreis netto in Euro */
 		unitPrice: real('unit_price'),
 		/** Alternativposition: mit Menge und Preis angeboten, aber nicht im Gesamtbetrag (GP 0) */
-		alternative: integer('alternative', { mode: 'boolean' }).notNull().default(false)
+		alternative: integer('alternative', { mode: 'boolean' }).notNull().default(false),
+		/** Unterposition der Überschrift darüber (2.1, 2.2 …) – sonst eine eigene Nummer */
+		sub: integer('sub', { mode: 'boolean' }).notNull().default(false)
 	},
 	(t) => [index('offer_positions_offer_idx').on(t.offerId, t.sortOrder)]
 );
@@ -173,6 +183,8 @@ export const orders = sqliteTable(
 		invoiceMapping: text('invoice_mapping', { mode: 'json' }).$type<Record<string, number | null | 'eigene'>>(),
 		statusBy: integer('status_by').references(() => users.id, { onDelete: 'set null' }),
 		statusAt: integer('status_at', { mode: 'timestamp_ms' }),
+		/** Bisherige Zählung 1.1, 1.2 … – Aufträge von vor der Umstellung (siehe offers.numberingLegacy) */
+		numberingLegacy: integer('numbering_legacy', { mode: 'boolean' }).notNull().default(false),
 		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: createdAt(),
 		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
@@ -196,7 +208,9 @@ export const orderPositions = sqliteTable(
 		quantity: real('quantity'),
 		unit: text('unit').notNull().default(''),
 		/** Alternativposition: mit Menge und Preis angeboten, aber nicht im Gesamtbetrag (GP 0) */
-		alternative: integer('alternative', { mode: 'boolean' }).notNull().default(false)
+		alternative: integer('alternative', { mode: 'boolean' }).notNull().default(false),
+		/** Unterposition der Überschrift darüber – wie im Angebot */
+		sub: integer('sub', { mode: 'boolean' }).notNull().default(false)
 	},
 	(t) => [index('order_positions_order_idx').on(t.orderId, t.sortOrder)]
 );
@@ -437,8 +451,12 @@ export const invoices = sqliteTable(
 		stornoId: integer('storno_id'),
 		/** … bzw. bei der Stornorechnung die stornierte Rechnung */
 		cancelsId: integer('cancels_id'),
+		/** Eigener Text dieser Rechnung – steht unter der Einleitung */
+		extraText: text('extra_text').notNull().default(''),
 		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: createdAt(),
+		/** Zuletzt gespeichert – zusammen mit updatedAt gegen gleichzeitiges Überschreiben */
+		updatedBy: integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
 		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
 	},
 	(t) => [

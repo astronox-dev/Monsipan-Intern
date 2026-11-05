@@ -137,6 +137,7 @@ export async function orderDetail(id: number) {
 			statusAt: orders.statusAt,
 			statusByFirst: statusUser.firstName,
 			statusByLast: statusUser.lastName,
+			numberingLegacy: orders.numberingLegacy,
 			createdAt: orders.createdAt,
 			creatorFirst: creator.firstName,
 			creatorLast: creator.lastName
@@ -156,7 +157,8 @@ export async function orderDetail(id: number) {
 			note: orderPositions.note,
 			quantity: orderPositions.quantity,
 			unit: orderPositions.unit,
-			alternative: orderPositions.alternative
+			alternative: orderPositions.alternative,
+			sub: orderPositions.sub
 		})
 		.from(orderPositions)
 		.where(eq(orderPositions.orderId, id))
@@ -208,6 +210,8 @@ export async function createOrderFromOffer(offerId: number, partyId: number | nu
 				customerContact: offer.contactName || customer?.contact || '',
 				customerPhone: offer.contactPhone || customer?.phone || '',
 				note: note.slice(0, 2000),
+				// Zählt wie das Angebot – ältere Angebote weiter 1.1, 1.2 …
+				numberingLegacy: offer.numberingLegacy,
 				createdBy: userId,
 				updatedAt: new Date()
 			})
@@ -222,7 +226,17 @@ export async function createOrderFromOffer(offerId: number, partyId: number | nu
 		for (const [i, l] of lines.entries()) {
 			await tx
 				.insert(orderPositions)
-				.values({ orderId: row.id, sortOrder: i, kind: l.kind, text: l.text, note: l.note, quantity: l.quantity, unit: l.unit, alternative: l.alternative });
+				.values({
+					orderId: row.id,
+					sortOrder: i,
+					kind: l.kind,
+					text: l.text,
+					note: l.note,
+					quantity: l.quantity,
+					unit: l.unit,
+					alternative: l.alternative,
+					sub: l.sub
+				});
 		}
 		return row.id;
 	});
@@ -275,8 +289,16 @@ export interface OrderLineChoice {
 export async function orderLineChoices(orderIds: number[]): Promise<Record<number, OrderLineChoice[]>> {
 	if (!orderIds.length) return {};
 	const rows = await db
-		.select({ orderId: orderPositions.orderId, kind: orderPositions.kind, text: orderPositions.text, unit: orderPositions.unit })
+		.select({
+			orderId: orderPositions.orderId,
+			kind: orderPositions.kind,
+			text: orderPositions.text,
+			unit: orderPositions.unit,
+			sub: orderPositions.sub,
+			legacy: orders.numberingLegacy
+		})
 		.from(orderPositions)
+		.innerJoin(orders, eq(orders.id, orderPositions.orderId))
 		.where(inArray(orderPositions.orderId, orderIds))
 		.orderBy(asc(orderPositions.orderId), asc(orderPositions.sortOrder), asc(orderPositions.id))
 		.all();
@@ -284,7 +306,7 @@ export async function orderLineChoices(orderIds: number[]): Promise<Record<numbe
 	for (const r of rows) byOrder.set(r.orderId, [...(byOrder.get(r.orderId) ?? []), r]);
 	const out: Record<number, OrderLineChoice[]> = {};
 	for (const [orderId, lines] of byOrder) {
-		const numbers = lineNumbers(lines);
+		const numbers = lineNumbers(lines, !!lines[0]?.legacy);
 		out[orderId] = lines
 			.map((l, i) => ({ kind: l.kind, number: numbers[i], text: l.text.split('\n')[0].replace(/\s+/g, ' ').trim().slice(0, 200), unit: l.unit }))
 			.filter((l) => l.kind === 'position' && l.text)
