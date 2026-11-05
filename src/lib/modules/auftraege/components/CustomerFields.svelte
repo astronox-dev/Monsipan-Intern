@@ -44,7 +44,7 @@
 	</label>
 	<label class="block sm:col-span-3">
 		<span class="field-label">E-Mail <span class="font-normal text-ink-3">(für den Angebotslink)</span></span>
-		<input class="input" type="email" name="email" maxlength="200" value={v('email')} autocomplete="email" />
+		<input class="input" type="text" inputmode="email" autocapitalize="off" spellcheck="false" name="email" maxlength="200" value={v('email')} autocomplete="email" />
 	</label>
 	<label class="block sm:col-span-3">
 		<span class="field-label">Ansprechpartner</span>

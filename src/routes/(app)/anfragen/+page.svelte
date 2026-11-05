@@ -151,7 +151,7 @@
 				</label>
 				<label class="block">
 					<span class="field-label">E-Mail-Adresse</span>
-					<input class="input" type="email" name="email" maxlength="200" bind:value={fields.email} oninput={() => (touched.email = true)} />
+					<input class="input" type="text" inputmode="email" autocapitalize="off" spellcheck="false" name="email" maxlength="200" bind:value={fields.email} oninput={() => (touched.email = true)} />
 				</label>
 				<label class="block">
 					<span class="field-label">Telefon</span>

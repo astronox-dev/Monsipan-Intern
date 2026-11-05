@@ -4,6 +4,7 @@
  * behalten ihre Anschrift ohnehin.
  */
 import { and, asc, eq, like, or, sql, type SQL } from 'drizzle-orm';
+import { isEmail } from '$lib/email';
 import { db } from '$lib/server/db';
 import { customers, offers } from '$lib/server/db/schema';
 import { col } from '$lib/server/db/sql';
@@ -50,7 +51,7 @@ export function readCustomer(form: FormData): CustomerInput {
 
 export function customerProblem(c: CustomerInput): string | null {
 	if (c.name.length < 2) return 'Bitte den Namen des Kunden eintragen.';
-	if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) return 'Die E-Mail-Adresse stimmt nicht.';
+	if (c.email && !isEmail(c.email)) return 'Die E-Mail-Adresse stimmt nicht.';
 	return null;
 }
 

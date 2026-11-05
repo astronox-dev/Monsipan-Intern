@@ -84,7 +84,7 @@
 			>
 				<label class="block min-w-0 flex-[1_1_16rem]">
 					<span class="field-label">Per E-Mail an den Kunden</span>
-					<input class="input" type="email" name="email" required maxlength="200" autocomplete="email" placeholder="name@firma.at" value={email} />
+					<input class="input" type="text" inputmode="email" autocapitalize="off" spellcheck="false" name="email" required maxlength="200" autocomplete="email" placeholder="name@firma.at" value={email} />
 				</label>
 				<button class="btn btn-secondary" disabled={sending}><Send size={18} aria-hidden="true" />{sending ? 'Wird gesendet …' : 'Senden'}</button>
 			</form>

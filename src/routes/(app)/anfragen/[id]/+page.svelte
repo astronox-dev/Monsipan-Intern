@@ -112,7 +112,7 @@
 					</label>
 					<label class="block">
 						<span class="field-label">E-Mail-Adresse</span>
-						<input class="input" type="email" name="email" maxlength="200" value={inquiry.senderEmail} />
+						<input class="input" type="text" inputmode="email" autocapitalize="off" spellcheck="false" name="email" maxlength="200" value={inquiry.senderEmail} />
 					</label>
 					<label class="block">
 						<span class="field-label">Telefon</span>

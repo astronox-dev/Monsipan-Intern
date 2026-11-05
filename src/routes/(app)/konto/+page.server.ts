@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import { and, eq, ne, sql } from 'drizzle-orm';
+import { isEmail, normalizeEmail } from '$lib/email';
 import { z } from 'zod';
 import { hashPassword, invalidateUserSessions, MIN_PASSWORD_LENGTH, verifyPassword } from '$lib/server/auth';
 import { db } from '$lib/server/db';
@@ -44,7 +45,8 @@ export const actions: Actions = {
 					.trim()
 					.toLowerCase()
 					.max(120)
-					.refine((s) => s === '' || z.email().safeParse(s).success, 'Ungültige E-Mail-Adresse')
+					.refine((s) => s === '' || isEmail(s), 'Ungültige E-Mail-Adresse')
+					.transform((s) => normalizeEmail(s))
 					.transform((s) => s || null)
 			})
 			.safeParse({ firstName: f.get('firstName') ?? '', lastName: f.get('lastName') ?? '', email: f.get('email') ?? '' });

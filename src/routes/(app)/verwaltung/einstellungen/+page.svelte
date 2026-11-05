@@ -162,7 +162,7 @@
 		</p>
 		<form method="POST" action="?/testMail" class="mt-4 flex max-w-xl gap-2" use:enhance={done('mail', (d) => `Test-Mail an ${d.mailed} gesendet`)}>
 			<label for="test-to" class="sr-only">Empfänger der Test-Mail</label>
-			<input id="test-to" name="to" type="email" class="input flex-1" placeholder="E-Mail-Adresse" value={data.myEmail ?? ''} required />
+			<input id="test-to" name="to" type="text" inputmode="email" autocapitalize="off" spellcheck="false" class="input flex-1" placeholder="E-Mail-Adresse" value={data.myEmail ?? ''} required />
 			<button class="btn btn-secondary" disabled={busy === 'mail'}>Test senden</button>
 		</form>
 	</section>

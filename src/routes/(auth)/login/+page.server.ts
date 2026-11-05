@@ -30,7 +30,7 @@ let dummyHash: Promise<string> | null = null;
 export const actions: Actions = {
 	default: async ({ request, cookies, getClientAddress, url }) => {
 		const form = await request.formData();
-		const identifier = String(form.get('identifier') ?? '').trim();
+		const identifier = String(form.get('identifier') ?? '').trim().normalize('NFC');
 		const password = String(form.get('password') ?? '');
 		const remember = form.get('remember') === 'on';
 

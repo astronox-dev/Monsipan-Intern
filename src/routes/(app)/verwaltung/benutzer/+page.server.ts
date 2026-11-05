@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import { and, asc, eq, isNull, ne, or, sql } from 'drizzle-orm';
+import { isEmail, normalizeEmail } from '$lib/email';
 import { z } from 'zod';
 import {
 	createPasswordReset,
@@ -71,7 +72,8 @@ const UserSchema = z.object({
 		.trim()
 		.toLowerCase()
 		.max(120)
-		.refine((s) => s === '' || z.email().safeParse(s).success, 'Ungültige E-Mail-Adresse')
+		.refine((s) => s === '' || isEmail(s), 'Ungültige E-Mail-Adresse')
+		.transform((s) => normalizeEmail(s))
 		.transform((s) => s || null),
 	role: z.enum(ROLES)
 });

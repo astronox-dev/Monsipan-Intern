@@ -1,5 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
+import { isEmail } from '$lib/email';
 import { requireUser } from '$lib/server/guard';
 import { customerReportMail, isMailConfigured, sendMail } from '$lib/server/mail';
 import {
@@ -164,7 +165,7 @@ async function saveIfEditable(form: FormData, report: { id: number; orderId: num
 	return null;
 }
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL = { test: isEmail };
 
 export const actions: Actions = {
 	save: async ({ params, request, locals }) => {

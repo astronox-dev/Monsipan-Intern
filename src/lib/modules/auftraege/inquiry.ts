@@ -16,7 +16,7 @@ export interface InquiryGuess {
 export const MAX_INQUIRY_TEXT = 20000;
 
 const OWN = /monsipan/i;
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/gu;
 const HEADER_FROM = /^[ \t>*]*(?:von|from|absender)[ \t]*:[ \t]*(.+)$/gim;
 const HEADER_SUBJECT = /^[ \t>*]*(?:betreff|subject|betr\.?)[ \t]*:[ \t]*(.+)$/im;
 /** Vorsilben beim Antworten und Weiterleiten */

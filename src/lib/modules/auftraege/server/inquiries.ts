@@ -7,6 +7,7 @@
  * erstellt ist – oder von Hand abgelegt (etwa wenn kein Angebot kommt).
  */
 import { and, desc, eq, isNotNull, isNull, like, or, sql, type SQL } from 'drizzle-orm';
+import { isEmail } from '$lib/email';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db } from '$lib/server/db';
 import { broadcast } from '$lib/server/events';
@@ -129,7 +130,7 @@ export function readInquiry(form: FormData): InquiryInput {
 
 export function inquiryProblem(i: InquiryInput): string | null {
 	if (!i.body && !i.subject) return 'Bitte die E-Mail einfügen oder zumindest einen Betreff eintragen.';
-	if (i.senderEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(i.senderEmail)) return 'Die E-Mail-Adresse stimmt nicht.';
+	if (i.senderEmail && !isEmail(i.senderEmail)) return 'Die E-Mail-Adresse stimmt nicht.';
 	return null;
 }
 

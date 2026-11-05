@@ -55,7 +55,7 @@
 			</div>
 			<div>
 				<label for="email" class="field-label">E-Mail</label>
-				<input id="email" name="email" type="email" class="input" maxlength="120" value={data.user.email ?? ''} autocomplete="email" />
+				<input id="email" name="email" type="text" inputmode="email" autocapitalize="off" spellcheck="false" class="input" maxlength="120" value={data.user.email ?? ''} autocomplete="email" />
 				<p class="field-hint">Damit kannst du dich anmelden und dein Passwort selbst zurücksetzen.</p>
 			</div>
 			{#if form?.form === 'profile' && form.message}<p class="field-error" role="alert">{form.message}</p>{/if}

@@ -1,5 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
+import { isEmail } from '$lib/email';
 import { requirePermission } from '$lib/server/guard';
 import { conflictMessage, readGuard } from '$lib/server/concurrency';
 import { customerOfferMail, isMailConfigured, sendMail } from '$lib/server/mail';
@@ -165,7 +166,7 @@ async function saveFrom(form: FormData, offer: { id: number }, userId: number) {
 	return { version: result.version };
 }
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL = { test: isEmail };
 
 export const actions: Actions = {
 	save: async ({ params, request, locals }) => {

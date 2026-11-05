@@ -6,7 +6,7 @@ import type { Actions } from './$types';
 
 export const actions: Actions = {
 	default: async ({ request, getClientAddress, url }) => {
-		const identifier = String((await request.formData()).get('identifier') ?? '').trim();
+		const identifier = String((await request.formData()).get('identifier') ?? '').trim().normalize('NFC');
 		if (!identifier) return fail(400, { identifier, message: 'Bitte Benutzername oder E-Mail eingeben.' });
 
 		const key = `reset:${getClientAddress()}`;

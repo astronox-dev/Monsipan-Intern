@@ -287,7 +287,7 @@
 		</div>
 		<div>
 			<label for="u-mail" class="field-label">E-Mail</label>
-			<input id="u-mail" name="email" type="email" class="input" maxlength="120" bind:value={email} autocomplete="off" />
+			<input id="u-mail" name="email" type="text" inputmode="email" autocapitalize="off" spellcheck="false" class="input" maxlength="120" bind:value={email} autocomplete="off" />
 			<p class="field-hint">Für „Passwort vergessen“ und Info-Mails.</p>
 		</div>
 
