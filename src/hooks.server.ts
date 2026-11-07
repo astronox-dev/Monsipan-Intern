@@ -6,6 +6,7 @@ import { initTeltonika } from '$lib/modules/fuhrpark/server/teltonika';
 import { ensureDatabase } from '$lib/server/db';
 import { ensurePermissions } from '$lib/server/permissions';
 import { reportTools } from '$lib/server/compress';
+import { changed } from '$lib/server/events';
 
 export const init: ServerInit = async () => {
 	await ensureDatabase();
@@ -68,6 +69,17 @@ function movedTarget(path: string): string | null {
 	return null;
 }
 
+/**
+ * Was zählt als Änderung, von der die anderen erfahren sollen: jedes Absenden
+ * (POST …), das geklappt hat – außer Anmelden, Anwesenheit, Standorte der
+ * Fahrzeuge (die haben ihr eigenes Ereignis) und Ähnlichem ohne Daten für andere.
+ */
+const QUIET = ['/api/events', '/api/presence', '/api/fahrzeug', '/api/push', '/login', '/logout', '/passwort-', '/konto/darstellung', '/api/scan'];
+function isChange(method: string, path: string, status: number): boolean {
+	if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS' || status >= 400) return false;
+	return !QUIET.some((q) => path.startsWith(q));
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	await ensureDatabase();
 	await ensurePermissions();
@@ -112,6 +124,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 		preload: ({ type, path }) =>
 			type === 'js' || type === 'css' || (type === 'font' && /barlow-latin-(400|600)-normal.*\.woff2$/.test(path))
 	});
+
+	// Gespeichert: alle anderen, die dieselbe Seite (oder die Liste darüber) offen haben, laden neu
+	if (event.locals.user && isChange(event.request.method, path, response.status)) {
+		changed(path, (event.request.headers.get('x-tab') ?? '').slice(0, 64), event.locals.user.id);
+	}
 
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('X-Frame-Options', 'DENY');

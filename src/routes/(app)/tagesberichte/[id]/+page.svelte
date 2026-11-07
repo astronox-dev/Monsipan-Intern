@@ -2,6 +2,8 @@
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
 	import { Autosave, autosaveForm } from '$lib/autosave.svelte';
+	import { applyRows, assignFields, LiveDoc } from '$lib/livedoc.svelte';
+	import { newUid } from '$lib/merge';
 	import SaveState from '$lib/components/SaveState.svelte';
 	import { onMount, tick } from 'svelte';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
@@ -38,36 +40,40 @@
 	let { data, form } = $props();
 	const report = $derived(data.report);
 
-	type Position = { key: number; lbPos: string; unit: string; total: string };
+	/** `uid`: feste Kennung (fürs gleichzeitige Bearbeiten), `key` nur fürs Formular */
+	type Position = { key: number; uid: string; lbPos: string; unit: string; total: string };
 	/** free: Bezeichnung frei eingetippt statt aus den Positionen des Auftrags gewählt */
-	type Row = { key: number; id: number | null; label: string; free: boolean; q: string[] };
-	type Material = { key: number; productId: string; material: string; code: string; thickness: string };
+	type Row = { key: number; uid: string; id: number | null; label: string; free: boolean; q: string[] };
+	type Material = { key: number; uid: string; productId: string; material: string; code: string; thickness: string };
 
 	/**
 	 * Kopf- und Fußfelder gehören dem Formular – nur mit value={…} setzte Svelte sie
 	 * bei der ersten Änderung irgendwo im Formular (z. B. einer Unterschrift)
 	 * auf den gespeicherten Stand zurück, und Eingaben gingen verloren.
 	 */
-	// svelte-ignore state_referenced_locally
-	let head = $state({
-		number: data.report.number,
-		date: data.report.date,
-		dateTo: data.report.dateTo ?? '',
-		orderId: data.report.orderId == null ? '' : String(data.report.orderId),
-		road: data.report.road,
-		site: data.report.site,
-		costCenter: data.report.costCenter,
-		dailyOutput: data.report.dailyOutput,
-		lvPosition: data.report.lvPosition,
-		note: data.report.note
+	type Report = typeof data.report;
+	const headFrom = (r: Report) => ({
+		number: r.number,
+		date: r.date,
+		dateTo: r.dateTo ?? '',
+		orderId: r.orderId == null ? '' : String(r.orderId),
+		road: r.road,
+		site: r.site,
+		costCenter: r.costCenter,
+		dailyOutput: r.dailyOutput,
+		lvPosition: r.lvPosition,
+		note: r.note
 	});
+	// Ältere Zeilen ohne Kennung: aus Spalte bzw. ID – für alle gleich
+	const positionsFrom = (r: Report) =>
+		r.positions.map((p) => ({ uid: p.uid || `s${p.idx}`, lbPos: p.lbPos, unit: canonicalUnit(data.units, p.unit), total: quantityLabel(p.totalQuantity) }));
+	// svelte-ignore state_referenced_locally
+	let head = $state(headFrom(data.report));
 
 	let nextKey = 1;
-	// Der Bericht wird nur beim Öffnen übernommen – danach gehört der Stand dem Formular
+	// Der Bericht wird beim Öffnen übernommen – danach gehört der Stand dem Formular (fremde Änderungen führt LiveDoc ein)
 	// svelte-ignore state_referenced_locally
-	let positions = $state<Position[]>(
-		data.report.positions.map((p) => ({ key: nextKey++, lbPos: p.lbPos, unit: canonicalUnit(data.units, p.unit), total: quantityLabel(p.totalQuantity) }))
-	);
+	let positions = $state<Position[]>(positionsFrom(data.report).map((p) => ({ ...p, key: nextKey++ })));
 	/** Bezeichnung der Zeilen: die Positionen des gewählten Auftrags – im Notfall auch frei */
 	const choices = $derived(head.orderId ? (data.orderLines[Number(head.orderId)] ?? []) : []);
 	const FREE = '__frei__';
@@ -77,6 +83,7 @@
 	let rows = $state<Row[]>(
 		data.report.rows.map((r) => ({
 			key: nextKey++,
+			uid: r.uid || `r${r.id}`,
 			id: r.id,
 			label: r.label,
 			free: !!r.label.trim() && !startChoices.some((c) => c.text === r.label),
@@ -96,23 +103,85 @@
 		row.free = false;
 		row.label = '';
 	}
-	const emptyMaterial = (): Material => ({ key: nextKey++, productId: '', material: '', code: '', thickness: '' });
+	const emptyMaterial = (): Material => ({ key: nextKey++, uid: newUid(), productId: '', material: '', code: '', thickness: '' });
+	const materialsFrom = (r: Report) =>
+		r.materials.map((m) => ({
+			uid: m.uid || `m${m.id}`,
+			productId: m.productId == null ? '' : String(m.productId),
+			material: m.material,
+			code: m.code,
+			thickness: m.filmThickness
+		}));
 	// svelte-ignore state_referenced_locally
 	let materials = $state<Material[]>(
-		data.report.materials.length
-			? data.report.materials.map((m) => ({
-					key: nextKey++,
-					productId: m.productId == null ? '' : String(m.productId),
-					material: m.material,
-					code: m.code,
-					thickness: m.filmThickness
-				}))
-			: [emptyMaterial()]
+		data.report.materials.length ? materialsFrom(data.report).map((m) => ({ ...m, key: nextKey++ })) : [emptyMaterial()]
 	);
 
 	let busy = $state(false);
+
+	// Gegen gleichzeitiges Überschreiben: der geladene Stand geht mit jedem Speichern mit
+	const versionOf = (r: Report) => r.updatedAt?.getTime() ?? 0;
+	// svelte-ignore state_referenced_locally
+	let version = $state(versionOf(data.report));
+	// svelte-ignore state_referenced_locally
+	let loadedVersion = versionOf(data.report);
+	$effect(() => {
+		const v = versionOf(data.report);
+		if (v !== loadedVersion) {
+			loadedVersion = v;
+			version = v;
+		}
+	});
 	// Jede Eingabe speichert kurz danach von selbst
-	const saver = new Autosave({ action: '?/save', enabled: () => data.editable && !busy });
+	const saver = new Autosave({
+		action: '?/save',
+		enabled: () => data.editable && !busy,
+		onsaved: (d) => {
+			if (typeof d.version === 'number') version = d.version;
+		}
+	});
+
+	/*
+	 * Gemeinsam bearbeiten: was andere speichern, kommt Feld für Feld, Spalte für
+	 * Spalte und Zeile für Zeile ins Formular. Die Mengen einer Zeile hängen dabei
+	 * an der Kennung ihrer Spalte, nicht an deren Platz.
+	 */
+	const rowModel = (r: { uid: string; id: number | null; label: string }, q: Record<string, string>) => ({ uid: r.uid, id: r.id, label: r.label, q });
+	const doc = new LiveDoc({
+		read: () => {
+			const r = data.report;
+			const cols = positionsFrom(r);
+			return {
+				head: headFrom(r),
+				positions: cols,
+				rows: r.rows.map((row) => rowModel({ uid: row.uid || `r${row.id}`, id: row.id, label: row.label }, Object.fromEntries(cols.map((c, i) => [c.uid, quantityLabel(row.quantities[i])])))),
+				materials: materialsFrom(r)
+			};
+		},
+		get: () => ({
+			head: { ...head },
+			positions: positions.map(({ key: _k, ...p }) => p),
+			rows: rows.map((row) => rowModel(row, Object.fromEntries(positions.map((c, i) => [c.uid, row.q[i] ?? ''])))),
+			materials: materials.map(({ key: _k, ...m }) => m)
+		}),
+		set: (m) => {
+			assignFields(head, m.head);
+			const cols = applyRows(positions, m.positions, (p) => ({ ...p, key: nextKey++ }), (t, p) => assignFields(t, p));
+			if (cols) positions = cols;
+			const qOf = (r: { q: Record<string, string> }) => positions.map((c) => r.q[c.uid] ?? '');
+			const lines = applyRows(
+				rows,
+				m.rows,
+				(r) => ({ key: nextKey++, uid: r.uid, id: r.id, label: r.label, free: !!r.label.trim() && !choices.some((c) => c.text === r.label), q: qOf(r) }),
+				(t, r) => assignFields(t, { id: r.id, label: r.label, q: qOf(r) })
+			);
+			if (lines) rows = lines;
+			const mats = applyRows(materials, m.materials, (x) => ({ ...x, key: nextKey++ }), (t, x) => assignFields(t, x));
+			if (mats) materials = mats;
+		},
+		saver,
+		paused: () => !data.editable
+	});
 	let confirmDelete = $state(false);
 	let confirmReopen = $state(false);
 	let confirmUncheck = $state(false);
@@ -137,7 +206,7 @@
 	let tableBox = $state<HTMLDivElement>();
 
 	function addRow() {
-		rows.push({ key: nextKey++, id: null, label: '', free: false, q: positions.map(() => '') });
+		rows.push({ key: nextKey++, uid: newUid(), id: null, label: '', free: false, q: positions.map(() => '') });
 	}
 	function removeRow(key: number) {
 		rows = rows.filter((r) => r.key !== key);
@@ -146,7 +215,7 @@
 	/** Neue LB-Position hinten anfügen – die Tabelle rollt hin, der Cursor steht im neuen Feld */
 	async function addPosition() {
 		if (positions.length >= MAX_POSITIONS) return;
-		positions.push({ key: nextKey++, lbPos: '', unit: '', total: '' });
+		positions.push({ key: nextKey++, uid: newUid(), lbPos: '', unit: '', total: '' });
 		for (const r of rows) r.q.push('');
 		await tick();
 		tableBox?.scrollTo({ left: tableBox.scrollWidth, behavior: 'smooth' });
@@ -361,11 +430,17 @@
 					customerName = '';
 					customerSignature = '';
 				} else toast.success('Gespeichert');
+			} else if (result.type === 'failure' && result.data?.conflict) {
+				// Jemand anderer war schneller: zusammenführen, speichern – dann noch einmal
+				void doc.afterConflict();
+				toast.info('Inzwischen hat jemand anderer gespeichert', step === 'save' ? 'Die Änderungen sind zusammengeführt und gespeichert.' : 'Die Änderungen sind zusammengeführt – bitte noch einmal.');
+				return;
 			}
 			await update({ reset: false });
 		};
 	}}
 >
+	<input type="hidden" name="version" value={version} />
 	<!-- Außerhalb des fieldset, damit sie auch bei gesperrtem Bericht mitkommen -->
 	<input type="hidden" name="unterschrift" value={signature} />
 	<input type="hidden" name="kunde_name" value={customerName} />
@@ -434,6 +509,7 @@
 										</button>
 									{/if}
 								</div>
+								<input type="hidden" name="pos.uid" value={p.uid} />
 								<input
 									class="input input-sm num text-center"
 									name="pos.lbpos"
@@ -457,6 +533,7 @@
 						<tr class="border-b border-line">
 							<td class="sticky left-0 bg-surface px-3 py-1.5">
 								<input type="hidden" name="zeile.{i}.id" value={row.id ?? 'neu'} />
+								<input type="hidden" name="zeile.{i}.uid" value={row.uid} />
 								{#if data.editable && choices.length && !isFree(row)}
 									<!-- Aus dem Auftrag wählen; die Auswahl selbst hat keinen Namen, gespeichert wird der Text -->
 									<input type="hidden" name="zeile.{i}.text" value={row.label} />
@@ -571,6 +648,7 @@
 					<li class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] gap-2 border-b border-line pb-3 md:grid-cols-[minmax(0,1.7fr)_minmax(0,0.8fr)_minmax(0,1.7fr)_7rem_2.25rem] md:border-0 md:pb-0">
 						<label class="col-span-3 block md:col-span-1">
 							<span class="field-label md:sr-only">Artikel aus dem Lager</span>
+							<input type="hidden" name="material.uid" value={m.uid} />
 							<select
 								class="select min-h-9 py-1 text-[0.9375rem]"
 								name="material.artikel"
@@ -659,7 +737,7 @@
 		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			{#if data.editable}
 				<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
-				<SaveState {saver} what="den Bericht" compact />
+				<SaveState {saver} {doc} what="den Bericht" compact />
 			{/if}
 			{#if data.canRelease}
 				<button type="button" class="btn {data.editable ? 'btn-secondary' : 'btn-primary'}" disabled={busy} onclick={() => (releaseOpen = true)}>

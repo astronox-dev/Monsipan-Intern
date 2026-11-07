@@ -1,5 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
+import { conflictMessage, readGuard } from '$lib/server/concurrency';
 import { isEmail } from '$lib/email';
 import { requireUser } from '$lib/server/guard';
 import { customerReportMail, isMailConfigured, sendMail } from '$lib/server/mail';
@@ -88,7 +89,8 @@ function readReport(form: FormData): SaveReport | { message: string } {
 	const lbPos = all('pos.lbpos');
 	const units = all('pos.einheit');
 	const totals = all('pos.gesamt');
-	const positions = lbPos.map((p, i) => ({ lbPos: p, unit: units[i] ?? '', totalQuantity: totals[i] ?? '' }));
+	const posUids = all('pos.uid');
+	const positions = lbPos.map((p, i) => ({ lbPos: p, unit: units[i] ?? '', totalQuantity: totals[i] ?? '', uid: posUids[i] }));
 
 	// Zeilen kommen als zeile.<laufende Nummer>.* ; "neu" statt einer ID heißt: neue Zeile
 	const indexes = new Set<string>();
@@ -104,7 +106,8 @@ function readReport(form: FormData): SaveReport | { message: string } {
 			return {
 				id: Number.isInteger(id) ? id : null,
 				label: String(form.get(`zeile.${i}.text`) ?? ''),
-				quantities: all(`zeile.${i}.menge`)
+				quantities: all(`zeile.${i}.menge`),
+				uid: String(form.get(`zeile.${i}.uid`) ?? '')
 			};
 		});
 
@@ -112,13 +115,15 @@ function readReport(form: FormData): SaveReport | { message: string } {
 	const names = all('material.name');
 	const codes = all('material.nr');
 	const thickness = all('material.dicke');
+	const matUids = all('material.uid');
 	const materials = names.map((material, i) => {
 		const product = Number(products[i]);
 		return {
 			productId: products[i] && Number.isInteger(product) ? product : null,
 			material,
 			code: codes[i] ?? '',
-			filmThickness: thickness[i] ?? ''
+			filmThickness: thickness[i] ?? '',
+			uid: matUids[i]
 		};
 	});
 
@@ -161,7 +166,8 @@ async function saveIfEditable(form: FormData, report: { id: number; orderId: num
 	if ('message' in data) return fail(400, data);
 	const problem = await orderProblem(user, data, report.orderId);
 	if (problem) return fail(400, { message: problem });
-	await saveReport(report.id, data);
+	const saved = await saveReport(report.id, data, readGuard(form, user.id));
+	if ('conflict' in saved) return fail(409, { conflict: saved.conflict, message: conflictMessage(saved.conflict, 'den Bericht') });
 	return null;
 }
 
@@ -171,12 +177,14 @@ export const actions: Actions = {
 	save: async ({ params, request, locals }) => {
 		const { user, report } = await open(Number(params.id), locals);
 		if (!mayEdit(user, report)) return fail(403, { message: 'Dieser Bericht ist nicht (mehr) änderbar.' });
-		const data = readReport(await request.formData());
+		const form = await request.formData();
+		const data = readReport(form);
 		if ('message' in data) return fail(400, data);
 		const problem = await orderProblem(user, data, report.orderId);
 		if (problem) return fail(400, { message: problem });
-		await saveReport(report.id, data);
-		return { saved: true };
+		const saved = await saveReport(report.id, data, readGuard(form, user.id));
+		if ('conflict' in saved) return fail(409, { conflict: saved.conflict, message: conflictMessage(saved.conflict, 'den Bericht') });
+		return { saved: true, version: saved.version };
 	},
 
 	/** Freigeben geht nur mit Unterschrift – sie steht im Ausdruck bei „Für den Auftragnehmer" */

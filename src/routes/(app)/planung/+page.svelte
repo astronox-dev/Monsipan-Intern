@@ -14,6 +14,8 @@
 	import { pageTitle } from '$lib/app';
 	import { deserialize, enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import { watchPaths } from '$lib/live.svelte';
+	import { onDestroy } from 'svelte';
 	import { draggable, dropzone, type DragItem } from '$lib/dnd';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
@@ -41,6 +43,8 @@
 	import { date as dateLabel } from '$lib/format';
 
 	let { data, form } = $props();
+	// Live: Aufträge, Urlaub und Krankenstand ändern die Planung mit
+	onDestroy(watchPaths(['/auftraege', '/urlaub', '/krankenstand', '/tagesberichte']));
 
 	const DAY = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 	const kw = $derived(isoWeek(data.weekStart));

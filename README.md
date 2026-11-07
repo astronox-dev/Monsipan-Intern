@@ -71,6 +71,21 @@ Die Knöpfe zum Speichern und Freigeben (Tagesbericht, Stundenzettel, Angebot, R
 am Handy und Tablet am Ende des Formulars, damit beim Scrollen nichts verdeckt wird; erst am PC
 bleiben sie unten am Rand stehen.
 
+**Gemeinsam und live arbeiten:** Speichert jemand etwas, sehen es alle anderen, die dieselbe
+Seite (oder die Liste darüber, etwa „Angebote“) offen haben, ohne neu zu laden – auch die
+Übersicht und die Wochenplanung ziehen mit (höchstens alle paar Sekunden). Oben rechts steht,
+wer die Seite noch offen hat; ein grüner Punkt heißt „tippt gerade“. In Angeboten,
+Rechnungsentwürfen, Tagesberichten, Stundenzetteln und Arbeitsaufträgen können mehrere
+gleichzeitig schreiben: Was die anderen speichern, kommt **Feld für Feld und Zeile für Zeile**
+ins eigene Formular (neue Zeilen, Verschieben, Löschen inklusive), eigene noch nicht
+gespeicherte Eingaben bleiben. Schreiben zwei im selben Moment ins **selbe Feld**, gilt die
+Fassung, die zuletzt gespeichert wird. Beim Speichern prüft der Server, ob inzwischen jemand
+anderer gespeichert hat; dann wird zuerst zusammengeführt und erst danach gespeichert – so
+geht nichts still verloren. Neben dem Speichern-Knopf steht z. B. „Änderung von Tobias
+übernommen 14:32“. Technisch: Server-Sent Events (`/api/events`), Anwesenheit über
+`/api/presence`, das Zusammenführen in [`merge.ts`](src/lib/merge.ts) und
+[`livedoc.svelte.ts`](src/lib/livedoc.svelte.ts); Zeilen tragen dafür eine feste Kennung (`uid`).
+
 **Automatisch gespeichert** wird in Angeboten, Rechnungsentwürfen, Tagesberichten,
 Stundenzetteln, Anfragen und Arbeitsaufträgen: kurz nach jeder Eingabe und beim Verlassen der
 Seite. Neben dem Speichern-Knopf steht der Stand („Gespeichert 14:32“, „Nicht gespeichert: …“).
@@ -772,10 +787,9 @@ vor; man kann aber auch selbst eine eintippen (etwa „kg“) – im Angebot wie
   Vorschau; im PDF, in der Ansicht und beim Kunden steht es fett bzw. unterstrichen. Geht auch
   in den Vorlagen unter Einstellungen und im eigenen Text der Rechnung.
 - **Automatisch gespeichert** wird kurz nach jeder Eingabe – neben dem Speichern-Knopf steht
-  „Gespeichert 14:32“. Haben zwei Leute dasselbe Angebot offen und die andere Person hat
-  inzwischen gespeichert, wird **nichts überschrieben**: Oben erscheint, wer gespeichert hat,
-  mit **Neu laden** (zeigt deren Fassung) oder **Meine Fassung speichern** (überschreibt sie).
-  So geht keine von zwei gleichzeitig geschriebenen Fassungen mehr still verloren.
+  „Gespeichert 14:32“. Haben mehrere dasselbe Angebot offen, erscheinen die Änderungen der
+  anderen live im eigenen Formular (siehe „Gemeinsam und live arbeiten“ oben) – keine von zwei
+  gleichzeitig geschriebenen Fassungen geht mehr verloren.
 - Einleitung und Schlusstext kommen aus der Vorlage unter **Einstellungen → Angebote,
   Aufträge und Rechnungen** – je Art eine eigene; die für Aufträge stehen im Auftrags-PDF,
   leer bleibt dort nichts stehen – und lassen sich im einzelnen Angebot ändern. Dort stehen auch die drei Spalten
@@ -1029,8 +1043,8 @@ alles andere auf der Rechnung.
   Rechnung zeigt ihre Tagesberichte und hat ein eigenes **Summenblatt**.
 - Eine neue Rechnung ist ein **Entwurf** (PDF mit „ENTWURF“) – nur Entwürfe lassen sich
   **bearbeiten** und löschen (löschen: Admin, Geschäftsführung). Beim Bearbeiten wird
-  automatisch gespeichert, mit demselben Schutz gegen gleichzeitiges Überschreiben wie beim
-  Angebot. Wird ein Entwurf gelöscht,
+  automatisch gespeichert; arbeiten mehrere gleichzeitig daran, werden die Änderungen live
+  zusammengeführt wie beim Angebot. Wird ein Entwurf gelöscht,
   sind seine Tagesberichte wieder abzurechnen. Welche Berichte drin sind, lässt sich
   nachträglich nicht ändern – dafür den Entwurf löschen und neu erstellen. Mit **Rechnung
   endgültig ausstellen** wird sie archiviert, auf Wunsch digital signiert und gesperrt –

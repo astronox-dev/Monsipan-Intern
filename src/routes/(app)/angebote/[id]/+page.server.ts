@@ -117,7 +117,8 @@ function readOffer(form: FormData): SaveOffer | { message: string } {
 			unit: s(`z.${i}.einheit`),
 			unitPrice: s(`z.${i}.preis`),
 			alternative: s(`z.${i}.alternativ`) === 'on',
-			sub: s(`z.${i}.unter`) === '1'
+			sub: s(`z.${i}.unter`) === '1',
+			uid: s(`z.${i}.uid`)
 		}));
 	for (const [i, l] of lines.entries()) {
 		if (l.kind === 'titel') continue;

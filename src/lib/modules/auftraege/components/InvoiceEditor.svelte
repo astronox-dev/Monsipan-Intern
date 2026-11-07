@@ -48,6 +48,9 @@
 		ownTitle?: boolean;
 		/** Im Angebot eine Alternativposition – kommt nur mit Menge auf die Rechnung */
 		alternative?: boolean;
+		/** Gespeicherte Zeile: ID und feste Kennung (fürs gleichzeitige Bearbeiten) */
+		id?: number;
+		uid?: string | null;
 	}
 </script>
 
@@ -89,6 +92,9 @@
 	} from '../offer';
 	import LineTools from './LineTools.svelte';
 	import RichTextarea from '$lib/components/RichTextarea.svelte';
+	import { applyRows, assignFields, LiveDoc } from '$lib/livedoc.svelte';
+	import { newUid } from '$lib/merge';
+	import type { Autosave } from '$lib/autosave.svelte';
 	import { dropzone, type DragItem } from '$lib/dnd';
 	import {
 		columnLabel,
@@ -124,6 +130,13 @@
 		onchange?: () => void;
 		/** Neben dem Knopf: Stand des automatischen Speicherns */
 		status?: Snippet;
+		/**
+		 * Gemeinsam bearbeiten (bestehender Entwurf): der Stand vom Server, wie er
+		 * gerade geladen ist – fremde Änderungen kommen damit ins Formular.
+		 */
+		live?: { source: () => { head: EditorHead; lines: EditorLine[] }; saver: Autosave } | null;
+		/** Für die Anzeige „Änderung von … übernommen" */
+		doc?: { lastRemote: { by: string; at: Date } | null } | null;
 	}
 	let {
 		head: initialHead,
@@ -137,11 +150,14 @@
 		submitLabel,
 		message = '',
 		onchange,
-		status
+		status,
+		live = null,
+		doc = $bindable(null)
 	}: Props = $props();
 
 	type Line = {
 		key: number;
+		uid: string;
 		number: string;
 		kind: 'position' | 'titel';
 		text: string;
@@ -159,21 +175,25 @@
 
 	let nextKey = 1;
 	const qtyInput = (v: number | null) => (v == null ? '' : String(v).replace('.', ','));
-	// Die Vorgaben werden nur beim Öffnen übernommen – danach gehört der Stand dem Formular
-	// svelte-ignore state_referenced_locally
-	let head = $state({
-		...initialHead,
-		vat: String(initialHead.vatRate).replace('.', ','),
+	/** Der Kopf, wie er im Formular steht */
+	const headState = (h: EditorHead) => ({
+		...h,
+		vat: String(h.vatRate).replace('.', ','),
 		// Zahlungsziel in Tagen – bei einer bestehenden Rechnung aus „zahlbar bis"
-		days: String(isValidIsoDate(initialHead.dueDate) && isValidIsoDate(initialHead.date) ? Math.max(0, daysBetween(initialHead.date, initialHead.dueDate)) : paymentDays),
-		skonto: initialHead.skontoPercent ? String(initialHead.skontoPercent).replace('.', ',') : '',
-		skontoDays: initialHead.skontoDays ? String(initialHead.skontoDays) : '',
-		discount: discountInput(initialHead).value,
-		discountKind: discountInput(initialHead).kind
+		days: String(isValidIsoDate(h.dueDate) && isValidIsoDate(h.date) ? Math.max(0, daysBetween(h.date, h.dueDate)) : paymentDays),
+		skonto: h.skontoPercent ? String(h.skontoPercent).replace('.', ',') : '',
+		skontoDays: h.skontoDays ? String(h.skontoDays) : '',
+		discount: discountInput(h).value,
+		discountKind: discountInput(h).kind
 	});
+	// Die Vorgaben werden beim Öffnen übernommen – danach gehört der Stand dem Formular (fremde Änderungen führt LiveDoc ein)
+	// svelte-ignore state_referenced_locally
+	let head = $state(headState(initialHead));
 	// svelte-ignore state_referenced_locally
 	const toLine = (l: EditorLine | InvoiceLineDraft): Line => ({
 		key: nextKey++,
+		// Gespeicherte Zeilen ohne Kennung: aus der ID – für alle gleich
+		uid: ('uid' in l && l.uid) || ('id' in l && l.id ? `p${l.id}` : newUid()),
 		number: l.number,
 		kind: l.kind,
 		text: l.text,
@@ -202,11 +222,39 @@
 	/** Art und Leistungszeitraum folgen der Auswahl der Berichte, bis jemand sie selbst ändert */
 	let kindTouched = $state(false);
 	let periodTouched = $state(false);
+	// Gemeinsam bearbeiten: fremde Änderungen Feld für Feld, Zeile für Zeile ins Formular
+	type LineModel = Omit<Line, 'key'>;
+	const lineModel = ({ key: _key, ...l }: Line): LineModel => l;
+	// svelte-ignore state_referenced_locally
+	const liveDoc = live
+		? new LiveDoc({
+				read: () => {
+					const s = live.source();
+					return { head: headState(s.head), lines: s.lines.map(toLine).map(lineModel) };
+				},
+				get: () => ({ head: { ...head }, lines: lines.map(lineModel) }),
+				set: (m) => {
+					assignFields(head, m.head);
+					const next = applyRows(lines, m.lines, (r) => ({ ...r, key: nextKey++ }), (t, r) => assignFields(t, r));
+					if (next) lines = next;
+				},
+				saver: live.saver
+			})
+		: null;
+	// svelte-ignore state_referenced_locally
+	doc = liveDoc;
 	// Jede Änderung melden – die Seite speichert dann von selbst
 	let watching = false;
 	$effect(() => {
 		JSON.stringify(head);
 		JSON.stringify(lines);
+		// Mit LiveDoc zählt, ob etwas vom Server abweicht – sonst jede Änderung nach dem Öffnen
+		if (liveDoc) {
+			untrack(() => {
+				if (liveDoc.dirty()) onchange?.();
+			});
+			return;
+		}
 		if (!watching) {
 			watching = true;
 			return;
@@ -303,6 +351,7 @@
 	}
 	const blank = (kind: 'position' | 'titel', number: string): Line => ({
 		key: nextKey++,
+		uid: newUid(),
 		number,
 		kind,
 		text: '',
@@ -328,7 +377,7 @@
 	function copyLine(i: number) {
 		if (lines.length >= MAX_OFFER_LINES) return;
 		const l = lines[i];
-		lines.splice(i + 1, 0, { ...l, key: nextKey++, number: nextLineNumber(l.number), offerLineId: null, offerQuantity: null, source: '', columnKey: null, ownTitle: false });
+		lines.splice(i + 1, 0, { ...l, key: nextKey++, uid: newUid(), number: nextLineNumber(l.number), offerLineId: null, offerQuantity: null, source: '', columnKey: null, ownTitle: false });
 	}
 	function removeLine(key: number) {
 		lines = lines.filter((l) => l.key !== key);
@@ -545,6 +594,7 @@
 				use:dropzone={{ accepts: ['rechnung-zeile'], onDrop: dropOn(i) }}
 			>
 				<input type="hidden" name="z.{i}.art" value={l.kind} />
+				<input type="hidden" name="z.{i}.uid" value={l.uid} />
 				{#if l.kind === 'titel'}
 					<div class="grid grid-cols-[3.75rem_minmax(0,1fr)_auto] items-center gap-2">
 						<input class="input num px-2 font-bold" name="z.{i}.nr" maxlength="12" bind:value={l.number} aria-label="Nummer Zeile {i + 1}" />

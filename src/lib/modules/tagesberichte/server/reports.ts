@@ -27,6 +27,7 @@ import {
 	type ReportStatus
 } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
+import type { Conflict, SaveGuard } from '$lib/server/concurrency';
 import type { InkPages } from '$lib/ink';
 import { addDays, isValidIsoDate } from '$lib/modules/stunden/week';
 import { MAX_MATERIALS, MAX_POSITIONS } from '../sheet';
@@ -234,7 +235,8 @@ async function loadReport(where: SQL) {
 			customerEmail: dailyReports.customerEmail,
 			customerLinkSentAt: dailyReports.customerLinkSentAt,
 			authorFirst: users.firstName,
-			authorLast: users.lastName
+			authorLast: users.lastName,
+			updatedAt: dailyReports.updatedAt
 		})
 		.from(dailyReports)
 		.leftJoin(parties, eq(parties.id, dailyReports.partyId))
@@ -253,14 +255,15 @@ async function loadReport(where: SQL) {
 				idx: dailyReportPositions.idx,
 				lbPos: dailyReportPositions.lbPos,
 				unit: dailyReportPositions.unit,
-				totalQuantity: dailyReportPositions.totalQuantity
+				totalQuantity: dailyReportPositions.totalQuantity,
+				uid: dailyReportPositions.uid
 			})
 			.from(dailyReportPositions)
 			.where(eq(dailyReportPositions.reportId, id))
 			.orderBy(asc(dailyReportPositions.idx))
 			.all(),
 		db
-			.select({ id: dailyReportRows.id, label: dailyReportRows.label, quantities: dailyReportRows.quantities })
+			.select({ id: dailyReportRows.id, label: dailyReportRows.label, quantities: dailyReportRows.quantities, uid: dailyReportRows.uid })
 			.from(dailyReportRows)
 			.where(eq(dailyReportRows.reportId, id))
 			.orderBy(asc(dailyReportRows.sortOrder), asc(dailyReportRows.id))
@@ -271,7 +274,9 @@ async function loadReport(where: SQL) {
 				productName: products.name,
 				material: dailyReportMaterials.material,
 				code: dailyReportMaterials.code,
-				filmThickness: dailyReportMaterials.filmThickness
+				filmThickness: dailyReportMaterials.filmThickness,
+				id: dailyReportMaterials.id,
+				uid: dailyReportMaterials.uid
 			})
 			.from(dailyReportMaterials)
 			.leftJoin(products, eq(products.id, dailyReportMaterials.productId))
@@ -324,14 +329,20 @@ export interface SaveReport {
 		note: string;
 	};
 	/** In der Reihenfolge der Spalten; die Mengen der Zeilen stehen in derselben Reihenfolge */
-	positions: { lbPos: string; unit: string; totalQuantity: string }[];
-	rows: { id: number | null; label: string; quantities: string[] }[];
-	materials: { productId: number | null; material: string; code: string; filmThickness: string }[];
+	positions: { lbPos: string; unit: string; totalQuantity: string; uid?: string }[];
+	rows: { id: number | null; label: string; quantities: string[]; uid?: string }[];
+	materials: { productId: number | null; material: string; code: string; filmThickness: string; uid?: string }[];
 }
 
-export async function saveReport(id: number, data: SaveReport) {
-	await db.transaction(async (tx) => {
-		await tx
+/**
+ * Speichern. Mit `guard`: nur, wenn seit dem Laden niemand anderer gespeichert
+ * hat – sonst kommt der Konflikt zurück (und nichts wird geschrieben).
+ */
+export async function saveReport(id: number, data: SaveReport, guard?: SaveGuard): Promise<{ version: number } | { conflict: Conflict }> {
+	const now = new Date();
+	const checked = guard && guard.version != null && !guard.force;
+	return db.transaction(async (tx) => {
+		const done = await tx
 			.update(dailyReports)
 			.set({
 				number: data.head.number.slice(0, 40),
@@ -344,9 +355,14 @@ export async function saveReport(id: number, data: SaveReport) {
 				dailyOutput: data.head.dailyOutput.slice(0, 200),
 				lvPosition: data.head.lvPosition.slice(0, 200),
 				note: data.head.note.slice(0, 2000),
-				updatedAt: new Date()
+				updatedAt: now
 			})
-			.where(eq(dailyReports.id, id));
+			.where(checked ? and(eq(dailyReports.id, id), eq(dailyReports.updatedAt, new Date(guard.version!))) : eq(dailyReports.id, id))
+			.returning({ id: dailyReports.id });
+		if (!done.length) {
+			const current = await tx.select({ at: dailyReports.updatedAt }).from(dailyReports).where(eq(dailyReports.id, id)).get();
+			return { conflict: { by: '', at: current?.at?.getTime() ?? 0 } };
+		}
 
 		// Positionen werden neu geschrieben – ihre Reihenfolge ist zugleich die der Mengen
 		const positions = data.positions.slice(0, MAX_POSITIONS);
@@ -357,18 +373,23 @@ export async function saveReport(id: number, data: SaveReport) {
 				idx: i + 1,
 				lbPos: p.lbPos.slice(0, 40),
 				unit: p.unit.slice(0, 20),
-				totalQuantity: num(p.totalQuantity)
+				totalQuantity: num(p.totalQuantity),
+				uid: p.uid?.slice(0, 64) || null
 			});
 		}
 
 		const keep: number[] = [];
 		let order = 0;
+		// Neue Zeilen erkennt man an ihrer Kennung wieder – ein zweites Speichern legt sie nicht noch einmal an
+		const before = await tx.select({ id: dailyReportRows.id, uid: dailyReportRows.uid }).from(dailyReportRows).where(eq(dailyReportRows.reportId, id)).all();
+		const byUid = new Map(before.filter((b) => b.uid).map((b) => [b.uid!, b.id]));
 		for (const r of data.rows) {
 			const quantities = positions.map((_, i) => num(r.quantities[i]));
+			const rowId = r.id ?? (r.uid ? byUid.get(r.uid) : undefined) ?? null;
 			const empty = !r.label.trim() && quantities.every((q) => q == null);
-			if (empty && r.id == null) continue;
-			const values = { label: r.label.slice(0, 200), sortOrder: order++, quantities };
-			if (r.id == null) {
+			if (empty && rowId == null) continue;
+			const values = { label: r.label.slice(0, 200), sortOrder: order++, quantities, uid: r.uid?.slice(0, 64) || null };
+			if (rowId == null) {
 				const created = await tx
 					.insert(dailyReportRows)
 					.values({ reportId: id, ...values })
@@ -376,8 +397,8 @@ export async function saveReport(id: number, data: SaveReport) {
 					.get();
 				keep.push(created.id);
 			} else {
-				await tx.update(dailyReportRows).set(values).where(and(eq(dailyReportRows.id, r.id), eq(dailyReportRows.reportId, id)));
-				keep.push(r.id);
+				await tx.update(dailyReportRows).set(values).where(and(eq(dailyReportRows.id, rowId), eq(dailyReportRows.reportId, id)));
+				keep.push(rowId);
 			}
 		}
 		// Zeilen, die im Formular nicht mehr vorkommen, sind gelöscht worden
@@ -403,9 +424,11 @@ export async function saveReport(id: number, data: SaveReport) {
 				productId: m.productId != null && known.has(m.productId) ? m.productId : null,
 				material: m.material.slice(0, 60),
 				code: m.code.slice(0, 120),
-				filmThickness: m.filmThickness.trim().slice(0, 30)
+				filmThickness: m.filmThickness.trim().slice(0, 30),
+				uid: m.uid?.slice(0, 64) || null
 			});
 		}
+		return { version: now.getTime() };
 	});
 }
 

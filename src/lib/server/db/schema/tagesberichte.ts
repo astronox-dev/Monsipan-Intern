@@ -91,7 +91,9 @@ export const dailyReportPositions = sqliteTable(
 		lbPos: text('lb_pos').notNull().default(''),
 		unit: text('unit').notNull().default(''),
 		/** Gesamtmenge – wird von Hand eingetragen */
-		totalQuantity: real('total_quantity')
+		totalQuantity: real('total_quantity'),
+		/** Feste Kennung der Zeile – damit gleichzeitiges Bearbeiten sie wiedererkennt (ältere: leer) */
+		uid: text('uid')
 	},
 	(t) => [uniqueIndex('daily_report_positions_idx').on(t.reportId, t.idx)]
 );
@@ -107,7 +109,9 @@ export const dailyReportRows = sqliteTable(
 		sortOrder: integer('sort_order').notNull().default(0),
 		label: text('label').notNull().default(''),
 		/** Mengen je LB-Position, in der Reihenfolge der Spalten */
-		quantities: text('quantities', { mode: 'json' }).$type<(number | null)[]>().notNull().default([])
+		quantities: text('quantities', { mode: 'json' }).$type<(number | null)[]>().notNull().default([]),
+		/** Feste Kennung der Zeile – damit gleichzeitiges Bearbeiten sie wiedererkennt (ältere: leer) */
+		uid: text('uid')
 	},
 	(t) => [index('daily_report_rows_report_idx').on(t.reportId, t.sortOrder)]
 );
@@ -128,7 +132,9 @@ export const dailyReportMaterials = sqliteTable(
 		/** Kenn-Nr. – beim Artikel aus dem Lager dessen Name */
 		code: text('code').notNull().default(''),
 		/** Filmdicke – meist mm, aber frei, z. B. „0,6 nass" */
-		filmThickness: text('film_thickness').notNull().default('')
+		filmThickness: text('film_thickness').notNull().default(''),
+		/** Feste Kennung der Zeile – damit gleichzeitiges Bearbeiten sie wiedererkennt (ältere: leer) */
+		uid: text('uid')
 	},
 	(t) => [index('daily_report_materials_report_idx').on(t.reportId, t.sortOrder)]
 );

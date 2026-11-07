@@ -24,6 +24,7 @@ import { db, type Tx } from '$lib/server/db';
 import { col } from '$lib/server/db/sql';
 import { parties, timesheetDays, timesheets, users } from '$lib/server/db/schema';
 import type { SessionUser } from '$lib/server/auth';
+import type { Conflict, SaveGuard } from '$lib/server/concurrency';
 import type { InkPages } from '$lib/ink';
 import { entryLines, mondayOf, monthsOfWeek, normalizeRanges, parseHours, weekDaysInMonth, type TimeRange, type WEEKDAY_LABELS } from '../week';
 import { guestDaysAt, guestsOfParty } from '$lib/modules/planung/server/plan';
@@ -234,6 +235,7 @@ export async function sheetDetail(id: number) {
 			vaz: timesheets.vaz,
 			vazPercent: timesheets.vazPercent,
 			note: timesheets.note,
+			updatedAt: timesheets.updatedAt,
 			releasedAt: timesheets.releasedAt,
 			releaseSignature: timesheets.releaseSignature,
 			releasedByFirst: releaser.firstName,
@@ -306,28 +308,49 @@ const num = (v: string) => {
 	return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
 };
 
-export async function saveSheet(id: number, head: HeadInput, days: DayInput[]) {
-	await db.transaction(async (tx) => {
-		await tx
+type Saved = { version: number } | { conflict: Conflict };
+
+/**
+ * Mit `guard`: nur, wenn seit dem Laden niemand anderer gespeichert hat –
+ * sonst kommt der Konflikt zurück (und nichts wird geschrieben).
+ */
+export async function saveSheet(id: number, head: HeadInput, days: DayInput[], guard?: SaveGuard): Promise<Saved> {
+	const now = new Date();
+	return db.transaction(async (tx) => {
+		const done = await tx
 			.update(timesheets)
 			.set({
 				allowanceDays: num(head.allowanceDays),
 				allowanceAmount: num(head.allowanceAmount),
 				vazPercent: num(head.vazPercent),
 				note: String(head.note ?? '').slice(0, 2000),
-				updatedAt: new Date()
+				updatedAt: now
 			})
-			.where(eq(timesheets.id, id));
+			.where(guarded(id, guard))
+			.returning({ id: timesheets.id });
+		if (!done.length) return conflictOf(tx, id);
 		await writeDays(tx, id, days);
+		return { version: now.getTime() };
 	});
 }
 
 /** Nur Tageszeilen – für die Partie, bei der der Arbeiter laut Planung an diesen Tagen war */
-export async function saveSheetDays(id: number, days: DayInput[]) {
-	await db.transaction(async (tx) => {
-		await tx.update(timesheets).set({ updatedAt: new Date() }).where(eq(timesheets.id, id));
+export async function saveSheetDays(id: number, days: DayInput[], guard?: SaveGuard): Promise<Saved> {
+	const now = new Date();
+	return db.transaction(async (tx) => {
+		const done = await tx.update(timesheets).set({ updatedAt: now }).where(guarded(id, guard)).returning({ id: timesheets.id });
+		if (!done.length) return conflictOf(tx, id);
 		await writeDays(tx, id, days);
+		return { version: now.getTime() };
 	});
+}
+
+const guarded = (id: number, guard?: SaveGuard) =>
+	guard && guard.version != null && !guard.force ? and(eq(timesheets.id, id), eq(timesheets.updatedAt, new Date(guard.version))) : eq(timesheets.id, id);
+
+async function conflictOf(tx: Tx, id: number): Promise<{ conflict: Conflict }> {
+	const current = await tx.select({ at: timesheets.updatedAt }).from(timesheets).where(eq(timesheets.id, id)).get();
+	return { conflict: { by: '', at: current?.at?.getTime() ?? 0 } };
 }
 
 async function writeDays(tx: Tx, id: number, days: DayInput[]) {

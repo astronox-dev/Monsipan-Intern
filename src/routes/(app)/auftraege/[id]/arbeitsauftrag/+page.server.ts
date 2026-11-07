@@ -1,5 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { can } from '$lib/permissions';
+import { conflictMessage, readGuard, type SaveGuard } from '$lib/server/concurrency';
 import { requireUser } from '$lib/server/guard';
 import { ORDER_STATUS, type OrderStatus } from '$lib/server/db/schema';
 import { isValidSignature } from '$lib/modules/stunden/signature';
@@ -69,14 +70,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 };
 
 /** Formular aus dem Feld „inhalt" lesen und speichern – nur, was der Benutzer ändern darf */
-async function saveForm(form: FormData, orderId: number, scope: WorkScope, userId: number) {
+async function saveForm(form: FormData, orderId: number, scope: WorkScope, userId: number, guard?: SaveGuard) {
 	let raw: unknown;
 	try {
 		raw = JSON.parse(String(form.get('inhalt') ?? '{}'));
 	} catch {
 		return 'Das Formular ist unvollständig angekommen – bitte die Seite neu laden.';
 	}
-	return saveWorkOrderForm(orderId, sanitizeForm(raw), scope, userId, (raw as { foil?: unknown } | null)?.foil);
+	return saveWorkOrderForm(orderId, sanitizeForm(raw), scope, userId, (raw as { foil?: unknown } | null)?.foil, guard);
 }
 
 const roleOf = (v: FormDataEntryValue | null) => ((SIGNATURE_ROLES as readonly string[]).includes(String(v)) ? (String(v) as SignatureRole) : null);
@@ -85,7 +86,9 @@ export const actions: Actions = {
 	save: async ({ params, request, locals }) => {
 		const { user, order, scope } = await open(Number(params.id), locals);
 		if (!scope.office && !scope.site) return fail(403, { message: 'Diesen Arbeitsauftrag darfst du nur ansehen.' });
-		const problem = await saveForm(await request.formData(), order.id, scope, user.id);
+		const form = await request.formData();
+		const problem = await saveForm(form, order.id, scope, user.id, readGuard(form, user.id));
+		if (problem && typeof problem === 'object') return fail(409, { conflict: problem.conflict, message: conflictMessage(problem.conflict, 'den Arbeitsauftrag') });
 		if (problem) return fail(400, { message: problem });
 		return { saved: true };
 	},

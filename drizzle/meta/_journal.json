@@ -414,6 +414,13 @@
       "when": 1793888291156,
       "tag": "0058_angebot_unterpositionen",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1794011980158,
+      "tag": "0059_zeilen_uid",
+      "breakpoints": true
     }
   ]
 }

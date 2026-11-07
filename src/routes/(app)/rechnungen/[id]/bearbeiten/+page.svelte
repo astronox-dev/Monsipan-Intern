@@ -7,11 +7,22 @@
 	import { invoiceLabel, invoiceNo } from '$lib/modules/auftraege/offer';
 	import { Autosave } from '$lib/autosave.svelte';
 	import SaveState from '$lib/components/SaveState.svelte';
+	import { toast } from '$lib/stores/toast.svelte';
 
 	let { data, form } = $props();
 	let busy = $state(false);
 	// svelte-ignore state_referenced_locally
 	let version = $state(data.version);
+	// Neu geladen (fremdes oder eigenes Speichern): der Stand vom Server gilt
+	// svelte-ignore state_referenced_locally
+	let loadedVersion = data.version;
+	$effect(() => {
+		if (data.version !== loadedVersion) {
+			loadedVersion = data.version;
+			version = data.version;
+		}
+	});
+	let doc = $state<{ lastRemote: { by: string; at: Date } | null } | null>(null);
 	let formEl = $state<HTMLFormElement>();
 	const saver = new Autosave({
 		form: () => formEl,
@@ -45,7 +56,10 @@
 		return async ({ result, update }) => {
 			busy = false;
 			if (result.type === 'failure' && result.data?.conflict) {
-				saver.markConflict(String((result.data.conflict as { by?: string }).by ?? ''), String(result.data.message ?? ''));
+				// Jemand anderer war schneller: zusammenführen und noch einmal speichern
+				void (doc as { afterConflict?: () => Promise<void> } | null)?.afterConflict?.();
+				toast.info('Inzwischen hat jemand anderer gespeichert', 'Die Änderungen sind zusammengeführt – bitte noch einmal speichern.');
+				return;
 			}
 			await update({ reset: false });
 		};
@@ -62,7 +76,9 @@
 		submitLabel="Speichern"
 		{message}
 		onchange={() => saver.touch()}
+		live={{ source: () => ({ head: data.head, lines: data.lines }), saver }}
+		bind:doc
 	>
-		{#snippet status()}<SaveState {saver} what="die Rechnung" compact />{/snippet}
+		{#snippet status()}<SaveState {saver} {doc} what="die Rechnung" compact />{/snippet}
 	</InvoiceEditor>
 </form>

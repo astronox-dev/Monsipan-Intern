@@ -1,5 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { can, type Role } from '$lib/permissions';
+import { conflictMessage, readGuard, type Conflict } from '$lib/server/concurrency';
 import { requireUser } from '$lib/server/guard';
 import {
 	deleteSheet,
@@ -101,6 +102,10 @@ function readHead(form: FormData) {
 	};
 }
 
+/** Gespeichert – oder inzwischen hat jemand anderer gespeichert (die Seite führt zusammen) */
+const answer = (saved: { version: number } | { conflict: Conflict }) =>
+	'conflict' in saved ? fail(409, { conflict: saved.conflict, message: conflictMessage(saved.conflict, 'die Woche') }) : { saved: true, version: saved.version };
+
 export const actions: Actions = {
 	save: async ({ params, request, locals }) => {
 		const { user, sheet } = await load_(Number(params.id), locals);
@@ -108,19 +113,21 @@ export const actions: Actions = {
 			// Aushilfe laut Wochenplanung: nur die eigenen Tage, Kopf und Freigabe bleiben bei der schreibenden Partie
 			const days = await guestEditDays(user, sheet);
 			if (!days.length) return fail(403, { message: 'Diese Woche ist nicht (mehr) änderbar.' });
-			await saveSheetDays(sheet.id, readDays(await request.formData(), days));
-			return { saved: true };
+			const form = await request.formData();
+			return answer(await saveSheetDays(sheet.id, readDays(form, days), readGuard(form, user.id)));
 		}
 		const form = await request.formData();
-		await saveSheet(
-			sheet.id,
-			readHead(form),
-			readDays(
-				form,
-				sheet.days.map((d) => d.date)
+		return answer(
+			await saveSheet(
+				sheet.id,
+				readHead(form),
+				readDays(
+					form,
+					sheet.days.map((d) => d.date)
+				),
+				readGuard(form, user.id)
 			)
 		);
-		return { saved: true };
 	},
 
 	/** Speichert den aktuellen Stand und gibt frei – mit Unterschrift, wenn eine mitkommt */

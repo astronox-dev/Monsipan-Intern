@@ -143,7 +143,9 @@ export const offerPositions = sqliteTable(
 		/** Alternativposition: mit Menge und Preis angeboten, aber nicht im Gesamtbetrag (GP 0) */
 		alternative: integer('alternative', { mode: 'boolean' }).notNull().default(false),
 		/** Unterposition der Überschrift darüber (2.1, 2.2 …) – sonst eine eigene Nummer */
-		sub: integer('sub', { mode: 'boolean' }).notNull().default(false)
+		sub: integer('sub', { mode: 'boolean' }).notNull().default(false),
+		/** Feste Kennung der Zeile – damit gleichzeitiges Bearbeiten sie wiedererkennt (ältere: leer) */
+		uid: text('uid')
 	},
 	(t) => [index('offer_positions_offer_idx').on(t.offerId, t.sortOrder)]
 );
@@ -486,7 +488,9 @@ export const invoicePositions = sqliteTable(
 		quantity: real('quantity'),
 		unit: text('unit').notNull().default(''),
 		/** Einheitspreis netto in Euro */
-		unitPrice: real('unit_price')
+		unitPrice: real('unit_price'),
+		/** Feste Kennung der Zeile – damit gleichzeitiges Bearbeiten sie wiedererkennt (ältere: leer) */
+		uid: text('uid')
 	},
 	(t) => [index('invoice_positions_invoice_idx').on(t.invoiceId, t.sortOrder)]
 );

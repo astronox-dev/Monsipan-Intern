@@ -6,16 +6,23 @@
 	 */
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import CloudCheck from '@lucide/svelte/icons/cloud-check';
+	import Users from '@lucide/svelte/icons/users';
 	import { autosaveLabel, type Autosave } from '$lib/autosave.svelte';
 
-	let { saver, what, compact = false }: { saver: Autosave; what: string; compact?: boolean } = $props();
+	let { saver, doc, what, compact = false }: { saver: Autosave; doc?: { lastRemote: { by: string; at: Date } | null } | null; what: string; compact?: boolean } = $props();
 	const label = $derived(autosaveLabel(saver));
+	const time = (d: Date) => d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
 </script>
 
 {#if compact}
 	{#if label}
 		<span class="flex items-center gap-1.5 text-sm {saver.state === 'error' || saver.state === 'conflict' ? 'text-danger' : 'text-ink-3'}" aria-live="polite">
 			{#if saver.state === 'saved'}<CloudCheck size={16} aria-hidden="true" />{/if}{label}
+		</span>
+	{/if}
+	{#if doc?.lastRemote}
+		<span class="flex items-center gap-1.5 text-sm text-ink-3" aria-live="polite">
+			<Users size={16} aria-hidden="true" />Änderung von {doc.lastRemote.by} übernommen {time(doc.lastRemote.at)}
 		</span>
 	{/if}
 {:else if saver.state === 'conflict'}

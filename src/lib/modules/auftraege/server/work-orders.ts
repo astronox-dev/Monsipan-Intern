@@ -5,6 +5,7 @@
  * Inhalt und Regeln stehen in ../work-order.ts.
  */
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { userName, type Conflict, type SaveGuard } from '$lib/server/concurrency';
 import { db } from '$lib/server/db';
 import { planEntries, users, workOrders } from '$lib/server/db/schema';
 import { can } from '$lib/permissions';
@@ -176,10 +177,23 @@ export async function hasWorkOrder(orderId: number): Promise<boolean> {
 }
 
 /** Inhalt lesen, ändern und zurückschreiben – in einer Transaktion */
-async function change(orderId: number, userId: number, fn: (c: WorkOrderContent) => WorkOrderContent | string): Promise<string | null> {
+/**
+ * Inhalt ändern. Mit `guard`: nur, wenn seit dem Laden niemand anderer
+ * gespeichert hat – sonst kommt der Konflikt zurück.
+ */
+async function change(
+	orderId: number,
+	userId: number,
+	fn: (c: WorkOrderContent) => WorkOrderContent | string,
+	guard?: SaveGuard
+): Promise<string | null | { conflict: Conflict }> {
 	return db.transaction(async (tx) => {
-		const row = await tx.select({ content: workOrders.content }).from(workOrders).where(eq(workOrders.orderId, orderId)).get();
+		const row = await tx.select({ content: workOrders.content, updatedAt: workOrders.updatedAt, updatedBy: workOrders.updatedBy }).from(workOrders).where(eq(workOrders.orderId, orderId)).get();
 		if (!row) return 'Zu diesem Auftrag gibt es keinen Arbeitsauftrag.';
+		if (guard && guard.version != null && !guard.force && (row.updatedAt?.getTime() ?? 0) !== guard.version) {
+			const who = row.updatedBy ? await tx.select({ first: users.firstName, last: users.lastName }).from(users).where(eq(users.id, row.updatedBy)).get() : null;
+			return { conflict: { by: userName(who), at: row.updatedAt?.getTime() ?? 0 } };
+		}
 		const next = fn(readContent(row.content));
 		if (typeof next === 'string') return next;
 		await tx.update(workOrders).set({ content: next, updatedBy: userId, updatedAt: new Date() }).where(eq(workOrders.orderId, orderId));
@@ -194,8 +208,11 @@ const LOCKED = 'Der Auftraggeber hat schon unterschrieben – zum Ändern zuerst
  * (`foil`) gehört zur Baustelle; steht es neu auf „ja" und ist noch leer,
  * wird es vorbelegt. Gibt eine Meldung zurück, wenn nicht gespeichert wurde.
  */
-export async function saveWorkOrderForm(orderId: number, form: WorkOrderForm, scope: WorkScope, userId: number, foil?: unknown) {
-	const problem = await change(orderId, userId, (c) => {
+export async function saveWorkOrderForm(orderId: number, form: WorkOrderForm, scope: WorkScope, userId: number, foil?: unknown, guard?: SaveGuard) {
+	const problem = await change(
+		orderId,
+		userId,
+		(c) => {
 		// Nach dem Auftraggeber ist alles fest – nur die Vorarbeiter-Checkliste lässt sich noch abhaken,
 		// sonst ließe sich der Auftrag ohne sie nie abschließen
 		if (c.signatures.auftraggeber) return scope.site ? { ...c, checklist: form.checklist } : LOCKED;
@@ -203,7 +220,9 @@ export async function saveWorkOrderForm(orderId: number, form: WorkOrderForm, sc
 		if (scope.site && foil !== undefined && next.foilProtocol === 'ja') next.foil = { ...sanitizeFoil(foil), signatures: c.foil.signatures };
 		if (next.foilProtocol === 'ja' && isPristineFoil(next.foil)) next.foil = { ...prefillFoil(next), signatures: c.foil.signatures };
 		return next;
-	});
+		},
+		guard
+	);
 	// Den Termin ändert nur das Büro – die Wochenplanung zieht mit
 	if (!problem && scope.office) await syncWorkOrderPlan(orderId, userId);
 	return problem;

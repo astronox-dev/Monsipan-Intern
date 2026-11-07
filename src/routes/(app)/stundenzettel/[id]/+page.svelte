@@ -2,6 +2,7 @@
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
 	import { Autosave, autosaveForm } from '$lib/autosave.svelte';
+	import { assignFields, LiveDoc } from '$lib/livedoc.svelte';
 	import SaveState from '$lib/components/SaveState.svelte';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Printer from '@lucide/svelte/icons/printer';
@@ -102,8 +103,57 @@
 	// svelte-ignore state_referenced_locally
 	let note = $state(data.sheet.note);
 	let busy = $state(false);
+
+	// Gegen gleichzeitiges Überschreiben: der geladene Stand geht mit jedem Speichern mit
+	const versionOf = () => data.sheet.updatedAt?.getTime() ?? 0;
+	// svelte-ignore state_referenced_locally
+	let version = $state(versionOf());
+	// svelte-ignore state_referenced_locally
+	let loadedVersion = versionOf();
+	$effect(() => {
+		const v = versionOf();
+		if (v !== loadedVersion) {
+			loadedVersion = v;
+			version = v;
+		}
+	});
 	// Jede Eingabe speichert kurz danach von selbst
-	const saver = new Autosave({ action: '?/save', enabled: () => (data.editable || data.guestDays.length > 0) && !busy });
+	const saver = new Autosave({
+		action: '?/save',
+		enabled: () => (data.editable || data.guestDays.length > 0) && !busy,
+		onsaved: (d) => {
+			if (typeof d.version === 'number') version = d.version;
+		}
+	});
+	/*
+	 * Gemeinsam bearbeiten (etwa Partieführer und Aushilfe an derselben Woche): was
+	 * andere speichern, kommt Tag für Tag und Feld für Feld ins Formular.
+	 */
+	const doc = new LiveDoc({
+		read: () => ({
+			head: {
+				allowanceDays: hoursLabel(data.sheet.allowanceDays),
+				allowanceAmount: hoursLabel(data.sheet.allowanceAmount),
+				vazPercent: hoursLabel(data.sheet.vazPercent),
+				note: data.sheet.note
+			},
+			rows: data.sheet.days.map((d) => ({ uid: d.date, ...toRow(d) }))
+		}),
+		get: () => ({ head: { allowanceDays, allowanceAmount, vazPercent, note }, rows: rows.map((r) => ({ uid: r.date, ...r })) }),
+		set: (m) => {
+			allowanceDays = m.head.allowanceDays;
+			allowanceAmount = m.head.allowanceAmount;
+			vazPercent = m.head.vazPercent;
+			note = m.head.note;
+			// Die Woche hat feste Tage – jeder bleibt, nur seine Felder ändern sich
+			for (const { uid, ...r } of m.rows) {
+				const row = rows.find((x) => x.date === uid);
+				if (row) assignFields(row, r);
+			}
+		},
+		saver,
+		paused: () => !data.editable && !data.guestDays.length
+	});
 	let confirmDelete = $state(false);
 	let signOpen = $state(false);
 	let signature = $state('');
@@ -289,6 +339,12 @@
 		const releasing = action.search.includes('release');
 		return async ({ result, update }) => {
 			busy = false;
+			if (result.type === 'failure' && result.data?.conflict) {
+				// Jemand anderer war schneller: zusammenführen und gleich speichern
+				void doc.afterConflict();
+				toast.info('Inzwischen hat jemand anderer gespeichert', 'Die Änderungen sind zusammengeführt und gespeichert.');
+				return;
+			}
 			if (result.type === 'success') {
 				saver.markSaved();
 				toast.success(releasing ? 'Woche freigegeben' : 'Gespeichert');
@@ -301,6 +357,7 @@
 		};
 	}}
 >
+	<input type="hidden" name="version" value={version} />
 	<!-- Außerhalb des fieldset, damit sie auch bei gesperrter Woche nicht stört -->
 	<input type="hidden" name="unterschrift" value={signature} />
 
@@ -518,7 +575,7 @@
 	{#if data.editable || data.guestDays.length}
 		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
-			<SaveState {saver} what="die Woche" compact />
+			<SaveState {saver} {doc} what="die Woche" compact />
 			{#if sheet.status === 'entwurf' && data.canRelease && data.editable}
 				<button type="button" class="btn btn-secondary" disabled={busy} onclick={() => (signOpen = true)}>
 					<Lock size={18} aria-hidden="true" />Freigeben

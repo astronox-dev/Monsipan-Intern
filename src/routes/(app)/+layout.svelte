@@ -19,10 +19,27 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { resyncPush } from '$lib/push';
 	import type { LookupResult } from '$lib/modules/lager/types';
+	import LivePresence from '$lib/components/LivePresence.svelte';
+	import {
+		leaveTopic,
+		markRequests,
+		onVisible,
+		receiveChange,
+		receivePresence,
+		receivePresenceAll,
+		setTopic,
+		tabId,
+		typing
+	} from '$lib/live.svelte';
 
 	let { data, children } = $props();
 
 	let moreOpen = $state(false);
+
+	// Anwesenheit: die Seite, auf der dieser Tab gerade ist
+	$effect(() => {
+		setTopic(page.url.pathname);
+	});
 	let resultOpen = $state(false);
 	let result = $state<LookupResult | null>(null);
 
@@ -57,11 +74,38 @@
 			}
 		}, SCAN_PRIORITY.global);
 
-		// Live-Aktualisierung: andere Geräte haben gebucht
+		// Live-Aktualisierung: andere Geräte haben gebucht, gespeichert …
+		markRequests();
 		let es: EventSource | null = null;
 		let timer: ReturnType<typeof setTimeout>;
 		const connect = () => {
-			es = new EventSource('/api/events');
+			es = new EventSource(`/api/events?tab=${encodeURIComponent(tabId)}`);
+			// Jemand anderer hat gespeichert – betrifft es diese Seite, erscheint es hier
+			es.addEventListener('changed', (e) => {
+				try {
+					receiveChange(JSON.parse((e as MessageEvent).data), page.url.pathname);
+				} catch {
+					/* unlesbar – ignorieren */
+				}
+			});
+			// Wer welche Seite offen hat
+			es.addEventListener('presence', (e) => {
+				try {
+					const { topic, people } = JSON.parse((e as MessageEvent).data);
+					receivePresence(topic, people);
+				} catch {
+					/* unlesbar – ignorieren */
+				}
+			});
+			es.addEventListener('presence-all', (e) => {
+				try {
+					receivePresenceAll(JSON.parse((e as MessageEvent).data));
+				} catch {
+					/* unlesbar – ignorieren */
+				}
+			});
+			// Nach einer Unterbrechung: die eigene Seite neu melden
+			es.addEventListener('open', () => setTopic(page.url.pathname));
 			es.addEventListener('stock', () => {
 				clearTimeout(timer);
 				timer = setTimeout(() => invalidate('app:stock'), 250);
@@ -89,12 +133,28 @@
 		// Ist Push hier an, meldet sich das Gerät für die angemeldete Person (neu) an
 		resyncPush();
 
+		// Tippen irgendwo: „bearbeitet gerade"
+		const onInput = () => typing();
+		const onVis = () => {
+			if (document.visibilityState === 'visible') {
+				onVisible();
+				setTopic(page.url.pathname);
+			}
+		};
+		document.addEventListener('input', onInput, true);
+		document.addEventListener('visibilitychange', onVis);
+		window.addEventListener('pagehide', leaveTopic);
+
 		return () => {
 			uninstall();
 			stopInstallCheck();
 			off();
 			es?.close();
 			clearTimeout(timer);
+			document.removeEventListener('input', onInput, true);
+			document.removeEventListener('visibilitychange', onVis);
+			window.removeEventListener('pagehide', leaveTopic);
+			leaveTopic();
 		};
 	});
 </script>
@@ -118,6 +178,7 @@
 			neu aufbauen. Sonst behält SvelteKit die Seite samt Formular, Fotos und Handschrift
 			des vorigen – und Speichern schriebe dessen Stand in den neuen.
 		-->
+		<LivePresence me={data.user.id} />
 		{#key page.params.id}
 			{@render children()}
 		{/key}

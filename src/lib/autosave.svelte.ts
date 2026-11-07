@@ -40,6 +40,10 @@ export class Autosave {
 	#running: Promise<void> | null = null;
 	#again = false;
 	#force = false;
+	#afterSave = new Set<() => void>();
+	#resolver: (() => Promise<boolean>) | null = null;
+	#conflicted = false;
+	#retries = 0;
 
 	constructor(opts: AutosaveOptions) {
 		this.#opts = opts;
@@ -61,6 +65,26 @@ export class Autosave {
 				window.removeEventListener('pagehide', leave);
 			};
 		});
+	}
+
+	/** Nach jedem Speichern (auch dem normalen Absenden) – etwa um den neuen Stand zu laden */
+	afterSave(fn: () => void): () => void {
+		this.#afterSave.add(fn);
+		return () => this.#afterSave.delete(fn);
+	}
+
+	/**
+	 * Konflikt (jemand anderer hat inzwischen gespeichert) selbst lösen: `fn` holt
+	 * den neuen Stand und führt ihn mit dem eigenen zusammen – dann wird gleich
+	 * noch einmal gespeichert, ohne dass jemand gefragt werden muss.
+	 */
+	resolveConflicts(fn: () => Promise<boolean>) {
+		this.#resolver = fn;
+	}
+
+	#saved() {
+		this.#retries = 0;
+		for (const fn of this.#afterSave) fn();
 	}
 
 	/** Das Formular, wenn es nicht über `form` kommt */
@@ -98,6 +122,7 @@ export class Autosave {
 		this.state = 'saved';
 		this.savedAt = new Date();
 		this.message = '';
+		this.#saved();
 	}
 
 	/** Trotz Konflikt die eigene Fassung speichern */
@@ -140,6 +165,10 @@ export class Autosave {
 					this.savedAt = new Date();
 					this.message = '';
 					this.#opts.onsaved?.(result.data ?? {});
+					this.#saved();
+				} else if (result.type === 'failure' && result.data?.conflict && this.#resolver && this.#retries < 3) {
+					// Gleich zusammenführen und noch einmal
+					this.#conflicted = true;
 				} else if (result.type === 'failure' && result.data?.conflict) {
 					this.state = 'conflict';
 					const c = result.data.conflict as { by?: string };
@@ -162,6 +191,20 @@ export class Autosave {
 			}
 		})();
 		await this.#running;
+		if (this.#conflicted) {
+			this.#conflicted = false;
+			this.#again = false;
+			this.#retries++;
+			const ok = await this.#resolver!().catch(() => false);
+			if (ok) {
+				this.state = 'pending';
+				await this.flush(leaving);
+			} else {
+				this.state = 'conflict';
+				this.conflictBy = this.conflictBy || 'Jemand anderer';
+			}
+			return;
+		}
 		if (this.#again) {
 			this.#again = false;
 			if ((this.state as AutosaveState) !== 'conflict') {

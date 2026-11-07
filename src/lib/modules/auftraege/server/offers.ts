@@ -254,7 +254,7 @@ export async function duplicateOffer(user: SessionUser, sourceId: number, data: 
 			})
 			.returning({ id: offers.id })
 			.get();
-		const copy = lines.map(({ id: _id, offerId: _offer, ...l }) => ({ ...l, offerId: row.id }));
+		const copy = lines.map(({ id: _id, offerId: _offer, uid: _uid, ...l }) => ({ ...l, offerId: row.id }));
 		await tx.insert(offerPositions).values(copy.length ? copy : [{ offerId: row.id, sortOrder: 0, unit: 'Pauschal', quantity: 1 }]);
 		return row.id;
 	});
@@ -347,7 +347,8 @@ async function loadOffer(where: SQL) {
 				unit: offerPositions.unit,
 				unitPrice: offerPositions.unitPrice,
 				alternative: offerPositions.alternative,
-				sub: offerPositions.sub
+				sub: offerPositions.sub,
+				uid: offerPositions.uid
 			})
 			.from(offerPositions)
 			.where(eq(offerPositions.offerId, offer.id))
@@ -386,7 +387,7 @@ export interface SaveOffer {
 		discountPercent: number;
 		discountAmount: number;
 	};
-	lines: { kind: 'position' | 'titel'; text: string; note?: string; quantity: string; unit: string; unitPrice: string; alternative?: boolean; sub?: boolean }[];
+	lines: { kind: 'position' | 'titel'; text: string; note?: string; quantity: string; unit: string; unitPrice: string; alternative?: boolean; sub?: boolean; uid?: string }[];
 }
 
 const qty = (v: string) => {
@@ -466,7 +467,8 @@ export async function saveOffer(id: number, data: SaveOffer, guard?: SaveGuard):
 				unit: titel ? '' : l.unit.trim().slice(0, 20),
 				unitPrice: titel ? null : price(l.unitPrice),
 				alternative: !titel && !!l.alternative,
-				sub: sub[i]
+				sub: sub[i],
+				uid: l.uid?.slice(0, 64) || null
 			});
 		}
 		return { version: now.getTime() };

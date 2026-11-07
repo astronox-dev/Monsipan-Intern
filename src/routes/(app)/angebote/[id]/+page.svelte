@@ -3,6 +3,8 @@
 	import { enhance } from '$app/forms';
 	import { tick, untrack } from 'svelte';
 	import { Autosave } from '$lib/autosave.svelte';
+	import { applyRows, assignFields, LiveDoc } from '$lib/livedoc.svelte';
+	import { newUid } from '$lib/merge';
 	import SaveState from '$lib/components/SaveState.svelte';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Copy from '@lucide/svelte/icons/copy';
@@ -58,40 +60,40 @@
 	let { data, form } = $props();
 	const offer = $derived(data.offer);
 
-	type Line = { key: number; kind: 'position' | 'titel'; text: string; note: string; quantity: string; unit: string; price: string; alternative: boolean; sub: boolean };
+	/** `uid`: feste Kennung der Zeile (fürs gleichzeitige Bearbeiten), `key` nur fürs Formular */
+	type LineModel = { uid: string; kind: 'position' | 'titel'; text: string; note: string; quantity: string; unit: string; price: string; alternative: boolean; sub: boolean };
+	type Line = LineModel & { key: number };
 
-	let nextKey = 1;
-	// Das Angebot wird nur beim Öffnen übernommen – danach gehört der Stand dem Formular
-	// svelte-ignore state_referenced_locally
-	let head = $state({
-		number: data.offer.number,
-		date: data.offer.date,
-		title: data.offer.title,
-		location: data.offer.location,
-		customerId: data.offer.customerId == null ? '' : String(data.offer.customerId),
-		name: data.offer.customerName,
-		addition: data.offer.customerAddition,
-		street: data.offer.customerStreet,
-		zip: data.offer.customerZip,
-		city: data.offer.customerCity,
-		uid: data.offer.customerUid,
-		contact: data.offer.contactName,
-		phone: data.offer.contactPhone,
-		email: data.offer.contactEmail,
-		intro: data.offer.intro,
-		closing: data.offer.closing,
-		vat: String(data.offer.vatRate).replace('.', ','),
-		reverse: data.offer.reverseCharge,
-		days: String(data.offer.paymentDays ?? data.defaultPaymentDays),
-		skonto: data.offer.skontoPercent ? String(data.offer.skontoPercent).replace('.', ',') : '',
-		skontoDays: data.offer.skontoDays ? String(data.offer.skontoDays) : '',
-		discount: discountInput(data.offer).value,
-		discountKind: discountInput(data.offer).kind
+	/* Das Formular als schlichtes Modell – aus den geladenen Daten, wie es im Formular steht */
+	const headFrom = (o: typeof data.offer) => ({
+		number: o.number,
+		date: o.date,
+		title: o.title,
+		location: o.location,
+		customerId: o.customerId == null ? '' : String(o.customerId),
+		name: o.customerName,
+		addition: o.customerAddition,
+		street: o.customerStreet,
+		zip: o.customerZip,
+		city: o.customerCity,
+		uid: o.customerUid,
+		contact: o.contactName,
+		phone: o.contactPhone,
+		email: o.contactEmail,
+		intro: o.intro,
+		closing: o.closing,
+		vat: String(o.vatRate).replace('.', ','),
+		reverse: o.reverseCharge,
+		days: String(o.paymentDays ?? data.defaultPaymentDays),
+		skonto: o.skontoPercent ? String(o.skontoPercent).replace('.', ',') : '',
+		skontoDays: o.skontoDays ? String(o.skontoDays) : '',
+		discount: discountInput(o).value,
+		discountKind: discountInput(o).kind
 	});
-	// svelte-ignore state_referenced_locally
-	let lines = $state<Line[]>(
-		data.offer.lines.map((l) => ({
-			key: nextKey++,
+	const linesFrom = (o: typeof data.offer): LineModel[] =>
+		o.lines.map((l) => ({
+			// Ältere Zeilen ohne Kennung: aus der Datenbank-ID – für alle gleich
+			uid: l.uid || `p${l.id}`,
 			kind: l.kind,
 			text: l.text,
 			note: l.note ?? '',
@@ -100,8 +102,15 @@
 			price: amountInput(l.unitPrice),
 			alternative: l.alternative,
 			sub: l.sub
-		}))
-	);
+		}));
+
+	let nextKey = 1;
+	// Das Angebot wird beim Öffnen übernommen – danach führt LiveDoc fremde Änderungen ein
+	// svelte-ignore state_referenced_locally
+	let head = $state(headFrom(data.offer));
+	// svelte-ignore state_referenced_locally
+	let lines = $state<Line[]>(linesFrom(data.offer).map((l) => ({ ...l, key: nextKey++ })));
+	const lineModel = ({ key: _key, ...l }: Line): LineModel => l;
 
 	/** Ältere, schon angenommene Angebote zählen weiter 1.1, 1.2 … – dort gibt es kein Einrücken */
 	const legacy = $derived(data.offer.numberingLegacy);
@@ -139,16 +148,28 @@
 			if (typeof d.version === 'number') version = d.version;
 		}
 	});
-	// Jede Änderung an Kopf oder Zeilen speichert kurz danach von selbst
-	let watching = false;
+	/*
+	 * Gemeinsam bearbeiten: was andere speichern, kommt Feld für Feld und Zeile für
+	 * Zeile ins Formular – eigene, noch nicht gespeicherte Eingaben bleiben.
+	 */
+	const doc = new LiveDoc({
+		read: () => ({ head: headFrom(data.offer), lines: linesFrom(data.offer) }),
+		get: () => ({ head: { ...head }, lines: lines.map(lineModel) }),
+		set: (m) => {
+			assignFields(head, m.head);
+			const next = applyRows(lines, m.lines, (r) => ({ ...r, key: nextKey++ }), (t, r) => assignFields(t, r));
+			if (next) lines = next;
+		},
+		saver,
+		paused: () => !data.editable
+	});
+	// Jede eigene Änderung an Kopf oder Zeilen speichert kurz danach von selbst – auch eine ganz frühe
 	$effect(() => {
 		JSON.stringify(head);
 		JSON.stringify(lines);
-		if (!watching) {
-			watching = true;
-			return;
-		}
-		untrack(() => saver.touch());
+		untrack(() => {
+			if (doc.dirty()) saver.touch();
+		});
 	});
 
 	let releaseOpen = $state(false);
@@ -188,7 +209,7 @@
 		if (lines.length >= MAX_OFFER_LINES) return;
 		const prev = lines[at - 1];
 		const sub = kind === 'position' && !!prev && (prev.kind === 'titel' || subs[at - 1]);
-		lines.splice(at, 0, { key: nextKey++, kind, text: '', note: '', quantity: '', unit: '', price: '', alternative: false, sub });
+		lines.splice(at, 0, { key: nextKey++, uid: newUid(), kind, text: '', note: '', quantity: '', unit: '', price: '', alternative: false, sub });
 		await tick();
 		listBox?.querySelector<HTMLElement>(`[data-zeile="${at}"]`)?.focus();
 	}
@@ -196,7 +217,7 @@
 	/** Kopie direkt darunter – mit allem, was in der Zeile steht */
 	async function copyLine(i: number) {
 		if (lines.length >= MAX_OFFER_LINES) return;
-		lines.splice(i + 1, 0, { ...lines[i], key: nextKey++ });
+		lines.splice(i + 1, 0, { ...lines[i], key: nextKey++, uid: newUid() });
 		await tick();
 		listBox?.querySelector<HTMLElement>(`[data-zeile="${i + 1}"]`)?.focus();
 	}
@@ -386,15 +407,17 @@
 					toast.success('Gespeichert');
 				}
 			} else if (result.type === 'failure' && result.data?.conflict) {
-				releaseOpen = false;
-				saver.markConflict(String((result.data.conflict as { by?: string }).by ?? ''), String(result.data.message ?? ''));
+				// Jemand anderer war schneller: zusammenführen, speichern – dann noch einmal
+				void doc.afterConflict();
+				toast.info('Inzwischen hat jemand anderer gespeichert', release ? 'Die Änderungen sind zusammengeführt – bitte noch einmal freigeben.' : 'Die Änderungen sind zusammengeführt und gespeichert.');
+				return;
 			}
 			await update({ reset: false });
 		};
 	}}
 >
 	<input type="hidden" name="version" value={version} />
-	{#if data.editable}<SaveState {saver} what="das Angebot" />{/if}
+	{#if data.editable}<SaveState {saver} {doc} what="das Angebot" />{/if}
 	<fieldset disabled={!data.editable} class="contents">
 		<div class="grid gap-4 lg:grid-cols-2">
 			<section class="card p-4 lg:p-5">
@@ -477,6 +500,7 @@
 					>
 						<input type="hidden" name="z.{i}.art" value={l.kind} />
 						<input type="hidden" name="z.{i}.unter" value={subs[i] ? '1' : ''} />
+						<input type="hidden" name="z.{i}.uid" value={l.uid} />
 						{#if l.kind === 'titel'}
 							<div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-2">
 								<span class="num text-[1.0625rem] font-bold">{numbers[i]}</span>
@@ -596,7 +620,7 @@
 		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			{#if data.editable}
 				<button class="btn btn-primary" disabled={busy || saver.state === 'conflict'}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
-				<SaveState {saver} what="das Angebot" compact />
+				<SaveState {saver} {doc} what="das Angebot" compact />
 			{/if}
 			{#if data.canRelease}
 				<button type="button" class="btn {data.editable ? 'btn-secondary' : 'btn-primary'}" disabled={busy} onclick={() => (releaseOpen = true)}>

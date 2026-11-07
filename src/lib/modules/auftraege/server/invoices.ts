@@ -465,7 +465,7 @@ export interface SaveInvoice {
 		discountPercent: number;
 		discountAmount: number;
 	};
-	lines: { number: string; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null }[];
+	lines: { number: string; kind: 'position' | 'titel'; text: string; note?: string; quantity: number | null; unit: string; unitPrice: number | null; uid?: string }[];
 }
 
 /**
@@ -526,8 +526,9 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 		const titel = s(`z.${i}.art`) === 'titel';
 		const text = s(`z.${i}.text`).replace(/\r\n/g, '\n').trim();
 		const number = s(`z.${i}.nr`).trim().slice(0, 12);
+		const lineUid = s(`z.${i}.uid`).slice(0, 64) || undefined;
 		if (titel) {
-			lines.push({ number, kind: 'titel', text, quantity: null, unit: '', unitPrice: null });
+			lines.push({ number, kind: 'titel', text, quantity: null, unit: '', unitPrice: null, uid: lineUid });
 			continue;
 		}
 		const rawQty = s(`z.${i}.menge`).trim();
@@ -544,7 +545,8 @@ export function readInvoice(form: FormData): SaveInvoice | { message: string } {
 			note: s(`z.${i}.notiz`).replace(/\r\n/g, '\n').trim(),
 			quantity: quantity == null ? null : Math.round(quantity * 1000) / 1000,
 			unit: s(`z.${i}.einheit`).trim(),
-			unitPrice: unitPrice == null ? null : Math.round(unitPrice * 10000) / 10000
+			unitPrice: unitPrice == null ? null : Math.round(unitPrice * 10000) / 10000,
+			uid: lineUid
 		});
 	}
 	const billed = billedLines(lines).slice(0, MAX_OFFER_LINES);
@@ -618,7 +620,8 @@ async function writeLines(tx: Tx, invoiceId: number, lines: SaveInvoice['lines']
 			note: l.kind === 'titel' ? '' : (l.note ?? '').slice(0, 2000),
 			quantity: l.kind === 'titel' ? null : l.quantity,
 			unit: l.kind === 'titel' ? '' : l.unit.slice(0, 20),
-			unitPrice: l.kind === 'titel' ? null : l.unitPrice
+			unitPrice: l.kind === 'titel' ? null : l.unitPrice,
+			uid: l.uid || null
 		});
 	}
 }
@@ -801,7 +804,8 @@ export async function invoiceDetail(id: number) {
 			note: invoicePositions.note,
 			quantity: invoicePositions.quantity,
 			unit: invoicePositions.unit,
-			unitPrice: invoicePositions.unitPrice
+			unitPrice: invoicePositions.unitPrice,
+			uid: invoicePositions.uid
 		})
 		.from(invoicePositions)
 		.where(eq(invoicePositions.invoiceId, id))

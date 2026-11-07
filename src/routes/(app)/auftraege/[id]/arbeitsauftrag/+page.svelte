@@ -2,6 +2,7 @@
 	import { pageTitle } from '$lib/app';
 	import { enhance } from '$app/forms';
 	import { Autosave, autosaveForm } from '$lib/autosave.svelte';
+	import { deepAssign, keyed, LiveDoc, unkeyed } from '$lib/livedoc.svelte';
 	import SaveState from '$lib/components/SaveState.svelte';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import FileText from '@lucide/svelte/icons/file-text';
@@ -73,8 +74,40 @@
 	});
 
 	let busy = $state(false);
+
+	// Gegen gleichzeitiges Überschreiben: der geladene Stand geht mit jedem Speichern mit
+	const versionOf = () => data.work.updatedAt?.getTime() ?? 0;
+	// svelte-ignore state_referenced_locally
+	let version = $state(versionOf());
+	// svelte-ignore state_referenced_locally
+	let loadedVersion = versionOf();
+	$effect(() => {
+		const v = versionOf();
+		if (v !== loadedVersion) {
+			loadedVersion = v;
+			version = v;
+		}
+	});
 	// Jede Eingabe speichert kurz danach von selbst
 	const saver = new Autosave({ action: '?/save', enabled: () => editable && !busy });
+	/*
+	 * Gemeinsam bearbeiten (Büro und Partie gleichzeitig): was andere speichern,
+	 * kommt Feld für Feld und Zeile für Zeile ins Formular.
+	 */
+	const doc = new LiveDoc({
+		read: () => {
+			const { signatures: _s, ...foilNow } = data.foilStart;
+			return keyed({ f: toState(data.work.content), foil: foilNow });
+		},
+		get: () => keyed({ f: $state.snapshot(f), foil: $state.snapshot(foil) }),
+		set: (m) => {
+			const plain = unkeyed(m);
+			deepAssign(f as unknown as Record<string, unknown>, plain.f as unknown as Record<string, unknown>);
+			deepAssign(foil as unknown as Record<string, unknown>, plain.foil as unknown as Record<string, unknown>);
+		},
+		saver,
+		paused: () => !editable
+	});
 	let deleteOpen = $state(false);
 
 	// Unterschreiben: ein Dialog für BL, Vorarbeiter, Vertretung und Auftraggeber
@@ -235,6 +268,12 @@
 		const step = action.search === '?/sign' ? 'sign' : action.search === '?/brief' ? 'brief' : 'save';
 		return async ({ result, update }) => {
 			busy = false;
+			if (result.type === 'failure' && result.data?.conflict) {
+				// Jemand anderer war schneller: zusammenführen und gleich speichern
+				void doc.afterConflict();
+				toast.info('Inzwischen hat jemand anderer gespeichert', 'Die Änderungen sind zusammengeführt und gespeichert.');
+				return;
+			}
 			if (result.type === 'success') {
 				saver.markSaved();
 				toast.success(
@@ -255,6 +294,7 @@
 	}}
 >
 	<input type="hidden" name="inhalt" value={payload} />
+	<input type="hidden" name="version" value={version} />
 	{#if signOpen}
 		<input type="hidden" name="wer" value={signRole} />
 		<input type="hidden" name="name" value={signName} />
@@ -410,7 +450,7 @@
 	{#if editable}
 		<div class="card lg:sticky mt-4 flex flex-wrap items-center gap-2 p-3 lg:bottom-6">
 			<button class="btn btn-primary" disabled={busy}>{busy ? 'Wird gespeichert …' : 'Speichern'}</button>
-			<SaveState {saver} what="den Arbeitsauftrag" compact />
+			<SaveState {saver} {doc} what="den Arbeitsauftrag" compact />
 			<span class="ml-auto text-sm text-ink-3">
 				{data.work.updatedAt ? `Zuletzt gespeichert ${dateTime(data.work.updatedAt)}${data.work.updatedByName ? ` von ${data.work.updatedByName}` : ''}` : ''}
 			</span>

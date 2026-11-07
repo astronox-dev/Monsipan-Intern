@@ -6,6 +6,8 @@
 	 * Ganz unten alle Bereiche als Kacheln.
 	 */
 	import { APP_NAME, pageTitle } from '$lib/app';
+	import { watchPaths } from '$lib/live.svelte';
+	import { onDestroy } from 'svelte';
 	import ArrowUpFromLine from '@lucide/svelte/icons/arrow-up-from-line';
 	import ArrowDownToLine from '@lucide/svelte/icons/arrow-down-to-line';
 	import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
@@ -39,6 +41,8 @@
 	import type { Component } from 'svelte';
 
 	let { data } = $props();
+	// Live: die Übersicht zählt aus allen Bereichen – höchstens alle paar Sekunden neu
+	onDestroy(watchPaths(['/anfragen', '/angebote', '/auftraege', '/tagesberichte', '/rechnungen', '/stundenzettel', '/urlaub', '/krankenstand', '/lager']));
 
 	// Bereiche der Anwendung; wächst mit jedem freigeschalteten Modul
 	const areas = $derived(overviewCards(data.user.role));
